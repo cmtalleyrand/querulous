@@ -1,0 +1,501 @@
+/**
+ * Scoring utilities for fugue analysis
+ *
+ * This module provides functions to calculate scores for various aspects
+ * of fugue subject and countersubject analysis. All scores are normalized
+ * to a 0-100 scale for easy comparison and visualization.
+ */
+
+/**
+ * Score categories and their descriptions
+ */
+export const SCORE_CATEGORIES = {
+  harmonicImplication: {
+    name: 'Harmonic Implication',
+    description: 'How well the subject establishes and implies harmonic motion',
+    weight: 1.0,
+  },
+  rhythmicVariety: {
+    name: 'Rhythmic Variety',
+    description: 'Diversity and contrast in rhythmic values',
+    weight: 0.8,
+  },
+  strettoViability: {
+    name: 'Stretto Viability',
+    description: 'How well the subject works in overlapping entries',
+    weight: 1.0,
+  },
+  tonalAnswer: {
+    name: 'Tonal Answer',
+    description: 'Clarity and quality of the tonal answer junction',
+    weight: 0.9,
+  },
+  doubleCounterpoint: {
+    name: 'Double Counterpoint',
+    description: 'Invertibility of subject-countersubject combination',
+    weight: 1.0,
+  },
+  rhythmicComplementarity: {
+    name: 'Rhythmic Complementarity',
+    description: 'How well the countersubject complements the subject rhythmically',
+    weight: 0.8,
+  },
+  contourIndependence: {
+    name: 'Contour Independence',
+    description: 'Independence of melodic contours between voices',
+    weight: 0.9,
+  },
+  modulatoryRobustness: {
+    name: 'Modulatory Robustness',
+    description: 'How well the countersubject works against the answer',
+    weight: 1.0,
+  },
+};
+
+/**
+ * Score thresholds for rating
+ */
+export const SCORE_THRESHOLDS = {
+  excellent: 85,
+  good: 70,
+  fair: 50,
+  poor: 0,
+};
+
+/**
+ * Get a rating label for a score
+ */
+export function getScoreRating(score) {
+  if (score >= SCORE_THRESHOLDS.excellent) return 'Excellent';
+  if (score >= SCORE_THRESHOLDS.good) return 'Good';
+  if (score >= SCORE_THRESHOLDS.fair) return 'Fair';
+  return 'Needs Work';
+}
+
+/**
+ * Get a color for a score
+ */
+export function getScoreColor(score) {
+  if (score >= SCORE_THRESHOLDS.excellent) return '#2e7d32'; // Dark green
+  if (score >= SCORE_THRESHOLDS.good) return '#558b2f'; // Light green
+  if (score >= SCORE_THRESHOLDS.fair) return '#f57c00'; // Orange
+  return '#c62828'; // Red
+}
+
+/**
+ * Get a background color for a score
+ */
+export function getScoreBgColor(score) {
+  if (score >= SCORE_THRESHOLDS.excellent) return '#e8f5e9';
+  if (score >= SCORE_THRESHOLDS.good) return '#f1f8e9';
+  if (score >= SCORE_THRESHOLDS.fair) return '#fff3e0';
+  return '#ffebee';
+}
+
+/**
+ * Calculate harmonic implication score
+ */
+export function calculateHarmonicImplicationScore(result) {
+  if (!result || result.error) return { score: 0, details: [] };
+
+  let score = 50; // Base score
+  const details = [];
+
+  // Opening on tonic chord tone: +20
+  if (result.opening?.isTonicChordTone) {
+    score += 20;
+    details.push({ factor: 'Opens on tonic chord tone', impact: +20 });
+  } else {
+    details.push({ factor: 'Opens on non-tonic tone', impact: 0 });
+  }
+
+  // Terminal quality
+  const terminalScores = {
+    strong: 25,
+    good: 15,
+    workable: 5,
+    ambiguous: -5,
+    unusual: -10,
+  };
+  const termScore = terminalScores[result.terminal?.q] || 0;
+  score += termScore;
+  details.push({ factor: `Terminal: ${result.terminal?.q || 'unknown'}`, impact: termScore });
+
+  // Dominant arrival bonus
+  if (result.dominantArrival) {
+    const ratio = result.dominantArrival.ratio;
+    if (ratio >= 0.3 && ratio <= 0.7) {
+      score += 10;
+      details.push({ factor: 'Well-placed dominant arrival', impact: +10 });
+    } else {
+      score += 5;
+      details.push({ factor: 'Dominant arrival present', impact: +5 });
+    }
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details };
+}
+
+/**
+ * Calculate rhythmic variety score
+ */
+export function calculateRhythmicVarietyScore(result) {
+  if (!result || result.error) return { score: 0, details: [] };
+
+  let score = 40; // Base score
+  const details = [];
+
+  // Unique durations bonus
+  const uniqueCount = result.uniqueDurations || 1;
+  if (uniqueCount >= 4) {
+    score += 35;
+    details.push({ factor: `${uniqueCount} different note values`, impact: +35 });
+  } else if (uniqueCount >= 3) {
+    score += 25;
+    details.push({ factor: `${uniqueCount} different note values`, impact: +25 });
+  } else if (uniqueCount >= 2) {
+    score += 15;
+    details.push({ factor: `${uniqueCount} different note values`, impact: +15 });
+  } else {
+    score -= 20;
+    details.push({ factor: 'Uniform rhythm', impact: -20 });
+  }
+
+  // Check for rhythmic contrast in observations
+  const hasContrast = result.observations?.some((o) => o.description?.includes('Good rhythmic contrast'));
+  if (hasContrast) {
+    score += 20;
+    details.push({ factor: 'Good rhythmic contrast', impact: +20 });
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details };
+}
+
+/**
+ * Calculate stretto viability score
+ */
+export function calculateStrettoViabilityScore(result) {
+  if (!result || result.error) return { score: 0, details: [] };
+
+  const details = [];
+  const totalTests = result.allResults?.length || 0;
+  const viableCount = result.viableStrettos?.length || 0;
+
+  if (totalTests === 0) {
+    return { score: 0, details: [{ factor: 'No stretto distances tested', impact: 0 }] };
+  }
+
+  // Base score from viable ratio
+  const viableRatio = viableCount / totalTests;
+  let score = Math.round(viableRatio * 70);
+  details.push({ factor: `${viableCount}/${totalTests} viable strettos`, impact: score });
+
+  // Bonus for consecutive viable strettos (indicates flexibility)
+  let maxConsecutive = 0;
+  let current = 0;
+  for (const r of result.allResults || []) {
+    if (r.viable) {
+      current++;
+      maxConsecutive = Math.max(maxConsecutive, current);
+    } else {
+      current = 0;
+    }
+  }
+
+  if (maxConsecutive >= 3) {
+    score += 20;
+    details.push({ factor: `${maxConsecutive} consecutive viable distances`, impact: +20 });
+  } else if (maxConsecutive >= 2) {
+    score += 10;
+    details.push({ factor: `${maxConsecutive} consecutive viable distances`, impact: +10 });
+  }
+
+  // Bonus for having at least one viable close stretto (high overlap)
+  const closeViable = result.viableStrettos?.filter((s) => s.overlapPercent >= 60);
+  if (closeViable?.length > 0) {
+    score += 10;
+    details.push({ factor: 'Viable close stretto available', impact: +10 });
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details };
+}
+
+/**
+ * Calculate tonal answer score
+ */
+export function calculateTonalAnswerScore(result) {
+  if (!result || result.error) return { score: 0, details: [] };
+
+  let score = 60; // Base score
+  const details = [];
+
+  // Junction quality
+  const junctionScores = {
+    strong: 25,
+    good: 15,
+    static: -10,
+    unusual: -15,
+  };
+  const juncScore = junctionScores[result.junction?.q] || 0;
+  score += juncScore;
+  details.push({ factor: `Junction: ${result.junction?.p || '?'} (${result.junction?.q || 'unknown'})`, impact: juncScore });
+
+  // Answer type clarity
+  if (result.answerType === 'real') {
+    score += 10;
+    details.push({ factor: 'Clear real answer', impact: +10 });
+  } else if (result.mutationPoint !== null) {
+    score += 5;
+    details.push({ factor: 'Clear tonal mutation point', impact: +5 });
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details };
+}
+
+/**
+ * Calculate double counterpoint score
+ */
+export function calculateDoubleCounterpointScore(result) {
+  if (!result || result.error) return { score: 0, details: [] };
+
+  let score = 50; // Base score
+  const details = [];
+
+  // Original position issues
+  const origIssues = result.original?.issues?.length || 0;
+  if (origIssues === 0) {
+    score += 25;
+    details.push({ factor: 'No issues in original position', impact: +25 });
+  } else {
+    const penalty = Math.min(25, origIssues * 8);
+    score -= penalty;
+    details.push({ factor: `${origIssues} issues in original position`, impact: -penalty });
+  }
+
+  // Inverted position issues
+  const invIssues = result.inverted?.issues?.length || 0;
+  if (invIssues === 0) {
+    score += 25;
+    details.push({ factor: 'No issues in inverted position', impact: +25 });
+  } else {
+    const penalty = Math.min(25, invIssues * 8);
+    score -= penalty;
+    details.push({ factor: `${invIssues} issues in inverted position`, impact: -penalty });
+  }
+
+  // Imperfect consonance ratio bonus
+  const origRatio = result.original?.imperfectRatio || 0;
+  const invRatio = result.inverted?.imperfectRatio || 0;
+  const avgRatio = (origRatio + invRatio) / 2;
+
+  if (avgRatio >= 0.5) {
+    score += 10;
+    details.push({ factor: 'Good imperfect consonance ratio', impact: +10 });
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details };
+}
+
+/**
+ * Calculate rhythmic complementarity score
+ */
+export function calculateRhythmicComplementarityScore(result) {
+  if (!result || result.error) return { score: 0, details: [] };
+
+  const details = [];
+  const overlapRatio = result.overlapRatio || 0;
+
+  // Ideal overlap is between 30-60%
+  let score;
+  if (overlapRatio <= 0.3) {
+    score = 90;
+    details.push({ factor: `Low overlap (${Math.round(overlapRatio * 100)}%)`, impact: 90 });
+  } else if (overlapRatio <= 0.5) {
+    score = 75;
+    details.push({ factor: `Moderate overlap (${Math.round(overlapRatio * 100)}%)`, impact: 75 });
+  } else if (overlapRatio <= 0.7) {
+    score = 55;
+    details.push({ factor: `High overlap (${Math.round(overlapRatio * 100)}%)`, impact: 55 });
+  } else {
+    score = 30;
+    details.push({ factor: `Very high overlap (${Math.round(overlapRatio * 100)}%) - homorhythmic`, impact: 30 });
+  }
+
+  // Strong beat collision penalty
+  const collisions = result.strongBeatCollisions || 0;
+  if (collisions > 3) {
+    score -= 10;
+    details.push({ factor: `${collisions} strong beat collisions`, impact: -10 });
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details };
+}
+
+/**
+ * Calculate contour independence score
+ */
+export function calculateContourIndependenceScore(result) {
+  if (!result || result.error) return { score: 0, details: [] };
+
+  let score = 50; // Base score
+  const details = [];
+
+  const contraryRatio = result.contraryRatio || 0;
+  const parallelRatio = result.parallelRatio || 0;
+  const obliqueRatio = result.obliqueRatio || 0;
+
+  // Contrary motion is ideal
+  if (contraryRatio >= 0.4) {
+    score += 30;
+    details.push({ factor: `High contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: +30 });
+  } else if (contraryRatio >= 0.25) {
+    score += 15;
+    details.push({ factor: `Moderate contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: +15 });
+  }
+
+  // Parallel motion is problematic
+  if (parallelRatio > 0.3) {
+    score -= 20;
+    details.push({ factor: `High parallel motion (${Math.round(parallelRatio * 100)}%)`, impact: -20 });
+  } else if (parallelRatio <= 0.1) {
+    score += 10;
+    details.push({ factor: `Low parallel motion (${Math.round(parallelRatio * 100)}%)`, impact: +10 });
+  }
+
+  // Oblique motion adds variety
+  if (obliqueRatio >= 0.15) {
+    score += 10;
+    details.push({ factor: `Good oblique motion (${Math.round(obliqueRatio * 100)}%)`, impact: +10 });
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details };
+}
+
+/**
+ * Calculate modulatory robustness score
+ */
+export function calculateModulatoryRobustnessScore(result) {
+  if (!result || result.error) return { score: 0, details: [] };
+
+  let score = 50; // Base score
+  const details = [];
+
+  const profile = result.intervalProfile;
+  if (profile) {
+    const total = profile.consonant + profile.dissonant;
+    if (total > 0) {
+      const consPercent = Math.round((profile.consonant / total) * 100);
+
+      if (consPercent >= 80) {
+        score += 35;
+        details.push({ factor: `${consPercent}% consonant on strong beats`, impact: +35 });
+      } else if (consPercent >= 60) {
+        score += 20;
+        details.push({ factor: `${consPercent}% consonant on strong beats`, impact: +20 });
+      } else {
+        score -= 10;
+        details.push({ factor: `Only ${consPercent}% consonant on strong beats`, impact: -10 });
+      }
+    }
+  }
+
+  // Parallel perfect violations
+  const violations = result.violations?.length || 0;
+  if (violations === 0) {
+    score += 15;
+    details.push({ factor: 'No parallel perfect violations', impact: +15 });
+  } else {
+    const penalty = Math.min(30, violations * 10);
+    score -= penalty;
+    details.push({ factor: `${violations} parallel perfect violations`, impact: -penalty });
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details };
+}
+
+/**
+ * Calculate overall fugue viability score
+ */
+export function calculateOverallScore(results, hasCountersubject) {
+  const scores = {
+    harmonicImplication: calculateHarmonicImplicationScore(results.harmonicImplication),
+    rhythmicVariety: calculateRhythmicVarietyScore(results.rhythmicVariety),
+    strettoViability: calculateStrettoViabilityScore(results.stretto),
+    tonalAnswer: calculateTonalAnswerScore(results.tonalAnswer),
+  };
+
+  if (hasCountersubject) {
+    scores.doubleCounterpoint = calculateDoubleCounterpointScore(results.doubleCounterpoint);
+    scores.rhythmicComplementarity = calculateRhythmicComplementarityScore(results.rhythmicComplementarity);
+    scores.contourIndependence = calculateContourIndependenceScore(results.contourIndependence);
+    scores.modulatoryRobustness = calculateModulatoryRobustnessScore(results.modulatoryRobustness);
+  }
+
+  // Calculate weighted average
+  let totalWeight = 0;
+  let weightedSum = 0;
+
+  for (const [key, scoreData] of Object.entries(scores)) {
+    const weight = SCORE_CATEGORIES[key]?.weight || 1.0;
+    totalWeight += weight;
+    weightedSum += scoreData.score * weight;
+  }
+
+  const overallScore = Math.round(weightedSum / totalWeight);
+
+  return {
+    overall: overallScore,
+    rating: getScoreRating(overallScore),
+    color: getScoreColor(overallScore),
+    bgColor: getScoreBgColor(overallScore),
+    categories: scores,
+  };
+}
+
+/**
+ * Get a summary of strengths and areas for improvement
+ */
+export function getScoreSummary(scoreResult) {
+  const strengths = [];
+  const improvements = [];
+
+  for (const [key, data] of Object.entries(scoreResult.categories)) {
+    const category = SCORE_CATEGORIES[key];
+    if (!category) continue;
+
+    if (data.score >= SCORE_THRESHOLDS.good) {
+      strengths.push({
+        category: category.name,
+        score: data.score,
+        rating: getScoreRating(data.score),
+      });
+    } else if (data.score < SCORE_THRESHOLDS.fair) {
+      improvements.push({
+        category: category.name,
+        score: data.score,
+        rating: getScoreRating(data.score),
+        suggestion: getSuggestion(key, data),
+      });
+    }
+  }
+
+  return { strengths, improvements };
+}
+
+/**
+ * Get improvement suggestions for a category
+ */
+function getSuggestion(category, data) {
+  const suggestions = {
+    harmonicImplication: 'Consider starting on a tonic chord tone and ending on a degree that creates clear harmonic motion.',
+    rhythmicVariety: 'Try incorporating more diverse note values and rhythmic contrasts.',
+    strettoViability: 'Adjust melodic intervals to reduce dissonances when overlapping.',
+    tonalAnswer: 'Consider the harmonic junction at the end of the subject.',
+    doubleCounterpoint: 'Use more thirds and sixths to improve invertibility.',
+    rhythmicComplementarity: 'Offset attack points between voices for better interplay.',
+    contourIndependence: 'Add more contrary motion to create independent voice profiles.',
+    modulatoryRobustness: 'Ensure the countersubject works smoothly against the answer.',
+  };
+
+  return suggestions[category] || 'Review the analysis details for specific issues.';
+}
