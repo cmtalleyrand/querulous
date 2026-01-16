@@ -1,0 +1,313 @@
+import { ScaleDegree, NoteEvent } from '../types';
+import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants';
+
+/**
+ * Extract header information from ABC notation text
+ */
+export function extractABCHeaders(abcText) {
+  let key = null,
+    mode = null,
+    noteLength = null;
+
+  for (const line of abcText.split('\n')) {
+    const t = line.trim();
+
+    if (t.startsWith('L:')) {
+      const m = t.match(/L:\s*(\d+)\/(\d+)/);
+      if (m) noteLength = parseInt(m[1]) / parseInt(m[2]);
+    }
+
+    if (t.startsWith('K:')) {
+      const km = t.match(
+        /K:\s*([A-Ga-g][#b]?)\s*(m|min|minor|dor|dorian|phr|phrygian|lyd|lydian|mix|mixolydian|harm|harmonic)?/i
+      );
+      if (km) {
+        key = km[1].charAt(0).toUpperCase() + (km[1].slice(1) || '');
+        if (km[2]) {
+          const x = km[2].toLowerCase();
+          if (x.startsWith('m') && !x.startsWith('mix')) mode = 'natural_minor';
+          else if (x.startsWith('dor')) mode = 'dorian';
+          else if (x.startsWith('phr')) mode = 'phrygian';
+          else if (x.startsWith('lyd')) mode = 'lydian';
+          else if (x.startsWith('mix')) mode = 'mixolydian';
+          else if (x.startsWith('harm')) mode = 'harmonic_minor';
+          else mode = 'major';
+        }
+      }
+    }
+  }
+
+  return { key, mode, noteLength };
+}
+
+/**
+ * Compute the scale degree for a given pitch in a key and mode
+ */
+export function computeScaleDegree(pitch, tonic, mode) {
+  const interval = ((pitch - tonic) % 12 + 12) % 12;
+  const mi = MODE_INTERVALS[mode] || MODE_INTERVALS.major;
+
+  if (interval in mi) return new ScaleDegree(mi[interval], 0);
+
+  const raised = ((interval - 1) % 12 + 12) % 12;
+  if (raised in mi) return new ScaleDegree(mi[raised], 1);
+
+  const lowered = (interval + 1) % 12;
+  if (lowered in mi) return new ScaleDegree(mi[lowered], -1);
+
+  return new ScaleDegree(1, 0);
+}
+
+/**
+ * Parse ABC notation text into an array of NoteEvents
+ */
+export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null) {
+  let noteText = '',
+    defaultNoteLength = defaultNoteLengthOverride || 1 / 8,
+    keySignature = [];
+
+  for (const line of abcText.split('\n')) {
+    const t = line.trim();
+
+    if (t.startsWith('L:')) {
+      const m = t.match(/L:\s*(\d+)\/(\d+)/);
+      if (m && !defaultNoteLengthOverride) {
+        defaultNoteLength = parseInt(m[1]) / parseInt(m[2]);
+      }
+    } else if (t.startsWith('K:')) {
+      const km = t.match(/K:\s*([A-Ga-g][#b]?m?)/);
+      if (km) keySignature = KEY_SIGNATURES[km[1]] || [];
+    } else if (!t.startsWith('%') && !t.match(/^[A-Z]:/)) {
+      noteText += ' ' + t;
+    }
+  }
+
+  // Clean up the note text
+  noteText = noteText.replace(/\|/g, ' ').replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
+
+  const notes = [];
+  let currentOnset = 0;
+  const activeAccidentals = {};
+
+  const pat = /(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
+  let m;
+
+  while ((m = pat.exec(noteText)) !== null) {
+    const [, acc, letter, octMod, durStr] = m;
+    let pitch = NOTE_TO_MIDI[letter];
+    if (pitch === undefined) continue;
+
+    // Apply octave modifiers
+    for (const c of octMod || '') {
+      if (c === "'") pitch += 12;
+      if (c === ',') pitch -= 12;
+    }
+
+    const base = letter.toUpperCase();
+    let accStr = '';
+
+    // Apply accidentals
+    if (acc) {
+      if (acc.includes('^')) {
+        pitch += acc.length;
+        activeAccidentals[base] = acc.length;
+        accStr = acc;
+      } else if (acc.includes('_')) {
+        pitch -= acc.length;
+        activeAccidentals[base] = -acc.length;
+        accStr = acc;
+      } else if (acc === '=') {
+        activeAccidentals[base] = 0;
+        accStr = '=';
+      }
+    } else if (base in activeAccidentals) {
+      pitch += activeAccidentals[base];
+    } else {
+      if (keySignature.includes(base + '#')) pitch += 1;
+      if (keySignature.includes(base + 'b')) pitch -= 1;
+    }
+
+    // Parse duration
+    let dur = defaultNoteLength;
+    if (durStr) {
+      if (durStr.includes('/')) {
+        const p = durStr.split('/');
+        dur = (defaultNoteLength * (p[0] ? parseInt(p[0]) : 1)) / (p[1] ? parseInt(p[1]) : 2);
+      } else {
+        dur = defaultNoteLength * parseInt(durStr);
+      }
+    }
+
+    notes.push(
+      new NoteEvent(
+        pitch,
+        dur * 4,
+        currentOnset,
+        computeScaleDegree(pitch, tonic, mode),
+        accStr + letter + (octMod || '') + (durStr || '')
+      )
+    );
+    currentOnset += dur * 4;
+  }
+
+  return { notes, defaultNoteLength };
+}
+
+/**
+ * Convert a MIDI pitch to ABC notation
+ */
+export function midiToABC(pitch, keySignature) {
+  const noteNames = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
+  const isSharp = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+  const octave = Math.floor(pitch / 12) - 5;
+  const pc = pitch % 12;
+
+  let name = noteNames[pc];
+  let acc = '';
+
+  if (isSharp[pc]) {
+    if (!keySignature.includes(name + '#')) acc = '^';
+  } else {
+    if (keySignature.includes(name + '#') || keySignature.includes(name + 'b')) acc = '=';
+  }
+
+  let octMod = '';
+  if (octave >= 1) {
+    name = name.toLowerCase();
+    octMod = "'".repeat(octave - 1);
+  } else if (octave <= -1) {
+    octMod = ','.repeat(-octave);
+  }
+
+  return acc + name + octMod;
+}
+
+/**
+ * Generate ABC notation for the tonal answer
+ */
+export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLength, meter = [4, 4]) {
+  const { tonic, keySignature, mode } = keyInfo;
+  const { tonalMotions, mutationPoint } = answerData;
+
+  const keyNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const flatNames = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+  const answerTonic = (tonic + 7) % 12;
+  const useFlats = keySignature.some((k) => k.includes('b'));
+  const answerKey = useFlats ? flatNames[answerTonic] : keyNames[answerTonic];
+
+  let modeSuffix = ['natural_minor', 'harmonic_minor'].includes(mode)
+    ? 'm'
+    : mode === 'dorian'
+      ? ' dor'
+      : '';
+
+  const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+  const lNum = Math.round(defaultNoteLength * 100);
+  const g = gcd(lNum, 100);
+  const measDur = meter[0] * (4 / meter[1]);
+
+  const answerKeySig =
+    KEY_SIGNATURES[answerKey + (['natural_minor', 'harmonic_minor', 'dorian'].includes(mode) ? 'm' : '')] ||
+    KEY_SIGNATURES[answerKey] ||
+    [];
+
+  const tokens = [];
+  let measCount = 0;
+
+  for (let i = 0; i < subject.length; i++) {
+    const n = subject[i];
+    let newPitch = n.pitch + 7;
+
+    // Apply tonal mutation if needed
+    if (tonalMotions.length > 0 && mutationPoint !== null && i < mutationPoint) {
+      const d = n.scaleDegree;
+      if (d.degree === 1 && d.alteration === 0) newPitch = n.pitch + 7;
+      else if (d.degree === 5 && d.alteration === 0) newPitch = n.pitch + 5;
+    }
+
+    const durMatch = n.abcNote.match(/[\d\/]+$/);
+    const noteMeas = Math.floor(n.onset / measDur);
+
+    if (noteMeas > measCount && tokens.length > 0) {
+      while (measCount < noteMeas) {
+        measCount++;
+        tokens.push(measCount % 4 === 0 ? '|\n' : '|');
+      }
+    }
+
+    tokens.push(midiToABC(newPitch, answerKeySig) + (durMatch ? durMatch[0] : ''));
+  }
+
+  tokens.push('|]');
+
+  let body = '';
+  let line = '';
+
+  for (const t of tokens) {
+    if (t === '|\n') {
+      body += line + ' |\n';
+      line = '';
+    } else if (t === '|' || t === '|]') {
+      line += ' ' + t;
+    } else {
+      line += (line && !line.endsWith('|') ? ' ' : '') + t;
+    }
+  }
+
+  if (line.trim()) body += line;
+
+  return `K:${answerKey}${modeSuffix}\nL:${lNum / g}/${100 / g}\n${body.trim()}`;
+}
+
+/**
+ * Format the subject as ABC notation
+ */
+export function formatSubjectABC(subject, keyInfo, defaultNoteLength, meter = [4, 4]) {
+  const { key, mode } = keyInfo;
+
+  let modeSuffix = ['natural_minor', 'harmonic_minor'].includes(mode)
+    ? 'm'
+    : mode === 'dorian'
+      ? ' dor'
+      : '';
+
+  const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+  const lNum = Math.round(defaultNoteLength * 100);
+  const g = gcd(lNum, 100);
+  const measDur = meter[0] * (4 / meter[1]);
+
+  const tokens = [];
+  let measCount = 0;
+
+  for (const n of subject) {
+    const noteMeas = Math.floor(n.onset / measDur);
+    if (noteMeas > measCount && tokens.length > 0) {
+      while (measCount < noteMeas) {
+        measCount++;
+        tokens.push(measCount % 4 === 0 ? '|\n' : '|');
+      }
+    }
+    tokens.push(n.abcNote);
+  }
+
+  tokens.push('|]');
+
+  let body = '';
+  let line = '';
+
+  for (const t of tokens) {
+    if (t === '|\n') {
+      body += line + ' |\n';
+      line = '';
+    } else if (t === '|' || t === '|]') {
+      line += ' ' + t;
+    } else {
+      line += (line && !line.endsWith('|') ? ' ' : '') + t;
+    }
+  }
+
+  if (line.trim()) body += line;
+
+  return `K:${key}${modeSuffix}\nL:${lNum / g}/${100 / g}\n${body.trim()}`;
+}
