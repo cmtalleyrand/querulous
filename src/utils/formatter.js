@@ -75,3 +75,26 @@ export function metricWeight(onset) {
   if (Math.abs(b - 1) < 0.01 || Math.abs(b - 3) < 0.01) return 0.5;
   return 0.25;
 }
+
+/**
+ * Get metric position descriptor for a beat position
+ */
+export function metricPosition(onset) {
+  const weight = metricWeight(onset);
+  if (weight === 1.0) return { weight, label: 'downbeat', severity: 'strong' };
+  if (weight === 0.75) return { weight, label: 'secondary accent', severity: 'moderate' };
+  if (weight === 0.5) return { weight, label: 'weak beat', severity: 'mild' };
+  return { weight, label: 'off-beat', severity: 'negligible' };
+}
+
+/**
+ * Get severity multiplier for scoring based on metric position
+ * Downbeat issues are most severe, off-beat issues are least
+ */
+export function metricSeverity(onset) {
+  const weight = metricWeight(onset);
+  if (weight === 1.0) return 1.5; // downbeat - 50% more severe
+  if (weight === 0.75) return 1.2; // secondary accent - 20% more severe
+  if (weight === 0.5) return 1.0; // weak beat - baseline
+  return 0.6; // off-beat - 40% less severe
+}

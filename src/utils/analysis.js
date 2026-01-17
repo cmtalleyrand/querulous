@@ -548,19 +548,23 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       if (sim.metricWeight >= 0.75 && !sim.interval.isConsonant()) {
         // Find the classification for this dissonance
         const classification = classifyDissonance(sim, sims, subject, comes, formatter);
+        const metricLabel = sim.metricWeight === 1.0 ? 'downbeat' : 'strong beat';
 
         if (classification.type === 'unprepared') {
           issues.push({
             onset: sim.onset,
-            description: `Unprepared ${sim.interval} (${pitchName(sim.voice1Note.pitch)}-${pitchName(sim.voice2Note.pitch)}) on strong beat at ${formatter.formatBeat(sim.onset)}`,
+            description: `Unprepared ${sim.interval} on ${metricLabel}: Dux ${pitchName(sim.voice1Note.pitch)} vs Comes ${pitchName(sim.voice2Note.pitch)} at ${formatter.formatBeat(sim.onset)}`,
             type: 'dissonance',
+            interval: sim.interval.toString(),
+            duxPitch: pitchName(sim.voice1Note.pitch),
+            comesPitch: pitchName(sim.voice2Note.pitch),
           });
         } else if (classification.type === 'appoggiatura') {
-          // Appoggiaturas on strong beats are stylistically bold but not errors
           warnings.push({
             onset: sim.onset,
-            description: `${classification.label}: ${sim.interval} at ${formatter.formatBeat(sim.onset)} (resolves by step)`,
+            description: `Appoggiatura ${sim.interval} on ${metricLabel}: ${pitchName(sim.voice1Note.pitch)}-${pitchName(sim.voice2Note.pitch)} at ${formatter.formatBeat(sim.onset)} (resolves by step)`,
             type: 'appoggiatura',
+            interval: sim.interval.toString(),
           });
         }
         // Suspensions on strong beats are correct usage - no warning needed
@@ -592,10 +596,12 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
         if (v1Dir !== 0 && v2Dir !== 0 && Math.sign(v1Dir) === Math.sign(v2Dir)) {
           const upperLeap = Math.abs(v1Dir > v2Dir ? v1Dir : v2Dir) > 2;
           if (upperLeap) {
+            const dir = v1Dir > 0 ? 'ascending' : 'descending';
             warnings.push({
               onset: next.onset,
-              description: `Direct ${next.interval.class === 5 ? '5th' : '8ve'} by similar motion at ${formatter.formatBeat(next.onset)}`,
+              description: `Direct ${next.interval.class === 5 ? '5th' : '8ve'} (${dir}): ${pitchName(curr.voice1Note.pitch)}-${pitchName(curr.voice2Note.pitch)} to ${pitchName(next.voice1Note.pitch)}-${pitchName(next.voice2Note.pitch)} at ${formatter.formatBeat(next.onset)}`,
               type: 'direct',
+              interval: next.interval.toString(),
             });
           }
         }
@@ -639,6 +645,14 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       intervalPoints.push(beatSnapshots.get(beat));
     }
 
+    // Calculate quality rating based on issue severity
+    let qualityRating = 'clean';
+    if (issues.length > 0) {
+      qualityRating = issues.length > 2 ? 'problematic' : 'marginal';
+    } else if (warnings.length > 0) {
+      qualityRating = warnings.length > 2 ? 'acceptable' : 'good';
+    }
+
     results.push({
       distance: dist,
       distanceFormatted: formatter.formatDistance(dist),
@@ -650,8 +664,15 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       intervalPoints,
       viable: issues.length === 0,
       clean: issues.length === 0 && warnings.length === 0,
+      qualityRating,
     });
   }
+
+  // Generate summary with counts by category
+  const cleanCount = results.filter(r => r.clean).length;
+  const viableCount = results.filter(r => r.viable).length;
+  const marginalCount = results.filter(r => !r.viable && r.issueCount <= 2).length;
+  const problematicCount = results.filter(r => r.issueCount > 2).length;
 
   return {
     subjectLengthBeats: subLen,
@@ -659,6 +680,15 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     viableStrettos: results.filter((r) => r.viable),
     cleanStrettos: results.filter((r) => r.clean),
     problematicStrettos: results.filter((r) => !r.viable),
+    summary: {
+      totalTested: results.length,
+      clean: cleanCount,
+      viable: viableCount,
+      marginal: marginalCount,
+      problematic: problematicCount,
+      bestDistance: cleanCount > 0 ? results.find(r => r.clean)?.distanceFormatted :
+                    viableCount > 0 ? results.find(r => r.viable)?.distanceFormatted : null,
+    },
   };
 }
 

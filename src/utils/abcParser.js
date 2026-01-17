@@ -116,18 +116,25 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
     }
   }
 
-  // Clean up the note text
-  noteText = noteText.replace(/\|/g, ' ').replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
+  // Clean up the note text - preserve bar lines for accidental reset, remove other non-note elements
+  noteText = noteText.replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
 
   const notes = [];
   let currentOnset = 0;
-  const activeAccidentals = {};
+  let activeAccidentals = {};
 
-  const pat = /(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
+  // Pattern matches bar lines OR notes - bar lines reset accidentals per ABC standard
+  const pat = /(\|+:?|:\|+)|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
   let m;
 
   while ((m = pat.exec(noteText)) !== null) {
-    const [, acc, letter, octMod, durStr] = m;
+    // Check if this is a bar line - reset accidentals
+    if (m[1]) {
+      activeAccidentals = {};
+      continue;
+    }
+
+    const [, , acc, letter, octMod, durStr] = m;
     let pitch = NOTE_TO_MIDI[letter];
     if (pitch === undefined) continue;
 
