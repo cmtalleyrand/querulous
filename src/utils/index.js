@@ -46,3 +46,6 @@ export {
   calculateOverallScore,
   getScoreSummary,
 } from './scoring';
+
+// Help content
+export { HELP_CONTENT, getHelpContent, getHelpTopics } from './helpContent';

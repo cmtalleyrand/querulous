@@ -19,6 +19,7 @@ import {
   STRETTO_STEP_OPTIONS,
   OCTAVE_OPTIONS,
   CS_POSITION_OPTIONS,
+  TIME_SIGNATURE_OPTIONS,
   BeatFormatter,
   extractABCHeaders,
   parseABC,
@@ -56,6 +57,7 @@ export default function App() {
   const [selKey, setSelKey] = useState('D');
   const [selMode, setSelMode] = useState('natural_minor');
   const [selNoteLen, setSelNoteLen] = useState('1/8');
+  const [selTimeSig, setSelTimeSig] = useState('4/4');
   const [strettoStep, setStrettoStep] = useState('1');
   const [strettoOctave, setStrettoOctave] = useState('12');
   const [selectedStretto, setSelectedStretto] = useState(null);
@@ -93,7 +95,10 @@ export default function App() {
       if (['natural_minor', 'harmonic_minor'].includes(effMode)) keyForSig = keyBase + 'm';
       const keySig = KEY_SIGNATURES[keyForSig] || KEY_SIGNATURES[keyBase] || [];
       const keyInfo = { key: effKey, tonic, mode: effMode, keySignature: keySig };
-      const meter = [4, 4];
+
+      // Get time signature - use parsed from ABC or selected
+      const timeSigOption = TIME_SIGNATURE_OPTIONS.find(t => t.value === selTimeSig);
+      const meter = h.meter || timeSigOption?.meter || [4, 4];
 
       // Parse subject
       const subjectParsed = parseABC(subjectInput, tonic, effMode, effNL);
@@ -205,7 +210,7 @@ export default function App() {
             marginBottom: '16px',
           }}
         >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
             <Select
               label="Key"
               value={selKey}
@@ -217,6 +222,12 @@ export default function App() {
               value={selMode}
               onChange={setSelMode}
               options={AVAILABLE_MODES}
+            />
+            <Select
+              label="Time Sig (M:)"
+              value={selTimeSig}
+              onChange={setSelTimeSig}
+              options={TIME_SIGNATURE_OPTIONS}
             />
             <Select
               label="Note Length (L:)"
@@ -232,7 +243,7 @@ export default function App() {
             />
           </div>
           <p style={{ fontSize: '10px', color: '#888', margin: '10px 0 0' }}>
-            K: and L: in ABC notation override these settings
+            K:, M:, and L: in ABC notation override these settings
           </p>
         </div>
 
@@ -398,14 +409,14 @@ export default function App() {
             <ScoreDashboard scoreResult={scoreResult} hasCountersubject={!!results.countersubject} />
 
             {/* Subject Visualization */}
-            <Section title="Subject">
+            <Section title="Subject" helpKey="subject">
               <PianoRoll voices={[{ notes: results.subject, color: '#5c6bc0', label: 'Subject' }]} />
             </Section>
 
             {/* Countersubject Sections */}
             {results.countersubject && (
               <>
-                <Section title="Countersubject + Answer">
+                <Section title="Countersubject + Answer" helpKey="countersubject">
                   <div style={{ display: 'flex', gap: '16px', marginBottom: '10px', alignItems: 'flex-end' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '10px', color: '#546e7a', marginBottom: '4px' }}>
@@ -488,7 +499,7 @@ export default function App() {
             )}
 
             {/* Harmonic Implication */}
-            <Section title="Harmonic Implication">
+            <Section title="Harmonic Implication" helpKey="harmonicImplication">
               <DataRow
                 data={{
                   Opening: `${results.harmonicImplication.opening.degree} ${results.harmonicImplication.opening.isTonicChordTone ? '(tonic)' : ''}`,
@@ -502,7 +513,7 @@ export default function App() {
             </Section>
 
             {/* Tonal Answer */}
-            <Section title="Tonal Answer">
+            <Section title="Tonal Answer" helpKey="tonalAnswer">
               <DataRow
                 data={{
                   Type: results.tonalAnswer.answerType,
@@ -518,7 +529,7 @@ export default function App() {
             </Section>
 
             {/* Stretto Viability */}
-            <Section title="Stretto Viability">
+            <Section title="Stretto Viability" helpKey="strettoViability">
               <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', alignItems: 'flex-end' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '10px', color: '#546e7a', marginBottom: '4px' }}>
@@ -625,7 +636,7 @@ export default function App() {
             </Section>
 
             {/* Rhythmic Profile */}
-            <Section title="Rhythmic Profile">
+            <Section title="Rhythmic Profile" helpKey="rhythmicVariety">
               <DataRow
                 data={{
                   'Note values': results.rhythmicVariety.uniqueDurations,
@@ -651,7 +662,7 @@ export default function App() {
                   Countersubject Analysis
                 </h2>
 
-                <Section title="Double Counterpoint">
+                <Section title="Double Counterpoint" helpKey="doubleCounterpoint">
                   <DataRow
                     data={{
                       'Original (CS above)': `${results.doubleCounterpoint.original.thirds} 3rds, ${results.doubleCounterpoint.original.sixths} 6ths, ${results.doubleCounterpoint.original.perfects} perfect`,
@@ -661,7 +672,7 @@ export default function App() {
                   <ObservationList observations={results.doubleCounterpoint.observations} />
                 </Section>
 
-                <Section title="Rhythmic Complementarity">
+                <Section title="Rhythmic Complementarity" helpKey="rhythmicComplementarity">
                   <DataRow
                     data={{
                       Overlap: `${Math.round(results.rhythmicComplementarity.overlapRatio * 100)}%`,
@@ -671,7 +682,7 @@ export default function App() {
                   <ObservationList observations={results.rhythmicComplementarity.observations} />
                 </Section>
 
-                <Section title="Contour Independence">
+                <Section title="Contour Independence" helpKey="contourIndependence">
                   <DataRow
                     data={{
                       Parallel: `${results.contourIndependence.parallelMotions} (${Math.round(results.contourIndependence.parallelRatio * 100)}%)`,
@@ -691,7 +702,7 @@ export default function App() {
                   />
                 </Section>
 
-                <Section title="Modulatory Robustness">
+                <Section title="Modulatory Robustness" helpKey="modulatoryRobustness">
                   <p style={{ fontSize: '12px', color: '#546e7a', marginBottom: '8px' }}>
                     How well does the countersubject work against the answer?
                   </p>

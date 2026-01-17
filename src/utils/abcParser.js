@@ -7,37 +7,65 @@ import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants';
 export function extractABCHeaders(abcText) {
   let key = null,
     mode = null,
-    noteLength = null;
+    noteLength = null,
+    meter = null;
 
   for (const line of abcText.split('\n')) {
     const t = line.trim();
 
+    // Parse note length (L:)
     if (t.startsWith('L:')) {
       const m = t.match(/L:\s*(\d+)\/(\d+)/);
       if (m) noteLength = parseInt(m[1]) / parseInt(m[2]);
     }
 
+    // Parse time signature (M:)
+    if (t.startsWith('M:')) {
+      const mm = t.match(/M:\s*(\d+)\/(\d+)/);
+      if (mm) meter = [parseInt(mm[1]), parseInt(mm[2])];
+    }
+
+    // Parse key signature (K:)
     if (t.startsWith('K:')) {
+      // More flexible regex that handles Maj, Major, minor, m, etc.
       const km = t.match(
-        /K:\s*([A-Ga-g][#b]?)\s*(m|min|minor|dor|dorian|phr|phrygian|lyd|lydian|mix|mixolydian|harm|harmonic)?/i
+        /K:\s*([A-Ga-g][#b]?)\s*(maj|major|m|min|minor|dor|dorian|phr|phrygian|lyd|lydian|mix|mixolydian|harm|harmonic|loc|locrian|ion|ionian|aeo|aeolian)?/i
       );
       if (km) {
         key = km[1].charAt(0).toUpperCase() + (km[1].slice(1) || '');
         if (km[2]) {
           const x = km[2].toLowerCase();
-          if (x.startsWith('m') && !x.startsWith('mix')) mode = 'natural_minor';
-          else if (x.startsWith('dor')) mode = 'dorian';
-          else if (x.startsWith('phr')) mode = 'phrygian';
-          else if (x.startsWith('lyd')) mode = 'lydian';
-          else if (x.startsWith('mix')) mode = 'mixolydian';
-          else if (x.startsWith('harm')) mode = 'harmonic_minor';
-          else mode = 'major';
+          // Check for major indicators first (before checking 'm' for minor)
+          if (x.startsWith('maj') || x.startsWith('ion')) {
+            mode = 'major';
+          } else if (x.startsWith('m') && !x.startsWith('mix') && !x.startsWith('maj')) {
+            mode = 'natural_minor';
+          } else if (x.startsWith('aeo')) {
+            mode = 'natural_minor';
+          } else if (x.startsWith('dor')) {
+            mode = 'dorian';
+          } else if (x.startsWith('phr')) {
+            mode = 'phrygian';
+          } else if (x.startsWith('lyd')) {
+            mode = 'lydian';
+          } else if (x.startsWith('mix')) {
+            mode = 'mixolydian';
+          } else if (x.startsWith('harm')) {
+            mode = 'harmonic_minor';
+          } else if (x.startsWith('loc')) {
+            mode = 'locrian';
+          } else {
+            mode = 'major';
+          }
+        } else {
+          // No mode specified - default to major
+          mode = 'major';
         }
       }
     }
   }
 
-  return { key, mode, noteLength };
+  return { key, mode, noteLength, meter };
 }
 
 /**

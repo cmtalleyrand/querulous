@@ -54,6 +54,7 @@ export const MODE_INTERVALS = {
   phrygian: { 0: 1, 1: 2, 3: 3, 5: 4, 7: 5, 8: 6, 10: 7 },
   lydian: { 0: 1, 2: 2, 4: 3, 6: 4, 7: 5, 9: 6, 11: 7 },
   mixolydian: { 0: 1, 2: 2, 4: 3, 5: 4, 7: 5, 9: 6, 10: 7 },
+  locrian: { 0: 1, 1: 2, 3: 3, 5: 4, 6: 5, 8: 6, 10: 7 },
 };
 
 /**
@@ -124,4 +125,18 @@ export const OCTAVE_OPTIONS = [
 export const CS_POSITION_OPTIONS = [
   { value: 'above', label: 'Above' },
   { value: 'below', label: 'Below' },
+];
+
+/**
+ * Time signature options
+ */
+export const TIME_SIGNATURE_OPTIONS = [
+  { value: '4/4', label: '4/4', meter: [4, 4] },
+  { value: '3/4', label: '3/4', meter: [3, 4] },
+  { value: '2/4', label: '2/4', meter: [2, 4] },
+  { value: '6/8', label: '6/8', meter: [6, 8] },
+  { value: '9/8', label: '9/8', meter: [9, 8] },
+  { value: '12/8', label: '12/8', meter: [12, 8] },
+  { value: '2/2', label: '2/2 (cut time)', meter: [2, 2] },
+  { value: '3/2', label: '3/2', meter: [3, 2] },
 ];

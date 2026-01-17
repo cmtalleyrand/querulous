@@ -3,3 +3,4 @@ export { Observation, ObservationList } from './Observation';
 export { DataRow } from './DataRow';
 export { Select } from './Select';
 export { ABCBox } from './ABCBox';
+export { InfoButton, HelpModal } from './InfoButton';
