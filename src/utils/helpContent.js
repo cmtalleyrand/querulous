@@ -144,12 +144,56 @@ For each configuration, it counts:
 • Perfect consonances (5ths become 4ths when inverted)
 • Dissonances on strong beats
 
+Dissonance classification (per species counterpoint practice):
+• sus: Suspension—prepared consonance held over to become dissonant, resolves down by step
+• PT: Passing tone—stepwise motion through a dissonance on a weak beat
+• N: Neighbor tone—step away and back to the same note
+• Ant: Anticipation—arrives early, same pitch as next consonance
+• App: Appoggiatura—leap to strong-beat dissonance, resolves by step
+• unprepared: Dissonance not conforming to standard practice
+
 Issues detected:
 • Parallel 5ths/8ves in either position
 • 4ths against the bass (dissonant in tonal counterpoint)
-• Strong-beat dissonances
+• Unprepared strong-beat dissonances
 
 Good invertible counterpoint uses predominantly imperfect consonances (3rds and 6ths). Heavy use of perfect 5ths creates problems because they become 4ths when inverted.`,
+  },
+
+  dissonanceTreatment: {
+    title: 'Dissonance Treatment',
+    brief: 'Classification of dissonances according to species counterpoint.',
+    detailed: `In strict counterpoint, dissonances must be handled according to established patterns:
+
+SUSPENSIONS (sus)
+• Preparation: The dissonant note sounds as a consonance on the previous beat
+• Dissonance: Note is held while the other voice moves, creating the dissonance
+• Resolution: The suspended note moves DOWN by step to a consonance
+• Common suspensions: 7-6, 4-3, 9-8 (above bass); 2-3 (below bass)
+
+PASSING TONES (PT)
+• Occur on weak beats (beats 2, 4 or off-beats)
+• Approached by step from one direction
+• Left by step in the same direction
+• Connect two consonances
+
+NEIGHBOR TONES (N)
+• Also called auxiliary notes
+• Step away from a consonance and return to the same note
+• Usually on weak beats
+
+ANTICIPATIONS (Ant)
+• Arrive early—the note of the next consonance sounds before its time
+• Usually short and on weak beats
+
+APPOGGIATURAS (App)
+• Approach by leap to a strong beat dissonance
+• Resolve by step (usually down)
+• Creates expressive emphasis
+
+UNPREPARED DISSONANCES
+• Strong-beat dissonances not fitting the above categories
+• Generally avoided in strict style; may be acceptable in freer styles`,
   },
 
   rhythmicComplementarity: {

@@ -130,13 +130,26 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
             const isDissonant = !pt.isConsonant;
             const isPerfect = [1, 5, 8].includes(pt.intervalClass);
 
-            // Color coding: red for dissonant, blue for perfect consonance, green for imperfect consonance
+            // Color coding based on dissonance type
             let fillColor = '#43a047'; // imperfect consonance (3rd, 6th)
-            if (isDissonant) fillColor = '#e53935';
-            else if (isPerfect) fillColor = '#1e88e5';
+            if (isDissonant) {
+              // Color by dissonance type
+              if (pt.dissonanceType === 'suspension') fillColor = '#7b1fa2'; // purple for suspensions
+              else if (pt.dissonanceType === 'passing' || pt.dissonanceType === 'neighbor') fillColor = '#f57c00'; // orange for passing/neighbor
+              else if (pt.dissonanceType === 'unprepared') fillColor = '#d32f2f'; // red for unprepared
+              else fillColor = '#e53935'; // default red
+            } else if (isPerfect) {
+              fillColor = '#1e88e5';
+            }
 
             // Highlight strong beats
             const isStrong = pt.isStrong;
+
+            // Build label: interval class + dissonance type abbreviation
+            let label = `${pt.intervalClass}`;
+            if (pt.dissonanceLabel && pt.dissonanceLabel !== '!') {
+              label = pt.dissonanceLabel;
+            }
 
             return (
               <g key={`int-${i}`}>
@@ -154,13 +167,13 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                 <text
                   x={x}
                   y={h - 6}
-                  fontSize={isStrong ? '10' : '9'}
+                  fontSize={isStrong ? '9' : '8'}
                   fill={fillColor}
                   textAnchor="middle"
                   fontWeight={isStrong ? '600' : '400'}
                   fontFamily="monospace"
                 >
-                  {pt.intervalClass}
+                  {label}
                 </text>
               </g>
             );
@@ -178,13 +191,17 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
 
       {/* Legend for interval colors */}
       {intervalPoints.length > 0 && (
-        <g transform={`translate(${w - 140}, 5)`}>
-          <rect x={0} y={0} width={10} height={8} fill="#43a047" rx={1} />
-          <text x={14} y={7} fontSize="7" fill="#666">3rd/6th</text>
-          <rect x={45} y={0} width={10} height={8} fill="#1e88e5" rx={1} />
-          <text x={59} y={7} fontSize="7" fill="#666">P5/P8</text>
-          <rect x={85} y={0} width={10} height={8} fill="#e53935" rx={1} />
-          <text x={99} y={7} fontSize="7" fill="#666">diss</text>
+        <g transform={`translate(${w - 200}, 5)`}>
+          <rect x={0} y={0} width={8} height={8} fill="#43a047" rx={1} />
+          <text x={11} y={7} fontSize="6" fill="#666">3rd/6th</text>
+          <rect x={40} y={0} width={8} height={8} fill="#1e88e5" rx={1} />
+          <text x={51} y={7} fontSize="6" fill="#666">P5/8</text>
+          <rect x={72} y={0} width={8} height={8} fill="#7b1fa2" rx={1} />
+          <text x={83} y={7} fontSize="6" fill="#666">sus</text>
+          <rect x={100} y={0} width={8} height={8} fill="#f57c00" rx={1} />
+          <text x={111} y={7} fontSize="6" fill="#666">PT/N</text>
+          <rect x={133} y={0} width={8} height={8} fill="#d32f2f" rx={1} />
+          <text x={144} y={7} fontSize="6" fill="#666">unprep</text>
         </g>
       )}
     </svg>

@@ -18,6 +18,8 @@ export {
 export {
   findSimultaneities,
   checkParallelPerfects,
+  classifyDissonance,
+  analyzeDissonances,
   testContourIndependence,
   testHarmonicImplication,
   testRhythmicVariety,

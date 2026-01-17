@@ -2,6 +2,237 @@ import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName } from './formatter';
 
 /**
+ * Classify a dissonance according to species counterpoint practice
+ * Returns: 'suspension', 'passing', 'neighbor', 'anticipation', 'appoggiatura', or 'unprepared'
+ */
+export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
+  if (sim.interval.isConsonant()) return { type: 'consonant', label: null };
+
+  const currentOnset = sim.onset;
+  const v1Note = sim.voice1Note;
+  const v2Note = sim.voice2Note;
+
+  // Find the previous and next simultaneities
+  const prevSims = allSims.filter(s => s.onset < currentOnset);
+  const nextSims = allSims.filter(s => s.onset > currentOnset);
+  const prevSim = prevSims.length > 0 ? prevSims[prevSims.length - 1] : null;
+  const nextSim = nextSims.length > 0 ? nextSims[0] : null;
+
+  // Find melodic context for each voice
+  const v1Idx = v1Notes.findIndex(n => n === v1Note);
+  const v2Idx = v2Notes.findIndex(n => n === v2Note);
+
+  const v1Prev = v1Idx > 0 ? v1Notes[v1Idx - 1] : null;
+  const v1Next = v1Idx < v1Notes.length - 1 ? v1Notes[v1Idx + 1] : null;
+  const v2Prev = v2Idx > 0 ? v2Notes[v2Idx - 1] : null;
+  const v2Next = v2Idx < v2Notes.length - 1 ? v2Notes[v2Idx + 1] : null;
+
+  // Helper: check if interval is a step (1 or 2 semitones)
+  const isStep = (a, b) => Math.abs(a - b) <= 2;
+
+  // Check for SUSPENSION in voice 1 (dissonant note held from previous consonance, resolves down)
+  if (v1Prev && prevSim && prevSim.interval.isConsonant()) {
+    // Same pitch as previous (preparation)
+    if (v1Note.pitch === v1Prev.pitch) {
+      // Check resolution: next note steps down
+      if (v1Next && v1Next.pitch < v1Note.pitch && isStep(v1Note.pitch, v1Next.pitch)) {
+        return {
+          type: 'suspension',
+          label: `${sim.interval.class}-${sim.interval.class - 1} sus`,
+          voice: 1,
+          description: `Suspension: ${pitchName(v1Note.pitch)} prepared, resolves to ${pitchName(v1Next.pitch)}`,
+        };
+      }
+    }
+  }
+
+  // Check for SUSPENSION in voice 2
+  if (v2Prev && prevSim && prevSim.interval.isConsonant()) {
+    if (v2Note.pitch === v2Prev.pitch) {
+      if (v2Next && v2Next.pitch < v2Note.pitch && isStep(v2Note.pitch, v2Next.pitch)) {
+        return {
+          type: 'suspension',
+          label: `${sim.interval.class}-${sim.interval.class - 1} sus`,
+          voice: 2,
+          description: `Suspension: ${pitchName(v2Note.pitch)} prepared, resolves to ${pitchName(v2Next.pitch)}`,
+        };
+      }
+    }
+  }
+
+  // Check for PASSING TONE in voice 1 (stepwise through, weak beat)
+  if (v1Prev && v1Next && sim.metricWeight < 0.75) {
+    const dir1 = v1Note.pitch - v1Prev.pitch;
+    const dir2 = v1Next.pitch - v1Note.pitch;
+    // Same direction, both steps
+    if (Math.sign(dir1) === Math.sign(dir2) && dir1 !== 0 && isStep(v1Prev.pitch, v1Note.pitch) && isStep(v1Note.pitch, v1Next.pitch)) {
+      return {
+        type: 'passing',
+        label: 'PT',
+        voice: 1,
+        description: `Passing tone: ${pitchName(v1Note.pitch)} connects ${pitchName(v1Prev.pitch)} to ${pitchName(v1Next.pitch)}`,
+      };
+    }
+  }
+
+  // Check for PASSING TONE in voice 2
+  if (v2Prev && v2Next && sim.metricWeight < 0.75) {
+    const dir1 = v2Note.pitch - v2Prev.pitch;
+    const dir2 = v2Next.pitch - v2Note.pitch;
+    if (Math.sign(dir1) === Math.sign(dir2) && dir1 !== 0 && isStep(v2Prev.pitch, v2Note.pitch) && isStep(v2Note.pitch, v2Next.pitch)) {
+      return {
+        type: 'passing',
+        label: 'PT',
+        voice: 2,
+        description: `Passing tone: ${pitchName(v2Note.pitch)} connects ${pitchName(v2Prev.pitch)} to ${pitchName(v2Next.pitch)}`,
+      };
+    }
+  }
+
+  // Check for NEIGHBOR TONE in voice 1 (step away and back)
+  if (v1Prev && v1Next && sim.metricWeight < 0.75) {
+    if (v1Prev.pitch === v1Next.pitch && isStep(v1Prev.pitch, v1Note.pitch)) {
+      return {
+        type: 'neighbor',
+        label: 'N',
+        voice: 1,
+        description: `Neighbor tone: ${pitchName(v1Note.pitch)} decorates ${pitchName(v1Prev.pitch)}`,
+      };
+    }
+  }
+
+  // Check for NEIGHBOR TONE in voice 2
+  if (v2Prev && v2Next && sim.metricWeight < 0.75) {
+    if (v2Prev.pitch === v2Next.pitch && isStep(v2Prev.pitch, v2Note.pitch)) {
+      return {
+        type: 'neighbor',
+        label: 'N',
+        voice: 2,
+        description: `Neighbor tone: ${pitchName(v2Note.pitch)} decorates ${pitchName(v2Prev.pitch)}`,
+      };
+    }
+  }
+
+  // Check for ANTICIPATION in voice 1 (arrives early, same as next consonance)
+  if (v1Next && nextSim && nextSim.interval.isConsonant()) {
+    if (v1Note.pitch === v1Next.pitch && sim.metricWeight < 0.5) {
+      return {
+        type: 'anticipation',
+        label: 'Ant',
+        voice: 1,
+        description: `Anticipation: ${pitchName(v1Note.pitch)} arrives early`,
+      };
+    }
+  }
+
+  // Check for ANTICIPATION in voice 2
+  if (v2Next && nextSim && nextSim.interval.isConsonant()) {
+    if (v2Note.pitch === v2Next.pitch && sim.metricWeight < 0.5) {
+      return {
+        type: 'anticipation',
+        label: 'Ant',
+        voice: 2,
+        description: `Anticipation: ${pitchName(v2Note.pitch)} arrives early`,
+      };
+    }
+  }
+
+  // Check for APPOGGIATURA in voice 1 (leap to dissonance on strong beat, resolves by step)
+  if (v1Prev && v1Next && sim.metricWeight >= 0.5) {
+    const approach = Math.abs(v1Note.pitch - v1Prev.pitch);
+    if (approach > 2 && isStep(v1Note.pitch, v1Next.pitch)) {
+      return {
+        type: 'appoggiatura',
+        label: 'App',
+        voice: 1,
+        description: `Appoggiatura: leap to ${pitchName(v1Note.pitch)}, resolves to ${pitchName(v1Next.pitch)}`,
+      };
+    }
+  }
+
+  // Check for APPOGGIATURA in voice 2
+  if (v2Prev && v2Next && sim.metricWeight >= 0.5) {
+    const approach = Math.abs(v2Note.pitch - v2Prev.pitch);
+    if (approach > 2 && isStep(v2Note.pitch, v2Next.pitch)) {
+      return {
+        type: 'appoggiatura',
+        label: 'App',
+        voice: 2,
+        description: `Appoggiatura: leap to ${pitchName(v2Note.pitch)}, resolves to ${pitchName(v2Next.pitch)}`,
+      };
+    }
+  }
+
+  // Unprepared/unresolved dissonance
+  return {
+    type: 'unprepared',
+    label: '!',
+    description: `Unprepared dissonance: ${sim.interval} at ${formatter.formatBeat(currentOnset)}`,
+  };
+}
+
+/**
+ * Analyze all dissonances in a set of simultaneities
+ */
+export function analyzeDissonances(sims, v1Notes, v2Notes, formatter) {
+  const results = {
+    suspensions: [],
+    passingTones: [],
+    neighborTones: [],
+    anticipations: [],
+    appoggiaturas: [],
+    unprepared: [],
+    summary: {},
+  };
+
+  for (const sim of sims) {
+    if (!sim.interval.isConsonant()) {
+      const classification = classifyDissonance(sim, sims, v1Notes, v2Notes, formatter);
+      const entry = {
+        onset: sim.onset,
+        interval: sim.interval.toString(),
+        pitches: `${pitchName(sim.voice1Note.pitch)}-${pitchName(sim.voice2Note.pitch)}`,
+        metricWeight: sim.metricWeight,
+        ...classification,
+      };
+
+      switch (classification.type) {
+        case 'suspension':
+          results.suspensions.push(entry);
+          break;
+        case 'passing':
+          results.passingTones.push(entry);
+          break;
+        case 'neighbor':
+          results.neighborTones.push(entry);
+          break;
+        case 'anticipation':
+          results.anticipations.push(entry);
+          break;
+        case 'appoggiatura':
+          results.appoggiaturas.push(entry);
+          break;
+        default:
+          results.unprepared.push(entry);
+      }
+    }
+  }
+
+  const total = results.suspensions.length + results.passingTones.length +
+    results.neighborTones.length + results.anticipations.length +
+    results.appoggiaturas.length + results.unprepared.length;
+
+  results.summary = {
+    total,
+    prepared: total - results.unprepared.length,
+    unpreparedCount: results.unprepared.length,
+    preparedRatio: total > 0 ? (total - results.unprepared.length) / total : 1,
+  };
+
+  return results;
+}
+
+/**
  * Find all simultaneous note pairs between two voices
  */
 export function findSimultaneities(v1, v2) {
@@ -309,14 +540,30 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       issues.push({ onset: v.onset, description: v.description, type: 'parallel' });
     }
 
-    // Check strong-beat dissonances (serious issue for beats 1 and 3)
+    // Analyze dissonances with classification
+    const dissonanceAnalysis = analyzeDissonances(sims, subject, comes, formatter);
+
+    // Check strong-beat dissonances - only unprepared ones are serious issues
     for (const sim of sims) {
       if (sim.metricWeight >= 0.75 && !sim.interval.isConsonant()) {
-        issues.push({
-          onset: sim.onset,
-          description: `${sim.interval} (${pitchName(sim.voice1Note.pitch)}-${pitchName(sim.voice2Note.pitch)}) on strong beat at ${formatter.formatBeat(sim.onset)}`,
-          type: 'dissonance',
-        });
+        // Find the classification for this dissonance
+        const classification = classifyDissonance(sim, sims, subject, comes, formatter);
+
+        if (classification.type === 'unprepared') {
+          issues.push({
+            onset: sim.onset,
+            description: `Unprepared ${sim.interval} (${pitchName(sim.voice1Note.pitch)}-${pitchName(sim.voice2Note.pitch)}) on strong beat at ${formatter.formatBeat(sim.onset)}`,
+            type: 'dissonance',
+          });
+        } else if (classification.type === 'appoggiatura') {
+          // Appoggiaturas on strong beats are stylistically bold but not errors
+          warnings.push({
+            onset: sim.onset,
+            description: `${classification.label}: ${sim.interval} at ${formatter.formatBeat(sim.onset)} (resolves by step)`,
+            type: 'appoggiatura',
+          });
+        }
+        // Suspensions on strong beats are correct usage - no warning needed
       }
     }
 
@@ -355,13 +602,22 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       }
     }
 
-    // Build interval timeline for visualization
+    // Build interval timeline for visualization with dissonance labels
     const intervalPoints = [];
     const beatSnapshots = new Map();
 
     for (const sim of sims) {
       const snapBeat = Math.round(sim.onset * 2) / 2;
       if (!beatSnapshots.has(snapBeat)) {
+        // Get dissonance classification if not consonant
+        let dissLabel = null;
+        let dissType = null;
+        if (!sim.interval.isConsonant()) {
+          const classification = classifyDissonance(sim, sims, subject, comes, formatter);
+          dissLabel = classification.label;
+          dissType = classification.type;
+        }
+
         beatSnapshots.set(snapBeat, {
           onset: sim.onset,
           beat: snapBeat,
@@ -372,6 +628,8 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
           comesPitch: sim.voice2Note.pitch,
           isConsonant: sim.interval.isConsonant(),
           isStrong: sim.metricWeight >= 0.75,
+          dissonanceLabel: dissLabel,
+          dissonanceType: dissType,
         });
       }
     }
@@ -489,7 +747,7 @@ export function testTonalAnswer(subject, mode, keyInfo, formatter) {
 export function testDoubleCounterpoint(subject, cs, formatter) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
-  const analyze = (sims, name) => {
+  const analyze = (sims, v1, v2, name) => {
     let thirds = 0,
       sixths = 0,
       perfects = 0,
@@ -517,11 +775,15 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
       }
     }
 
-    for (const s of strong) {
-      if (!s.interval.isConsonant() && s.metricWeight >= 0.75) {
+    // Analyze dissonances with classification
+    const dissonanceAnalysis = analyzeDissonances(sims, v1, v2, formatter);
+
+    // Only flag unprepared strong-beat dissonances as issues
+    for (const d of dissonanceAnalysis.unprepared) {
+      if (d.metricWeight >= 0.75) {
         issues.push({
           config: name,
-          description: `${s.interval} on downbeat at ${formatter.formatBeat(s.onset)}`,
+          description: `Unprepared ${d.interval} on strong beat at ${formatter.formatBeat(d.onset)}`,
         });
       }
     }
@@ -532,13 +794,17 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
       sixths,
       perfects,
       dissonant,
+      dissonanceAnalysis,
       imperfectRatio: strong.length > 0 ? (thirds + sixths) / strong.length : 0,
     };
   };
 
-  const orig = analyze(findSimultaneities(subject, cs), 'CS above');
+  const origSims = findSimultaneities(subject, cs);
+  const orig = analyze(origSims, subject, cs, 'CS above');
+
   const csInv = cs.map((n) => new NoteEvent(n.pitch - 12, n.duration, n.onset, n.scaleDegree, n.abcNote));
-  const inv = analyze(findSimultaneities(subject, csInv), 'CS below');
+  const invSims = findSimultaneities(subject, csInv);
+  const inv = analyze(invSims, subject, csInv, 'CS below');
 
   const observations = [];
 
@@ -550,6 +816,40 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
     type: 'info',
     description: `Inverted (CS below): ${inv.thirds} 3rds, ${inv.sixths} 6ths, ${inv.perfects} perfect consonances`,
   });
+
+  // Report dissonance treatment
+  const origDA = orig.dissonanceAnalysis;
+  const invDA = inv.dissonanceAnalysis;
+
+  if (origDA.summary.total > 0) {
+    const parts = [];
+    if (origDA.suspensions.length) parts.push(`${origDA.suspensions.length} sus`);
+    if (origDA.passingTones.length) parts.push(`${origDA.passingTones.length} PT`);
+    if (origDA.neighborTones.length) parts.push(`${origDA.neighborTones.length} N`);
+    if (origDA.anticipations.length) parts.push(`${origDA.anticipations.length} ant`);
+    if (origDA.appoggiaturas.length) parts.push(`${origDA.appoggiaturas.length} app`);
+    if (origDA.unprepared.length) parts.push(`${origDA.unprepared.length} unprepared`);
+
+    observations.push({
+      type: origDA.unprepared.length === 0 ? 'strength' : 'info',
+      description: `Original dissonances: ${parts.join(', ')}`,
+    });
+  }
+
+  if (invDA.summary.total > 0) {
+    const parts = [];
+    if (invDA.suspensions.length) parts.push(`${invDA.suspensions.length} sus`);
+    if (invDA.passingTones.length) parts.push(`${invDA.passingTones.length} PT`);
+    if (invDA.neighborTones.length) parts.push(`${invDA.neighborTones.length} N`);
+    if (invDA.anticipations.length) parts.push(`${invDA.anticipations.length} ant`);
+    if (invDA.appoggiaturas.length) parts.push(`${invDA.appoggiaturas.length} app`);
+    if (invDA.unprepared.length) parts.push(`${invDA.unprepared.length} unprepared`);
+
+    observations.push({
+      type: invDA.unprepared.length === 0 ? 'strength' : 'info',
+      description: `Inverted dissonances: ${parts.join(', ')}`,
+    });
+  }
 
   for (const i of orig.issues) {
     observations.push({ type: 'consideration', description: `Original: ${i.description}` });
