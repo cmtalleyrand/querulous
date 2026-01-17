@@ -1,267 +1,292 @@
 /**
- * Help content and explanations for the Fugue Analyzer
- *
- * Each section has a brief summary and detailed explanation
- * written for musicians who may not be counterpoint experts.
+ * Help content for the Fugue Analyzer
+ * Technical explanations of what each analysis does and why it matters.
  */
 
 export const HELP_CONTENT = {
-  // Main concepts
+  // Core concepts
   fugue: {
-    title: 'What is a Fugue?',
-    brief: 'A contrapuntal composition where voices enter one by one with the same melody.',
-    detailed: `A fugue is a type of composition where a melody (the "subject") is introduced by one voice,
-then imitated by other voices entering one after another. Think of it like a musical conversation
-where everyone eventually says the same thing, but at different times and often at different pitch levels.
+    title: 'Fugue',
+    brief: 'A contrapuntal form based on imitative entries of a subject.',
+    detailed: `A fugue presents a subject (main theme) that is imitated by successive voices at the interval of a fifth (or fourth). The analysis here assesses whether your subject has the properties needed for this imitative treatment:
 
-The magic of a fugue lies in how these overlapping melodies fit together harmonically -
-the subject must be designed so that it sounds good when played against itself.`,
+• Can it combine with itself at different time offsets (stretto)?
+• Does it establish clear tonic-dominant polarity for the answer?
+• If you have a countersubject, does it invert cleanly?
+
+These are practical concerns that affect what you can do with the material in a fugue.`,
   },
 
   subject: {
     title: 'Subject',
-    brief: 'The main melody that defines the fugue.',
-    detailed: `The subject is the primary melodic idea of a fugue. It's typically 2-8 measures long
-and should have:
+    brief: 'The primary theme that defines the fugue.',
+    detailed: `The subject is the melodic material that each voice presents in turn. This visualization shows:
 
-• A clear beginning and end
-• Distinctive rhythm that's recognizable
-• Strong tonal identity (establishes the key)
-• Good "bones" for counterpoint (works well against itself)
+• Pitch on the vertical axis (higher = higher pitch)
+• Time on the horizontal axis (left to right)
+• Note duration shown by rectangle length
 
-A great subject is memorable on its own AND works beautifully in combination with other voices.`,
+The subject's melodic and rhythmic profile determines what contrapuntal possibilities are available.`,
   },
 
   countersubject: {
     title: 'Countersubject',
-    brief: 'A recurring counter-melody that accompanies the subject.',
-    detailed: `The countersubject is a secondary melody that plays against the subject whenever it appears.
-Unlike free counterpoint (which changes each time), a true countersubject returns consistently.
+    brief: 'A secondary theme that accompanies subject entries.',
+    detailed: `A countersubject is counterpoint that consistently accompanies the subject. For it to function properly:
 
-A good countersubject should:
-• Complement the subject rhythmically (move when it rests, rest when it moves)
-• Work both above AND below the subject (invertible counterpoint)
-• Have its own character while supporting the subject
-• Sound good against both the subject AND the answer`,
+• It must work against both the subject (tonic) and answer (dominant)
+• It should be invertible—functioning both above and below the subject
+• Its rhythm should complement rather than duplicate the subject's rhythm
+
+The analysis tests these properties directly.`,
   },
 
   answer: {
     title: 'Answer',
-    brief: 'The subject transposed to the dominant key.',
-    detailed: `When the second voice enters in a fugue, it presents the subject transposed up a fifth
-(or down a fourth) into the dominant key. This is called the "answer."
+    brief: 'The subject transposed to the dominant.',
+    detailed: `The answer is the subject transposed up a perfect fifth (or down a fourth). Two types exist:
 
-There are two types:
-• Real Answer: Exact transposition (every interval preserved)
-• Tonal Answer: Modified transposition to maintain tonic-dominant relationship
+Real answer: Exact interval-for-interval transposition.
 
-A tonal answer is needed when the subject prominently features ^1-^5 or ^5-^1 motion,
-which would distort the harmony if transposed exactly.`,
+Tonal answer: Modified transposition used when the subject emphasizes ^1-^5 or ^5-^1. In these cases:
+• ^1 in the subject becomes ^5 in the answer (not ^5→^2)
+• ^5 in the subject becomes ^1 in the answer (not ^5→^2)
+
+This preserves the tonic-dominant relationship. The "mutation point" is where real transposition resumes after the tonal adjustment.`,
   },
 
   // Analysis sections
   harmonicImplication: {
     title: 'Harmonic Implication',
-    brief: 'How well the subject establishes tonality and harmonic direction.',
-    detailed: `This analyzes how the subject sets up the key and creates harmonic momentum.
+    brief: 'How the subject establishes and implies tonal function.',
+    detailed: `This analysis examines the subject's scale degrees:
 
-What we look for:
-• Opening note: Starting on ^1, ^3, or ^5 (tonic chord tones) establishes the key clearly
-• Ending note: Determines how smoothly we transition to the answer
-  - Ending on ^1 or ^2: Clean transition to dominant
-  - Ending on ^5: Creates harmonic stasis (V→V)
-  - Ending on ^7: Strong leading tone pull
-• Dominant arrival: When and where ^5 or ^7 appears affects pacing
+Opening degree: Starting on ^1, ^3, or ^5 (tonic triad) clearly establishes the key. Other degrees create ambiguity.
 
-A subject with clear harmonic implications gives the fugue strong tonal architecture.`,
+Terminal degree: Determines the harmonic junction with the answer:
+• ^1: Clean I→V progression
+• ^2: Pre-dominant function (ii→V possible)
+• ^5: Creates V→V stasis (less momentum)
+• ^7: Strong dominant pull (vii°→V)
+
+Dominant arrival: When ^5 or ^7 appears on a strong beat. Early arrival (first third) front-loads tension. Late arrival (final third) creates directed motion toward the cadence.
+
+The score reflects how clearly the subject defines tonal function.`,
   },
 
   rhythmicVariety: {
     title: 'Rhythmic Variety',
-    brief: 'Diversity and contrast in note durations.',
-    detailed: `This measures how interesting and distinctive the subject's rhythm is.
+    brief: 'Diversity of note values in the subject.',
+    detailed: `This counts distinct note durations and checks for rhythmic contrast.
 
-Good rhythmic variety means:
-• Multiple note values (not all quarter notes, for example)
-• Contrast between long and short notes
-• A recognizable rhythmic profile
+Why it matters: In multi-voice texture, the subject must be identifiable. Uniform rhythm (all quarter notes, for example) makes entries harder to perceive. Varied rhythm creates a distinctive profile.
 
-Why it matters: In a fugue with 3-4 voices, you need to hear the subject clearly.
-A distinctive rhythm helps it stand out from the texture. Uniform rhythm
-(all notes the same length) makes the subject harder to follow.`,
+The analysis checks:
+• Number of unique note values used
+• Presence of long-short and short-long contrasts
+• Whether the rhythm has a recognizable character
+
+A subject with one note value scores poorly. Three or more values with contrast scores well.`,
   },
 
   strettoViability: {
     title: 'Stretto Viability',
-    brief: 'Can the subject overlap with itself without clashing?',
-    detailed: `Stretto is when a new voice enters with the subject before the previous voice finishes.
-It's a powerful climactic device in fugues.
+    brief: 'Whether the subject can overlap with itself.',
+    detailed: `Stretto occurs when a new entry begins before the previous one finishes. This analysis tests each possible entry distance:
 
-This analysis tests what happens when you overlap the subject with itself at various time intervals:
+For each distance, the algorithm:
+1. Creates a second voice with the subject offset by that distance (and optionally displaced by octave)
+2. Finds all vertical simultaneities between the voices
+3. Checks for forbidden parallels (5ths and 8ves moving in the same direction)
+4. Checks for dissonances on strong beats (beats 1 and 3 in 4/4)
 
-• Green (viable): No voice-leading problems - can use this stretto distance
-• Orange (issues): Problems detected:
-  - Parallel 5ths/8ves: Forbidden in counterpoint
-  - Strong-beat dissonances: Clashes on emphasized beats
+Green = no violations detected
+Orange = issues found (hover or click for details)
 
-More viable strettos = more options for building excitement in your fugue.
+Violations listed:
+• "Parallel 5ths/8ves" - consecutive perfect intervals in parallel motion
+• Interval + beat position - dissonance occurring on a strong beat
 
-The intervals shown indicate what harmony results at each moment of overlap.`,
+More viable distances = more compositional flexibility. Close strettos (high overlap percentage) are particularly valuable for climactic passages.`,
   },
 
   tonalAnswer: {
     title: 'Tonal Answer',
-    brief: 'Whether the answer needs modification and how the subject-answer junction works.',
-    detailed: `This determines if your subject needs a "tonal" or "real" answer.
+    brief: 'Whether the answer requires tonal modification.',
+    detailed: `This determines if your subject needs a tonal (modified) or real (exact) answer.
 
-Tonal vs Real:
-• If subject starts ^1→^5 or ^5→^1: Tonal answer needed (modify the interval)
-• Otherwise: Real answer (exact transposition up a 5th)
+Detection logic:
+• Scans for ^1→^5 motion: triggers tonal mutation (^1→^5 becomes ^5→^1)
+• Scans for ^5→^1 motion: triggers tonal mutation (^5→^1 becomes ^1→^5)
+• Checks if subject begins on ^5: answer begins on ^1
 
-Why? If subject goes C→G (^1→^5) and we transpose exactly, answer would go G→D.
-But D is ^2, not ^1 of the dominant key! A tonal answer adjusts this to G→C to maintain proper harmonic function.
+The mutation point indicates where real transposition resumes after the tonal adjustment.
 
-Junction quality indicates how smoothly the subject connects to the answer:
-• I→V (strong): Subject ends on tonic function, answer on dominant - perfect!
-• V→V (static): Both on dominant - less harmonic motion
-• ii→V (good): Pre-dominant to dominant works well`,
+Junction quality describes the harmonic connection at the subject's end:
+• "strong" - creates clear functional progression
+• "static" - V→V, less harmonic motion
+• "unusual" - non-standard ending degree
+
+The generated answer ABC shows the computed transposition with any tonal modifications applied.`,
   },
 
   doubleCounterpoint: {
     title: 'Double Counterpoint',
-    brief: 'Can the countersubject work both above AND below the subject?',
-    detailed: `Double (or invertible) counterpoint means the two melodies can swap positions -
-what was on top can go on bottom, and vice versa.
+    brief: 'Invertibility of the subject-countersubject combination.',
+    detailed: `Double counterpoint at the octave means the two voices can exchange positions—the upper voice becomes the lower and vice versa.
 
-Why it matters: In a 3-voice fugue, sometimes the subject is in the soprano, sometimes in the bass.
-The countersubject needs to work in either position.
+The analysis tests both configurations:
+• Original: countersubject above the subject
+• Inverted: countersubject below the subject (transposed down an octave)
 
-What makes good invertible counterpoint:
-• Lots of 3rds and 6ths (they become 6ths and 3rds when inverted - both consonant!)
-• Careful use of 5ths (become 4ths, which need special treatment)
-• Avoid many perfect intervals (parallel 5ths in original = parallel 4ths inverted)
+For each configuration, it counts:
+• 3rds and 6ths (ideal—they invert to each other)
+• Perfect consonances (5ths become 4ths when inverted)
+• Dissonances on strong beats
 
-"CS above" = countersubject higher than subject (original position)
-"CS below" = countersubject lower than subject (inverted position)`,
+Issues detected:
+• Parallel 5ths/8ves in either position
+• 4ths against the bass (dissonant in tonal counterpoint)
+• Strong-beat dissonances
+
+Good invertible counterpoint uses predominantly imperfect consonances (3rds and 6ths). Heavy use of perfect 5ths creates problems because they become 4ths when inverted.`,
   },
 
   rhythmicComplementarity: {
     title: 'Rhythmic Complementarity',
-    brief: 'Do subject and countersubject fill in each other\'s gaps?',
-    detailed: `Good counterpoint often features rhythmic interplay - when one voice moves, the other rests,
-and vice versa.
+    brief: 'How attack points relate between subject and countersubject.',
+    detailed: `This measures rhythmic independence between the voices.
 
-Overlap percentage:
-• Low (under 30%): Excellent! Voices take turns, creating continuous motion
-• Medium (30-60%): Acceptable, some independence
-• High (over 60%): Homorhythmic - voices move together too much
+Attack overlap: Percentage of note onsets that coincide between subject and countersubject.
+• Under 30%: High complementarity—voices take turns
+• 30-60%: Moderate overlap
+• Over 60%: Homorhythmic—voices move together
 
-Strong-beat collisions: Both voices attacking together on beat 1 or 3.
-Some are fine (for emphasis), but too many loses the conversational quality.`,
+Strong-beat collisions: Simultaneous attacks on beats 1 or 3 (in 4/4). Some are normal; too many loses contrapuntal independence.
+
+Low overlap is generally better—it creates continuous motion where one voice fills the gaps of the other.`,
   },
 
   contourIndependence: {
     title: 'Contour Independence',
-    brief: 'Do the melodic shapes move independently?',
-    detailed: `This measures whether your voices have their own melodic profiles or just move in tandem.
+    brief: 'How melodic motion relates between voices.',
+    detailed: `This analyzes the directional relationship when both voices move simultaneously:
 
-Types of motion:
-• Contrary: One voice up, one down (most independent - ideal!)
-• Oblique: One voice moves, one stays (good independence)
-• Similar: Both move same direction, different intervals (moderate)
-• Parallel: Both move same direction, same interval (least independent)
+Contrary motion: One voice ascends, the other descends. Most independent.
+Oblique motion: One voice moves, the other holds. Good independence.
+Similar motion: Both move the same direction, different intervals.
+Parallel motion: Both move the same direction and interval. Least independent.
 
-A balance is best, but favoring contrary motion creates the most interesting texture.
-High parallel motion (over 30%) makes voices sound like they're "stuck together."`,
+The percentages show how often each motion type occurs.
+
+High contrary motion (over 35%) indicates good voice independence. High parallel motion (over 30%) suggests the voices are not sufficiently differentiated.`,
   },
 
   modulatoryRobustness: {
     title: 'Modulatory Robustness',
-    brief: 'Does the countersubject work against the answer (in the dominant key)?',
-    detailed: `The countersubject first appears against the subject (in the tonic key),
-but it also needs to work against the answer (in the dominant key).
+    brief: 'How the countersubject works against the answer.',
+    detailed: `The countersubject first appears against the subject in the tonic. But it also accompanies the answer, which is in the dominant.
 
-This tests: What happens when we play the countersubject against the transposed subject?
+This analysis transposes the subject up a fifth (simulating the answer) and tests the countersubject against it:
 
-What we check:
-• Consonance on strong beats: Should remain mostly consonant
-• Parallel 5ths/8ves: Should not appear
-• Voice-leading quality: Should remain smooth
+• Consonance percentage on strong beats
+• Parallel perfect interval violations
+• Strong-beat dissonances
 
-A countersubject that only works in one key will cause problems as the fugue modulates.`,
+A countersubject that works in the tonic but fails against the answer will cause problems whenever the answer appears with accompanying counterpoint.
+
+High consonance (80%+) and no parallel violations indicates the countersubject will function reliably throughout the fugue.`,
   },
 
   // UI elements
   pianoRoll: {
     title: 'Piano Roll',
-    brief: 'Visual representation of pitches over time.',
-    detailed: `The piano roll shows notes as colored rectangles:
-• Horizontal position = time (left to right)
-• Vertical position = pitch (higher = higher pitch)
-• Rectangle length = note duration
-• Color = which voice (subject, answer, countersubject)
+    brief: 'Time vs. pitch visualization.',
+    detailed: `Standard piano roll display:
+• X-axis: time (beats), with vertical lines marking beats
+• Y-axis: pitch (MIDI note number), with horizontal lines marking reference pitches
+• Rectangle: note duration
+• Color: voice identity
 
-Click on any note to see its details: pitch, duration, scale degree, and role in the counterpoint.`,
+Vertical grid lines: Solid lines mark downbeats (every 4 beats in 4/4). Lighter lines mark other beats.`,
   },
 
   intervalTimeline: {
     title: 'Interval Timeline',
-    brief: 'Shows consonance and dissonance over time.',
-    detailed: `This colored bar shows the harmonic intervals between voices:
+    brief: 'Consonance/dissonance over time.',
+    detailed: `Shows vertical intervals between two voices:
 
-• Green = Consonant (sounds stable): unisons, 3rds, 5ths, 6ths, octaves
-• Red = Dissonant (sounds tense): 2nds, 4ths*, 7ths, tritones
+Green: Consonant intervals (unison, 3rd, 5th, 6th, octave)
+Red: Dissonant intervals (2nd, 4th*, 7th, tritone)
 
-*4ths are consonant in some contexts but dissonant against the bass
+*4ths are consonant between upper voices but dissonant against the bass.
 
-Darker colors = stronger beats (more important)
-Lighter colors = weaker beats (passing moments)
+Darker shading: Strong beats (1, 3 in 4/4)
+Lighter shading: Weak beats
 
-Numbers show the interval class (3 = third, 6 = sixth, etc.)`,
+Numbers indicate interval class (3 = third, 6 = sixth, etc.)`,
   },
 
   abcNotation: {
     title: 'ABC Notation',
-    brief: 'A simple text format for writing music.',
-    detailed: `ABC notation lets you type music as text:
+    brief: 'Text-based music notation format.',
+    detailed: `ABC notation represents music as text:
 
-Notes: C D E F G A B (middle octave), c d e f g a b (octave higher)
-Octaves: ' = up one octave, , = down one octave
-Sharps/flats: ^ = sharp, _ = flat, = = natural
-Duration: 2 = double length, /2 = half length, 3 = triple, etc.
-Bar lines: | separates measures
+Pitch:
+• C D E F G A B = notes in the octave below middle C to B above
+• c d e f g a b = notes from middle C to B above
+• Apostrophe (') = up one octave: c' = C5
+• Comma (,) = down one octave: C, = C3
 
-Examples:
-• C2 = C half note (if L:1/4)
-• ^F = F sharp
-• G, = G below middle C
-• c' = C two octaves above middle
+Accidentals (applied to the following note):
+• ^ = sharp (^F = F#)
+• _ = flat (_B = Bb)
+• = = natural (cancels key signature)
+
+Note: ^C means "sharp the note C", so in C major it's C#. In a key that already has C# (like A major), ^C would mean C## (double sharp, enharmonically D).
+
+Duration (multiplies default note length):
+• No modifier = default length (set by L: header)
+• 2 = double length
+• 3 = triple length
+• /2 = half length
+• 3/2 = 1.5x length
 
 Headers:
-• K:Dm = Key of D minor
-• L:1/8 = Default note length is eighth note
-• M:3/4 = Time signature 3/4`,
+• K:D = D major
+• K:Dm or K:D minor = D minor
+• L:1/8 = default note length is eighth note
+• M:3/4 = time signature 3/4
+
+Bar lines: | separates measures, |] ends the piece`,
   },
 
-  // Scoring
   scoring: {
     title: 'Viability Score',
-    brief: 'Overall assessment of fugal potential.',
-    detailed: `The viability score (0-100) combines all analysis categories into a single rating.
+    brief: 'Aggregate assessment of fugal potential.',
+    detailed: `The overall score (0-100) combines individual category scores with these weights:
 
-How it's calculated:
-• Each category gets a score based on specific criteria
-• Categories are weighted by importance
-• The weighted average becomes your overall score
+Subject-only categories:
+• Harmonic Implication (1.0) - tonal clarity
+• Rhythmic Variety (0.8) - distinctive rhythm
+• Stretto Viability (1.0) - overlapping potential
+• Tonal Answer (0.9) - junction quality
 
-Score ratings:
-• 85-100 (Excellent): Strong fugal material, few if any concerns
-• 70-84 (Good): Solid foundation, minor issues to consider
-• 50-69 (Fair): Workable but needs attention in some areas
-• Below 50 (Needs Work): Significant issues to address
+With countersubject:
+• Double Counterpoint (1.0) - invertibility
+• Rhythmic Complementarity (0.8) - attack point offset
+• Contour Independence (0.9) - voice differentiation
+• Modulatory Robustness (1.0) - works against answer
 
-The score is a guide, not a verdict! Some great fugue subjects might score lower
-because they're unconventional. Use the detailed feedback to understand the trade-offs.`,
+Score = weighted average of applicable categories.
+
+Thresholds:
+• 85-100: Excellent - strong fugal material
+• 70-84: Good - solid with minor issues
+• 50-69: Fair - workable but has weaknesses
+• Below 50: Needs Work - significant issues
+
+The score indicates potential, not quality. Unconventional subjects may score lower but still make effective fugues.`,
   },
 };
 
@@ -273,7 +298,7 @@ export function getHelpContent(key) {
 }
 
 /**
- * Get all help topics for a category
+ * Get all help topics
  */
 export function getHelpTopics() {
   return Object.keys(HELP_CONTENT).map(key => ({
