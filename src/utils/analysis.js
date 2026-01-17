@@ -302,20 +302,83 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     );
     const sims = findSimultaneities(subject, comes);
     const issues = [];
+    const warnings = [];
 
-    // Check parallel perfects
+    // Check parallel perfects (serious issue)
     for (const v of checkParallelPerfects(sims, formatter)) {
-      issues.push({ onset: v.onset, description: v.description });
+      issues.push({ onset: v.onset, description: v.description, type: 'parallel' });
     }
 
-    // Check strong-beat dissonances
+    // Check strong-beat dissonances (serious issue for beats 1 and 3)
     for (const sim of sims) {
       if (sim.metricWeight >= 0.75 && !sim.interval.isConsonant()) {
         issues.push({
           onset: sim.onset,
           description: `${sim.interval} (${pitchName(sim.voice1Note.pitch)}-${pitchName(sim.voice2Note.pitch)}) on strong beat at ${formatter.formatBeat(sim.onset)}`,
+          type: 'dissonance',
         });
       }
+    }
+
+    // Deduplicate simultaneities for motion analysis
+    const uniqueSims = [];
+    const seenKeys = new Set();
+    for (const s of sims) {
+      const key = `${s.voice1Note.onset}-${s.voice2Note.onset}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        uniqueSims.push(s);
+      }
+    }
+    uniqueSims.sort((a, b) => a.onset - b.onset);
+
+    // Check direct motion into perfect intervals (warning)
+    for (let i = 0; i < uniqueSims.length - 1; i++) {
+      const curr = uniqueSims[i];
+      const next = uniqueSims[i + 1];
+
+      if ([5, 8].includes(next.interval.class)) {
+        const v1Dir = next.voice1Note.pitch - curr.voice1Note.pitch;
+        const v2Dir = next.voice2Note.pitch - curr.voice2Note.pitch;
+
+        // Similar motion into a perfect interval with upper voice leap
+        if (v1Dir !== 0 && v2Dir !== 0 && Math.sign(v1Dir) === Math.sign(v2Dir)) {
+          const upperLeap = Math.abs(v1Dir > v2Dir ? v1Dir : v2Dir) > 2;
+          if (upperLeap) {
+            warnings.push({
+              onset: next.onset,
+              description: `Direct ${next.interval.class === 5 ? '5th' : '8ve'} by similar motion at ${formatter.formatBeat(next.onset)}`,
+              type: 'direct',
+            });
+          }
+        }
+      }
+    }
+
+    // Build interval timeline for visualization
+    const intervalPoints = [];
+    const beatSnapshots = new Map();
+
+    for (const sim of sims) {
+      const snapBeat = Math.round(sim.onset * 2) / 2;
+      if (!beatSnapshots.has(snapBeat)) {
+        beatSnapshots.set(snapBeat, {
+          onset: sim.onset,
+          beat: snapBeat,
+          interval: sim.interval,
+          intervalClass: sim.interval.class,
+          intervalName: sim.interval.toString(),
+          duxPitch: sim.voice1Note.pitch,
+          comesPitch: sim.voice2Note.pitch,
+          isConsonant: sim.interval.isConsonant(),
+          isStrong: sim.metricWeight >= 0.75,
+        });
+      }
+    }
+
+    const sortedBeats = [...beatSnapshots.keys()].sort((a, b) => a - b);
+    for (const beat of sortedBeats) {
+      intervalPoints.push(beatSnapshots.get(beat));
     }
 
     results.push({
@@ -323,8 +386,12 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       distanceFormatted: formatter.formatDistance(dist),
       overlapPercent: Math.round(((subLen - dist) / subLen) * 100),
       issueCount: issues.length,
+      warningCount: warnings.length,
       issues,
+      warnings,
+      intervalPoints,
       viable: issues.length === 0,
+      clean: issues.length === 0 && warnings.length === 0,
     });
   }
 
@@ -332,6 +399,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     subjectLengthBeats: subLen,
     allResults: results,
     viableStrettos: results.filter((r) => r.viable),
+    cleanStrettos: results.filter((r) => r.clean),
     problematicStrettos: results.filter((r) => !r.viable),
   };
 }

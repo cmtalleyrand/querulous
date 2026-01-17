@@ -1,8 +1,8 @@
 /**
  * Stretto Visualization component
- * Shows overlapping subject entries with conflict markers
+ * Shows overlapping subject entries with conflict markers and interval labels
  */
-export function StrettoViz({ subject, distance, issues, formatter, octaveDisp }) {
+export function StrettoViz({ subject, distance, issues, warnings = [], intervalPoints = [], formatter, octaveDisp }) {
   if (!subject?.length) return null;
 
   const subEnd = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
@@ -18,23 +18,37 @@ export function StrettoViz({ subject, distance, issues, formatter, octaveDisp })
   const maxP = Math.max(...all.map((n) => n.pitch)) + 2;
   const pRange = maxP - minP;
   const nH = Math.max(7, Math.min(12, 140 / pRange));
-  const h = pRange * nH + 40;
-  const w = 480;
-  const tScale = (w - 40) / (subEnd + distance);
+  // Add extra height for interval labels
+  const intervalLabelHeight = intervalPoints.length > 0 ? 24 : 0;
+  const h = pRange * nH + 40 + intervalLabelHeight;
+  const w = 560;
+  const tScale = (w - 50) / (subEnd + distance);
 
-  const pToY = (p) => h - 18 - (p - minP) * nH;
-  const tToX = (t) => 36 + t * tScale;
+  const pToY = (p) => h - 18 - intervalLabelHeight - (p - minP) * nH;
+  const tToX = (t) => 42 + t * tScale;
 
   const hasIssues = issues.length > 0;
+  const hasWarnings = warnings.length > 0;
+
+  // Determine background color based on status
+  let bgColor = '#e8f5e9';
+  let borderColor = '#a5d6a7';
+  if (hasIssues) {
+    bgColor = '#ffebee';
+    borderColor = '#ef9a9a';
+  } else if (hasWarnings) {
+    bgColor = '#fff8e1';
+    borderColor = '#ffe082';
+  }
 
   return (
     <svg
       width={w}
       height={h}
       style={{
-        backgroundColor: hasIssues ? '#fff8e1' : '#e8f5e9',
+        backgroundColor: bgColor,
         borderRadius: '4px',
-        border: `1px solid ${hasIssues ? '#ffe082' : '#a5d6a7'}`,
+        border: `1px solid ${borderColor}`,
       }}
       role="img"
       aria-label={`Stretto visualization at ${formatter.formatDistance(distance)}`}
@@ -46,7 +60,7 @@ export function StrettoViz({ subject, distance, issues, formatter, octaveDisp })
           x1={tToX(i)}
           y1={10}
           x2={tToX(i)}
-          y2={h - 18}
+          y2={h - 18 - intervalLabelHeight}
           stroke={i % 4 === 0 ? '#bdbdbd' : '#e0e0e0'}
           strokeWidth={i % 4 === 0 ? 1 : 0.5}
         />
@@ -81,21 +95,98 @@ export function StrettoViz({ subject, distance, issues, formatter, octaveDisp })
 
       {/* Issue markers */}
       {issues.map((is, i) => (
-        <g key={i}>
-          <circle cx={tToX(is.onset || 0)} cy={7} r={5} fill="#ff5722" />
+        <g key={`issue-${i}`}>
+          <circle cx={tToX(is.onset || 0)} cy={7} r={5} fill="#d32f2f" />
           <text x={tToX(is.onset || 0)} y={10} fontSize="8" fill="white" textAnchor="middle" fontWeight="bold">
             !
           </text>
         </g>
       ))}
 
+      {/* Warning markers */}
+      {warnings.map((w, i) => (
+        <g key={`warn-${i}`}>
+          <circle cx={tToX(w.onset || 0)} cy={7} r={4} fill="#ff9800" />
+          <text x={tToX(w.onset || 0)} y={10} fontSize="7" fill="white" textAnchor="middle" fontWeight="bold">
+            ?
+          </text>
+        </g>
+      ))}
+
+      {/* Interval labels at each simultaneity point */}
+      {intervalPoints.length > 0 && (
+        <g>
+          {/* Background strip for intervals */}
+          <rect
+            x={0}
+            y={h - intervalLabelHeight - 2}
+            width={w}
+            height={intervalLabelHeight}
+            fill="rgba(255,255,255,0.7)"
+          />
+          {/* Interval markers */}
+          {intervalPoints.map((pt, i) => {
+            const x = tToX(pt.onset);
+            const isDissonant = !pt.isConsonant;
+            const isPerfect = [1, 5, 8].includes(pt.intervalClass);
+
+            // Color coding: red for dissonant, blue for perfect consonance, green for imperfect consonance
+            let fillColor = '#43a047'; // imperfect consonance (3rd, 6th)
+            if (isDissonant) fillColor = '#e53935';
+            else if (isPerfect) fillColor = '#1e88e5';
+
+            // Highlight strong beats
+            const isStrong = pt.isStrong;
+
+            return (
+              <g key={`int-${i}`}>
+                {/* Vertical line connecting to notes */}
+                <line
+                  x1={x}
+                  y1={h - intervalLabelHeight - 2}
+                  x2={x}
+                  y2={h - intervalLabelHeight + 4}
+                  stroke={fillColor}
+                  strokeWidth={isStrong ? 2 : 1}
+                  opacity={0.6}
+                />
+                {/* Interval label */}
+                <text
+                  x={x}
+                  y={h - 6}
+                  fontSize={isStrong ? '10' : '9'}
+                  fill={fillColor}
+                  textAnchor="middle"
+                  fontWeight={isStrong ? '600' : '400'}
+                  fontFamily="monospace"
+                >
+                  {pt.intervalClass}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      )}
+
       {/* Labels */}
-      <text x={tToX(0)} y={h - 5} fontSize="9" fill="#5c6bc0" fontWeight="500">
+      <text x={tToX(0)} y={h - intervalLabelHeight - 5} fontSize="9" fill="#5c6bc0" fontWeight="500">
         Dux
       </text>
-      <text x={tToX(distance)} y={h - 5} fontSize="9" fill="#ef5350" fontWeight="500">
+      <text x={tToX(distance)} y={h - intervalLabelHeight - 5} fontSize="9" fill="#ef5350" fontWeight="500">
         Comes (+{formatter.formatDistance(distance)})
       </text>
+
+      {/* Legend for interval colors */}
+      {intervalPoints.length > 0 && (
+        <g transform={`translate(${w - 140}, 5)`}>
+          <rect x={0} y={0} width={10} height={8} fill="#43a047" rx={1} />
+          <text x={14} y={7} fontSize="7" fill="#666">3rd/6th</text>
+          <rect x={45} y={0} width={10} height={8} fill="#1e88e5" rx={1} />
+          <text x={59} y={7} fontSize="7" fill="#666">P5/P8</text>
+          <rect x={85} y={0} width={10} height={8} fill="#e53935" rx={1} />
+          <text x={99} y={7} fontSize="7" fill="#666">diss</text>
+        </g>
+      )}
     </svg>
   );
 }

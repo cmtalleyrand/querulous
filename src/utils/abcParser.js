@@ -88,11 +88,16 @@ export function computeScaleDegree(pitch, tonic, mode) {
 
 /**
  * Parse ABC notation text into an array of NoteEvents
+ * @param abcText - The ABC notation text
+ * @param tonic - The MIDI note number of the tonic (for scale degree analysis)
+ * @param mode - The mode for scale degree analysis
+ * @param defaultNoteLengthOverride - Override for default note length
+ * @param keySignatureOverride - Optional key signature array to use instead of parsing K: header
  */
-export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null) {
+export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null, keySignatureOverride = null) {
   let noteText = '',
     defaultNoteLength = defaultNoteLengthOverride || 1 / 8,
-    keySignature = [];
+    keySignature = keySignatureOverride || [];
 
   for (const line of abcText.split('\n')) {
     const t = line.trim();
@@ -102,7 +107,8 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null)
       if (m && !defaultNoteLengthOverride) {
         defaultNoteLength = parseInt(m[1]) / parseInt(m[2]);
       }
-    } else if (t.startsWith('K:')) {
+    } else if (t.startsWith('K:') && !keySignatureOverride) {
+      // Only use K: header for key signature if no override provided
       const km = t.match(/K:\s*([A-Ga-g][#b]?m?)/);
       if (km) keySignature = KEY_SIGNATURES[km[1]] || [];
     } else if (!t.startsWith('%') && !t.match(/^[A-Z]:/)) {

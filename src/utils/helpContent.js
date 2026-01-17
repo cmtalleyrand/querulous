@@ -227,6 +227,25 @@ Lighter shading: Weak beats
 Numbers indicate interval class (3 = third, 6 = sixth, etc.)`,
   },
 
+  spellingKey: {
+    title: 'Spelling Key',
+    brief: 'Separate key signature for ABC parsing from analysis key.',
+    detailed: `The spelling key determines which accidentals are applied when parsing ABC notation, while the analysis key determines scale degree interpretation.
+
+Use case: You want to write ABC in C major (no sharps or flats in key signature, so you write all accidentals explicitly) but analyze the subject as if it were in D minor.
+
+Example:
+• Spelling key: C major — the note "F" is F natural, "^F" is F#
+• Analysis key: D minor — F# is interpreted as scale degree 3
+
+This separation is useful when:
+• You prefer writing ABC with explicit accidentals (C major spelling)
+• You're transposing a subject and want to see how it functions in a new key
+• You're experimenting with modal reinterpretation
+
+Note: K: headers in the ABC notation override both settings.`,
+  },
+
   abcNotation: {
     title: 'ABC Notation',
     brief: 'Text-based music notation format.',

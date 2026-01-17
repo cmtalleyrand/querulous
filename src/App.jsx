@@ -56,6 +56,9 @@ export default function App() {
   // Settings state
   const [selKey, setSelKey] = useState('D');
   const [selMode, setSelMode] = useState('natural_minor');
+  const [spellingKey, setSpellingKey] = useState('C');
+  const [spellingMode, setSpellingMode] = useState('major');
+  const [useSpellingKey, setUseSpellingKey] = useState(false);
   const [selNoteLen, setSelNoteLen] = useState('1/8');
   const [selTimeSig, setSelTimeSig] = useState('4/4');
   const [strettoStep, setStrettoStep] = useState('1');
@@ -79,29 +82,45 @@ export default function App() {
 
       // Extract headers from ABC notation
       const h = extractABCHeaders(subjectInput);
-      const effKey = h.key || selKey;
-      const effMode = h.mode || selMode;
+
+      // Analysis key - what key we're analyzing scale degrees in
+      const analysisKey = h.key || selKey;
+      const analysisMode = h.mode || selMode;
+
+      // Spelling key - what key signature to use for parsing ABC accidentals
+      // If useSpellingKey is true and no K: header, use separate spelling key
+      // Otherwise, use the analysis key for spelling too
+      const effSpellingKey = (useSpellingKey && !h.key) ? spellingKey : analysisKey;
+      const effSpellingMode = (useSpellingKey && !h.mode) ? spellingMode : analysisMode;
+
       const effNL =
         h.noteLength || parseFloat(selNoteLen.split('/')[0]) / parseFloat(selNoteLen.split('/')[1]);
 
-      // Calculate tonic MIDI number
-      const keyBase = effKey.replace('#', '').replace('b', '');
-      let tonic = NOTE_TO_MIDI[keyBase] || 60;
-      if (effKey.includes('#')) tonic += 1;
-      if (effKey.includes('b')) tonic -= 1;
+      // Calculate tonic MIDI number for analysis (scale degrees)
+      const analysisKeyBase = analysisKey.replace('#', '').replace('b', '');
+      let tonic = NOTE_TO_MIDI[analysisKeyBase] || 60;
+      if (analysisKey.includes('#')) tonic += 1;
+      if (analysisKey.includes('b')) tonic -= 1;
 
-      // Get key signature
-      let keyForSig = effKey;
-      if (['natural_minor', 'harmonic_minor'].includes(effMode)) keyForSig = keyBase + 'm';
-      const keySig = KEY_SIGNATURES[keyForSig] || KEY_SIGNATURES[keyBase] || [];
-      const keyInfo = { key: effKey, tonic, mode: effMode, keySignature: keySig };
+      // Get key signature for spelling (parsing ABC)
+      const spellingKeyBase = effSpellingKey.replace('#', '').replace('b', '');
+      let spellingKeyForSig = effSpellingKey;
+      if (['natural_minor', 'harmonic_minor'].includes(effSpellingMode)) spellingKeyForSig = spellingKeyBase + 'm';
+      const spellingKeySig = KEY_SIGNATURES[spellingKeyForSig] || KEY_SIGNATURES[spellingKeyBase] || [];
+
+      // Get key signature for answer generation (based on analysis key)
+      let analysisKeyForSig = analysisKey;
+      if (['natural_minor', 'harmonic_minor'].includes(analysisMode)) analysisKeyForSig = analysisKeyBase + 'm';
+      const analysisKeySig = KEY_SIGNATURES[analysisKeyForSig] || KEY_SIGNATURES[analysisKeyBase] || [];
+
+      const keyInfo = { key: analysisKey, tonic, mode: analysisMode, keySignature: analysisKeySig };
 
       // Get time signature - use parsed from ABC or selected
       const timeSigOption = TIME_SIGNATURE_OPTIONS.find(t => t.value === selTimeSig);
       const meter = h.meter || timeSigOption?.meter || [4, 4];
 
-      // Parse subject
-      const subjectParsed = parseABC(subjectInput, tonic, effMode, effNL);
+      // Parse subject with spelling key for accidentals, analysis key for scale degrees
+      const subjectParsed = parseABC(subjectInput, tonic, analysisMode, effNL, spellingKeySig);
       const subject = subjectParsed.notes;
 
       if (!subject.length) {
@@ -111,11 +130,11 @@ export default function App() {
 
       const formatter = new BeatFormatter(effNL, meter);
 
-      // Parse countersubject if provided
-      const cs = csInput.trim() ? parseABC(csInput, tonic, effMode, effNL).notes : null;
+      // Parse countersubject if provided (use spelling key for accidentals)
+      const cs = csInput.trim() ? parseABC(csInput, tonic, analysisMode, effNL, spellingKeySig).notes : null;
 
-      // Parse or generate answer
-      let answerNotes = answerInput.trim() ? parseABC(answerInput, tonic, effMode, effNL).notes : null;
+      // Parse or generate answer (use spelling key for accidentals)
+      let answerNotes = answerInput.trim() ? parseABC(answerInput, tonic, analysisMode, effNL, spellingKeySig).notes : null;
 
       // Build results object
       const res = {
@@ -126,8 +145,10 @@ export default function App() {
         defaultNoteLength: effNL,
         meter,
         parsedInfo: {
-          key: effKey,
-          mode: effMode,
+          key: analysisKey,
+          mode: analysisMode,
+          spellingKey: useSpellingKey ? effSpellingKey : null,
+          spellingMode: useSpellingKey ? effSpellingMode : null,
           defaultNoteLength: effNL,
           subjectNotes: subject.length,
           csNotes: cs?.length || 0,
@@ -135,10 +156,10 @@ export default function App() {
       };
 
       // Run subject analyses
-      res.harmonicImplication = testHarmonicImplication(subject, tonic, effMode, formatter);
+      res.harmonicImplication = testHarmonicImplication(subject, tonic, analysisMode, formatter);
       res.rhythmicVariety = testRhythmicVariety(subject, formatter);
       res.stretto = testStrettoViability(subject, formatter, 0.5, parseFloat(strettoStep), parseInt(strettoOctave));
-      res.tonalAnswer = testTonalAnswer(subject, effMode, keyInfo, formatter);
+      res.tonalAnswer = testTonalAnswer(subject, analysisMode, keyInfo, formatter);
       res.answerABC = generateAnswerABC(subject, keyInfo, res.tonalAnswer, effNL, meter);
       res.subjectABC = formatSubjectABC(subject, keyInfo, effNL, meter);
 
@@ -212,7 +233,7 @@ export default function App() {
         >
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
             <Select
-              label="Key"
+              label="Analysis Key"
               value={selKey}
               onChange={setSelKey}
               options={AVAILABLE_KEYS}
@@ -242,6 +263,40 @@ export default function App() {
               options={STRETTO_STEP_OPTIONS}
             />
           </div>
+
+          {/* Spelling Key Option */}
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eee' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={useSpellingKey}
+                onChange={(e) => setUseSpellingKey(e.target.checked)}
+              />
+              <span style={{ fontSize: '12px', color: '#546e7a' }}>
+                Use separate spelling key (parse accidentals from a different key signature)
+              </span>
+            </label>
+            {useSpellingKey && (
+              <div style={{ display: 'flex', gap: '14px', marginTop: '10px', paddingLeft: '24px' }}>
+                <Select
+                  label="Spelling Key"
+                  value={spellingKey}
+                  onChange={setSpellingKey}
+                  options={AVAILABLE_KEYS}
+                />
+                <Select
+                  label="Spelling Mode"
+                  value={spellingMode}
+                  onChange={setSpellingMode}
+                  options={AVAILABLE_MODES}
+                />
+                <p style={{ fontSize: '11px', color: '#78909c', marginTop: '18px', flex: 1 }}>
+                  ABC accidentals use {spellingKey} {spellingMode.replace('_', ' ')}, but scale degrees analyzed in {selKey} {selMode.replace('_', ' ')}
+                </p>
+              </div>
+            )}
+          </div>
+
           <p style={{ fontSize: '10px', color: '#888', margin: '10px 0 0' }}>
             K:, M:, and L: in ABC notation override these settings
           </p>
@@ -397,7 +452,10 @@ export default function App() {
                 color: '#546e7a',
               }}
             >
-              Key: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.key} {results.parsedInfo.mode.replace('_', ' ')}</strong>
+              Analysis: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.key} {results.parsedInfo.mode.replace('_', ' ')}</strong>
+              {results.parsedInfo.spellingKey && (
+                <> · Spelling: <strong style={{ color: '#78909c' }}>{results.parsedInfo.spellingKey} {results.parsedInfo.spellingMode.replace('_', ' ')}</strong></>
+              )}
               {' · '}Subject: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.subjectNotes} notes</strong>
               {' · '}L: <strong style={{ color: '#2c3e50' }}>1/{Math.round(1 / results.parsedInfo.defaultNoteLength)}</strong>
               {results.parsedInfo.csNotes > 0 && (
@@ -558,24 +616,54 @@ export default function App() {
                   Select distance:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                  {results.stretto.allResults.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSelectedStretto(s.distance)}
-                      style={{
-                        padding: '5px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        border: '1px solid',
-                        backgroundColor: selectedStretto === s.distance ? '#37474f' : s.viable ? '#e8f5e9' : '#fff3e0',
-                        borderColor: selectedStretto === s.distance ? '#37474f' : s.viable ? '#a5d6a7' : '#ffcc80',
-                        color: selectedStretto === s.distance ? 'white' : s.viable ? '#2e7d32' : '#e65100',
-                      }}
-                    >
-                      {s.distanceFormatted} {s.viable ? '✓' : `(${s.issueCount})`}
-                    </button>
-                  ))}
+                  {results.stretto.allResults.map((s, i) => {
+                    // Determine button style based on status
+                    let bgColor, borderColor, textColor, label;
+                    if (selectedStretto === s.distance) {
+                      bgColor = '#37474f';
+                      borderColor = '#37474f';
+                      textColor = 'white';
+                    } else if (!s.viable) {
+                      bgColor = '#ffebee';
+                      borderColor = '#ef9a9a';
+                      textColor = '#c62828';
+                    } else if (!s.clean) {
+                      bgColor = '#fff8e1';
+                      borderColor = '#ffe082';
+                      textColor = '#f57c00';
+                    } else {
+                      bgColor = '#e8f5e9';
+                      borderColor = '#a5d6a7';
+                      textColor = '#2e7d32';
+                    }
+
+                    if (!s.viable) {
+                      label = `(${s.issueCount})`;
+                    } else if (!s.clean) {
+                      label = `⚠${s.warningCount}`;
+                    } else {
+                      label = '✓';
+                    }
+
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setSelectedStretto(s.distance)}
+                        style={{
+                          padding: '5px 10px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          border: '1px solid',
+                          backgroundColor: bgColor,
+                          borderColor: borderColor,
+                          color: textColor,
+                        }}
+                      >
+                        {s.distanceFormatted} {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -596,32 +684,52 @@ export default function App() {
                         marginBottom: '8px',
                         fontSize: '13px',
                         fontWeight: '500',
-                        color: s.viable ? '#2e7d32' : '#e65100',
+                        color: s.viable ? (s.clean ? '#2e7d32' : '#f57c00') : '#c62828',
                       }}
                     >
-                      {s.distanceFormatted} — {s.overlapPercent}% overlap — {s.viable ? 'Clean' : `${s.issueCount} issue${s.issueCount > 1 ? 's' : ''}`}
+                      {s.distanceFormatted} — {s.overlapPercent}% overlap — {
+                        s.viable
+                          ? (s.clean ? 'Clean' : `${s.warningCount} warning${s.warningCount > 1 ? 's' : ''}`)
+                          : `${s.issueCount} issue${s.issueCount > 1 ? 's' : ''}`
+                      }
                     </div>
                     <StrettoViz
                       subject={results.subject}
                       distance={s.distance}
                       issues={s.issues}
+                      warnings={s.warnings || []}
+                      intervalPoints={s.intervalPoints || []}
                       formatter={results.formatter}
                       octaveDisp={strettoOctaveVal}
                     />
-                    {s.issues.length > 0 && (
+                    {(s.issues.length > 0 || (s.warnings && s.warnings.length > 0)) && (
                       <div style={{ marginTop: '8px' }}>
                         {s.issues.map((is, j) => (
                           <div
-                            key={j}
+                            key={`issue-${j}`}
                             style={{
                               fontSize: '12px',
-                              color: '#bf360c',
+                              color: '#c62828',
+                              marginTop: '3px',
+                              paddingLeft: '7px',
+                              borderLeft: '2px solid #ef9a9a',
+                            }}
+                          >
+                            {is.description}
+                          </div>
+                        ))}
+                        {s.warnings && s.warnings.map((w, j) => (
+                          <div
+                            key={`warn-${j}`}
+                            style={{
+                              fontSize: '12px',
+                              color: '#e65100',
                               marginTop: '3px',
                               paddingLeft: '7px',
                               borderLeft: '2px solid #ffcc80',
                             }}
                           >
-                            {is.description}
+                            ⚠ {w.description}
                           </div>
                         ))}
                       </div>
@@ -631,7 +739,10 @@ export default function App() {
               })()}
 
               <div style={{ marginTop: '12px', fontSize: '12px', color: '#546e7a' }}>
-                <strong>Summary:</strong> {results.stretto.viableStrettos.length} clean, {results.stretto.problematicStrettos.length} with issues
+                <strong>Summary:</strong>{' '}
+                {results.stretto.cleanStrettos?.length || 0} clean,{' '}
+                {(results.stretto.viableStrettos?.length || 0) - (results.stretto.cleanStrettos?.length || 0)} with warnings,{' '}
+                {results.stretto.problematicStrettos.length} with issues
               </div>
             </Section>
 
