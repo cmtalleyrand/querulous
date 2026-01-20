@@ -7,37 +7,65 @@ import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants';
 export function extractABCHeaders(abcText) {
   let key = null,
     mode = null,
-    noteLength = null;
+    noteLength = null,
+    meter = null;
 
   for (const line of abcText.split('\n')) {
     const t = line.trim();
 
+    // Parse note length (L:)
     if (t.startsWith('L:')) {
       const m = t.match(/L:\s*(\d+)\/(\d+)/);
       if (m) noteLength = parseInt(m[1]) / parseInt(m[2]);
     }
 
+    // Parse time signature (M:)
+    if (t.startsWith('M:')) {
+      const mm = t.match(/M:\s*(\d+)\/(\d+)/);
+      if (mm) meter = [parseInt(mm[1]), parseInt(mm[2])];
+    }
+
+    // Parse key signature (K:)
     if (t.startsWith('K:')) {
+      // More flexible regex that handles Maj, Major, minor, m, etc.
       const km = t.match(
-        /K:\s*([A-Ga-g][#b]?)\s*(m|min|minor|dor|dorian|phr|phrygian|lyd|lydian|mix|mixolydian|harm|harmonic)?/i
+        /K:\s*([A-Ga-g][#b]?)\s*(maj|major|m|min|minor|dor|dorian|phr|phrygian|lyd|lydian|mix|mixolydian|harm|harmonic|loc|locrian|ion|ionian|aeo|aeolian)?/i
       );
       if (km) {
         key = km[1].charAt(0).toUpperCase() + (km[1].slice(1) || '');
         if (km[2]) {
           const x = km[2].toLowerCase();
-          if (x.startsWith('m') && !x.startsWith('mix')) mode = 'natural_minor';
-          else if (x.startsWith('dor')) mode = 'dorian';
-          else if (x.startsWith('phr')) mode = 'phrygian';
-          else if (x.startsWith('lyd')) mode = 'lydian';
-          else if (x.startsWith('mix')) mode = 'mixolydian';
-          else if (x.startsWith('harm')) mode = 'harmonic_minor';
-          else mode = 'major';
+          // Check for major indicators first (before checking 'm' for minor)
+          if (x.startsWith('maj') || x.startsWith('ion')) {
+            mode = 'major';
+          } else if (x.startsWith('m') && !x.startsWith('mix') && !x.startsWith('maj')) {
+            mode = 'natural_minor';
+          } else if (x.startsWith('aeo')) {
+            mode = 'natural_minor';
+          } else if (x.startsWith('dor')) {
+            mode = 'dorian';
+          } else if (x.startsWith('phr')) {
+            mode = 'phrygian';
+          } else if (x.startsWith('lyd')) {
+            mode = 'lydian';
+          } else if (x.startsWith('mix')) {
+            mode = 'mixolydian';
+          } else if (x.startsWith('harm')) {
+            mode = 'harmonic_minor';
+          } else if (x.startsWith('loc')) {
+            mode = 'locrian';
+          } else {
+            mode = 'major';
+          }
+        } else {
+          // No mode specified - default to major
+          mode = 'major';
         }
       }
     }
   }
 
-  return { key, mode, noteLength };
+  return { key, mode, noteLength, meter };
 }
 
 /**
@@ -60,11 +88,16 @@ export function computeScaleDegree(pitch, tonic, mode) {
 
 /**
  * Parse ABC notation text into an array of NoteEvents
+ * @param abcText - The ABC notation text
+ * @param tonic - The MIDI note number of the tonic (for scale degree analysis)
+ * @param mode - The mode for scale degree analysis
+ * @param defaultNoteLengthOverride - Override for default note length
+ * @param keySignatureOverride - Optional key signature array to use instead of parsing K: header
  */
-export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null) {
+export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null, keySignatureOverride = null) {
   let noteText = '',
     defaultNoteLength = defaultNoteLengthOverride || 1 / 8,
-    keySignature = [];
+    keySignature = keySignatureOverride || [];
 
   for (const line of abcText.split('\n')) {
     const t = line.trim();
@@ -74,7 +107,8 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null)
       if (m && !defaultNoteLengthOverride) {
         defaultNoteLength = parseInt(m[1]) / parseInt(m[2]);
       }
-    } else if (t.startsWith('K:')) {
+    } else if (t.startsWith('K:') && !keySignatureOverride) {
+      // Only use K: header for key signature if no override provided
       const km = t.match(/K:\s*([A-Ga-g][#b]?m?)/);
       if (km) keySignature = KEY_SIGNATURES[km[1]] || [];
     } else if (!t.startsWith('%') && !t.match(/^[A-Z]:/)) {
@@ -82,18 +116,25 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null)
     }
   }
 
-  // Clean up the note text
-  noteText = noteText.replace(/\|/g, ' ').replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
+  // Clean up the note text - preserve bar lines for accidental reset, remove other non-note elements
+  noteText = noteText.replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
 
   const notes = [];
   let currentOnset = 0;
-  const activeAccidentals = {};
+  let activeAccidentals = {};
 
-  const pat = /(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
+  // Pattern matches bar lines OR notes - bar lines reset accidentals per ABC standard
+  const pat = /(\|+:?|:\|+)|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
   let m;
 
   while ((m = pat.exec(noteText)) !== null) {
-    const [, acc, letter, octMod, durStr] = m;
+    // Check if this is a bar line - reset accidentals
+    if (m[1]) {
+      activeAccidentals = {};
+      continue;
+    }
+
+    const [, , acc, letter, octMod, durStr] = m;
     let pitch = NOTE_TO_MIDI[letter];
     if (pitch === undefined) continue;
 

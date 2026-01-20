@@ -2,7 +2,7 @@
 export { PianoRoll, IntervalTimeline, StrettoViz } from './visualizations';
 
 // UI components
-export { Section, Observation, ObservationList, DataRow, Select, ABCBox } from './ui';
+export { Section, Observation, ObservationList, DataRow, Select, ABCBox, InfoButton, HelpModal } from './ui';
 
 // Scoring components
 export { ScoreGauge, ScoreBar, ScoreDashboard, ScoreSummaryCard, ScoreBadges } from './scoring';

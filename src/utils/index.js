@@ -18,6 +18,8 @@ export {
 export {
   findSimultaneities,
   checkParallelPerfects,
+  classifyDissonance,
+  analyzeDissonances,
   testContourIndependence,
   testHarmonicImplication,
   testRhythmicVariety,
@@ -46,3 +48,6 @@ export {
   calculateOverallScore,
   getScoreSummary,
 } from './scoring';
+
+// Help content
+export { HELP_CONTENT, getHelpContent, getHelpTopics } from './helpContent';
