@@ -51,3 +51,11 @@ export {
 
 // Help content
 export { HELP_CONTENT, getHelpContent, getHelpTopics } from './helpContent';
+
+// Dissonance scoring system
+export {
+  scoreDissonance,
+  analyzeAllDissonances,
+  setP4Treatment,
+  getP4Treatment,
+} from './dissonanceScoring';
