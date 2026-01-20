@@ -35,6 +35,7 @@ import {
   testContourIndependence,
   testModulatoryRobustness,
   calculateOverallScore,
+  setP4Treatment,
 } from './utils';
 import { NoteEvent, ScaleDegree } from './types';
 
@@ -64,6 +65,7 @@ export default function App() {
   const [strettoStep, setStrettoStep] = useState('1');
   const [strettoOctave, setStrettoOctave] = useState('12');
   const [selectedStretto, setSelectedStretto] = useState(null);
+  const [treatP4Dissonant, setTreatP4Dissonant] = useState(false);
   const [csPos, setCsPos] = useState('above');
   const [csShift, setCsShift] = useState('0');
 
@@ -605,6 +607,21 @@ export default function App() {
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#37474f', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={treatP4Dissonant}
+                      onChange={(e) => {
+                        setTreatP4Dissonant(e.target.checked);
+                        setP4Treatment(e.target.checked);
+                        setSelectedStretto(null);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    Treat P4 as dissonant
+                  </label>
                 </div>
                 <span style={{ fontSize: '12px', color: '#757575', paddingBottom: '8px' }}>
                   Testing at {strettoStep}-beat intervals

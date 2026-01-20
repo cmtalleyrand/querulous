@@ -1,5 +1,6 @@
 import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName } from './formatter';
+import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -540,35 +541,40 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       issues.push({ onset: v.onset, description: v.description, type: 'parallel' });
     }
 
-    // Analyze dissonances with classification
-    const dissonanceAnalysis = analyzeDissonances(sims, subject, comes, formatter);
+    // Analyze dissonances with new scoring system
+    const dissonanceAnalysis = analyzeAllDissonances(sims, subject, comes);
 
-    // Check strong-beat dissonances - only unprepared ones are serious issues
-    for (const sim of sims) {
-      if (sim.metricWeight >= 0.75 && !sim.interval.isConsonant()) {
-        // Find the classification for this dissonance
-        const classification = classifyDissonance(sim, sims, subject, comes, formatter);
-        const metricLabel = sim.metricWeight === 1.0 ? 'downbeat' : 'strong beat';
+    // Evaluate each dissonance based on score
+    for (const d of dissonanceAnalysis.dissonances) {
+      const sim = sims.find(s => s.onset === d.onset);
+      if (!sim) continue;
 
-        if (classification.type === 'unprepared') {
-          issues.push({
-            onset: sim.onset,
-            description: `Unprepared ${sim.interval} on ${metricLabel}: Dux ${pitchName(sim.voice1Note.pitch)} vs Comes ${pitchName(sim.voice2Note.pitch)} at ${formatter.formatBeat(sim.onset)}`,
-            type: 'dissonance',
-            interval: sim.interval.toString(),
-            duxPitch: pitchName(sim.voice1Note.pitch),
-            comesPitch: pitchName(sim.voice2Note.pitch),
-          });
-        } else if (classification.type === 'appoggiatura') {
-          warnings.push({
-            onset: sim.onset,
-            description: `Appoggiatura ${sim.interval} on ${metricLabel}: ${pitchName(sim.voice1Note.pitch)}-${pitchName(sim.voice2Note.pitch)} at ${formatter.formatBeat(sim.onset)} (resolves by step)`,
-            type: 'appoggiatura',
-            interval: sim.interval.toString(),
-          });
-        }
-        // Suspensions on strong beats are correct usage - no warning needed
+      const metricLabel = sim.metricWeight === 1.0 ? 'downbeat' : (sim.metricWeight >= 0.75 ? 'strong beat' : 'weak beat');
+
+      if (d.score < -1.0) {
+        // Serious issue - badly handled dissonance
+        issues.push({
+          onset: d.onset,
+          description: `${d.type === 'unprepared' ? 'Unprepared' : 'Poorly resolved'} ${d.interval} on ${metricLabel}: Dux ${d.v1Pitch} vs Comes ${d.v2Pitch} at ${formatter.formatBeat(d.onset)} (score: ${d.score.toFixed(1)})`,
+          type: d.type,
+          interval: d.interval,
+          duxPitch: d.v1Pitch,
+          comesPitch: d.v2Pitch,
+          score: d.score,
+          details: d.details,
+        });
+      } else if (d.score < 0 && d.isStrongBeat) {
+        // Warning - marginal dissonance on strong beat
+        warnings.push({
+          onset: d.onset,
+          description: `${d.type} ${d.interval} on ${metricLabel}: ${d.v1Pitch}-${d.v2Pitch} at ${formatter.formatBeat(d.onset)} (score: ${d.score.toFixed(1)})`,
+          type: d.type,
+          interval: d.interval,
+          score: d.score,
+          details: d.details,
+        });
       }
+      // Score >= 0 means acceptable dissonance treatment
     }
 
     // Deduplicate simultaneities for motion analysis
@@ -608,21 +614,15 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       }
     }
 
-    // Build interval timeline for visualization with dissonance labels
+    // Build interval timeline for visualization with scores
     const intervalPoints = [];
     const beatSnapshots = new Map();
 
     for (const sim of sims) {
       const snapBeat = Math.round(sim.onset * 2) / 2;
       if (!beatSnapshots.has(snapBeat)) {
-        // Get dissonance classification if not consonant
-        let dissLabel = null;
-        let dissType = null;
-        if (!sim.interval.isConsonant()) {
-          const classification = classifyDissonance(sim, sims, subject, comes, formatter);
-          dissLabel = classification.label;
-          dissType = classification.type;
-        }
+        // Get dissonance scoring
+        const scoring = scoreDissonance(sim, sims, subject, comes);
 
         beatSnapshots.set(snapBeat, {
           onset: sim.onset,
@@ -632,10 +632,13 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
           intervalName: sim.interval.toString(),
           duxPitch: sim.voice1Note.pitch,
           comesPitch: sim.voice2Note.pitch,
-          isConsonant: sim.interval.isConsonant(),
+          isConsonant: scoring.isConsonant,
           isStrong: sim.metricWeight >= 0.75,
-          dissonanceLabel: dissLabel,
-          dissonanceType: dissType,
+          dissonanceLabel: scoring.label,
+          dissonanceType: scoring.type,
+          score: scoring.score,
+          scoreDetails: scoring.details,
+          patterns: scoring.patterns,
         });
       }
     }

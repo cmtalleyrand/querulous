@@ -290,33 +290,37 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
         const x = tToX(pt.onset);
         const isIssue = issueOnsets.has(Math.round(pt.onset * 4) / 4);
         const isWarning = warningOnsets.has(Math.round(pt.onset * 4) / 4);
+        const score = pt.score || 0;
 
-        // Determine color based on dissonance type
+        // Determine color based on score (if dissonance) or interval type (if consonant)
         let fillColor = colors.consonant;
         let bgColor = 'transparent';
+
         if (!pt.isConsonant) {
-          if (pt.dissonanceType === 'suspension') {
-            fillColor = colors.suspension;
-            bgColor = 'rgba(124, 58, 237, 0.1)';
-          } else if (pt.dissonanceType === 'passing') {
-            fillColor = colors.passing;
-            bgColor = 'rgba(234, 88, 12, 0.1)';
-          } else if (pt.dissonanceType === 'neighbor') {
-            fillColor = colors.neighbor;
-            bgColor = 'rgba(202, 138, 4, 0.1)';
-          } else if (pt.dissonanceType === 'unprepared') {
-            fillColor = colors.unprepared;
-            bgColor = 'rgba(220, 38, 38, 0.15)';
+          // Color based on score: green (positive) -> yellow (neutral) -> red (negative)
+          if (score >= 1.5) {
+            fillColor = '#15803d'; // dark green - excellent
+            bgColor = 'rgba(34, 197, 94, 0.15)';
+          } else if (score >= 0.5) {
+            fillColor = '#16a34a'; // green - good
+            bgColor = 'rgba(34, 197, 94, 0.1)';
+          } else if (score >= 0) {
+            fillColor = '#ca8a04'; // yellow - acceptable
+            bgColor = 'rgba(234, 179, 8, 0.1)';
+          } else if (score >= -1.0) {
+            fillColor = '#ea580c'; // orange - marginal
+            bgColor = 'rgba(234, 88, 12, 0.15)';
           } else {
-            fillColor = colors.unprepared;
+            fillColor = '#dc2626'; // red - poor
+            bgColor = 'rgba(220, 38, 38, 0.2)';
           }
         } else if ([1, 5, 8].includes(pt.intervalClass)) {
           fillColor = colors.perfect;
         }
 
-        // Build label
+        // Build label - show type abbreviation and score for dissonances
         let label = pt.intervalClass.toString();
-        if (pt.dissonanceLabel && pt.dissonanceLabel !== '!') {
+        if (!pt.isConsonant && pt.dissonanceLabel) {
           label = pt.dissonanceLabel;
         }
 
@@ -340,23 +344,25 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               strokeWidth={isStrong ? 2 : 1}
             />
 
-            {/* Background for problem intervals */}
-            {(isIssue || bgColor !== 'transparent') && (
+            {/* Background for dissonances - always show to indicate score */}
+            {(!pt.isConsonant || isIssue) && (
               <rect
-                x={x - 14}
-                y={h - intervalRowHeight + 4}
-                width={28}
-                height={intervalRowHeight - 8}
-                fill={isIssue ? 'rgba(220, 38, 38, 0.2)' : bgColor}
+                x={x - 16}
+                y={h - intervalRowHeight + 2}
+                width={32}
+                height={intervalRowHeight - 6}
+                fill={isIssue ? 'rgba(220, 38, 38, 0.25)' : bgColor}
                 rx={4}
+                stroke={isIssue ? '#dc2626' : 'transparent'}
+                strokeWidth={isIssue ? 1 : 0}
               />
             )}
 
             {/* Interval label */}
             <text
               x={x}
-              y={h - intervalRowHeight + 20}
-              fontSize={isStrong ? '12' : '10'}
+              y={h - intervalRowHeight + 16}
+              fontSize={isStrong ? '11' : '9'}
               fontFamily={monoFont}
               fontWeight={isStrong ? '600' : '400'}
               fill={fillColor}
@@ -365,11 +371,26 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               {label}
             </text>
 
+            {/* Score below label for dissonances */}
+            {!pt.isConsonant && (
+              <text
+                x={x}
+                y={h - intervalRowHeight + 26}
+                fontSize="7"
+                fontFamily={monoFont}
+                fill={fillColor}
+                textAnchor="middle"
+                opacity={0.8}
+              >
+                {score >= 0 ? '+' : ''}{score.toFixed(1)}
+              </text>
+            )}
+
             {/* Pitch names below */}
             <text
               x={x}
-              y={h - 4}
-              fontSize="8"
+              y={h - 2}
+              fontSize="7"
               fontFamily={monoFont}
               fill="#6b7280"
               textAnchor="middle"
@@ -442,12 +463,20 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                 marginLeft: '8px',
                 padding: '2px 6px',
                 borderRadius: '4px',
-                backgroundColor: hoveredElement.dissonanceType === 'unprepared' ? colors.unprepared :
-                                 hoveredElement.dissonanceType === 'suspension' ? colors.suspension :
-                                 colors.passing,
+                backgroundColor: (hoveredElement.score || 0) >= 0 ? '#16a34a' :
+                                 (hoveredElement.score || 0) >= -1 ? '#ea580c' : '#dc2626',
                 fontSize: '10px',
               }}>
                 {hoveredElement.dissonanceType}
+              </span>
+            )}
+            {!hoveredElement.isConsonant && (
+              <span style={{
+                marginLeft: '6px',
+                fontSize: '11px',
+                color: (hoveredElement.score || 0) >= 0 ? '#4ade80' : '#f87171',
+              }}>
+                ({(hoveredElement.score || 0) >= 0 ? '+' : ''}{(hoveredElement.score || 0).toFixed(1)})
               </span>
             )}
           </div>
@@ -457,6 +486,13 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
           <div style={{ color: '#9ca3af', fontSize: '11px' }}>
             {formatter.formatBeat(hoveredElement.onset)} | {hoveredElement.isStrong ? 'Strong beat' : 'Weak beat'}
           </div>
+          {hoveredElement.scoreDetails && hoveredElement.scoreDetails.length > 0 && (
+            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid #374151', fontSize: '10px', color: '#9ca3af' }}>
+              {hoveredElement.scoreDetails.slice(0, 3).map((d, i) => (
+                <div key={i}>{d}</div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -502,22 +538,61 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
           <div><strong>Voice:</strong> {selectedElement.voice === 'dux' ? 'Dux (Leader)' : 'Comes (Follower)'}</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          <div><strong>Interval:</strong> {selectedElement.pt.intervalName}</div>
-          <div><strong>Position:</strong> {formatter.formatBeat(selectedElement.pt.onset)}</div>
-          <div><strong>Dux pitch:</strong> {pitchName(selectedElement.pt.duxPitch)}</div>
-          <div><strong>Comes pitch:</strong> {pitchName(selectedElement.pt.comesPitch)}</div>
-          <div><strong>Metric position:</strong> {selectedElement.pt.isStrong ? 'Strong beat' : 'Weak/off-beat'}</div>
-          <div>
-            <strong>Treatment:</strong>{' '}
-            {selectedElement.pt.isConsonant ? 'Consonant' :
-             selectedElement.pt.dissonanceType === 'suspension' ? 'Suspension (prepared, resolves down)' :
-             selectedElement.pt.dissonanceType === 'passing' ? 'Passing tone (stepwise, weak beat)' :
-             selectedElement.pt.dissonanceType === 'neighbor' ? 'Neighbor tone (step away & back)' :
-             selectedElement.pt.dissonanceType === 'anticipation' ? 'Anticipation (arrives early)' :
-             selectedElement.pt.dissonanceType === 'appoggiatura' ? 'Appoggiatura (leap to strong beat)' :
-             'UNPREPARED - problematic!'}
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+            <div><strong>Interval:</strong> {selectedElement.pt.intervalName}</div>
+            <div><strong>Position:</strong> {formatter.formatBeat(selectedElement.pt.onset)}</div>
+            <div><strong>Dux pitch:</strong> {pitchName(selectedElement.pt.duxPitch)}</div>
+            <div><strong>Comes pitch:</strong> {pitchName(selectedElement.pt.comesPitch)}</div>
+            <div><strong>Metric position:</strong> {selectedElement.pt.isStrong ? 'Strong beat' : 'Weak/off-beat'}</div>
+            <div>
+              <strong>Type:</strong>{' '}
+              {selectedElement.pt.isConsonant ? 'Consonant' : selectedElement.pt.dissonanceType || 'Unknown'}
+            </div>
           </div>
+
+          {!selectedElement.pt.isConsonant && (
+            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                <strong>Score:</strong>
+                <span style={{
+                  padding: '3px 10px',
+                  borderRadius: '4px',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  backgroundColor: (selectedElement.pt.score || 0) >= 1.5 ? '#dcfce7' :
+                                   (selectedElement.pt.score || 0) >= 0 ? '#fef9c3' :
+                                   (selectedElement.pt.score || 0) >= -1 ? '#ffedd5' : '#fee2e2',
+                  color: (selectedElement.pt.score || 0) >= 1.5 ? '#166534' :
+                         (selectedElement.pt.score || 0) >= 0 ? '#854d0e' :
+                         (selectedElement.pt.score || 0) >= -1 ? '#c2410c' : '#dc2626',
+                }}>
+                  {(selectedElement.pt.score || 0) >= 0 ? '+' : ''}{(selectedElement.pt.score || 0).toFixed(1)}
+                </span>
+                <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                  {(selectedElement.pt.score || 0) >= 1.5 ? 'Excellent' :
+                   (selectedElement.pt.score || 0) >= 0.5 ? 'Good' :
+                   (selectedElement.pt.score || 0) >= 0 ? 'Acceptable' :
+                   (selectedElement.pt.score || 0) >= -1 ? 'Marginal' : 'Problematic'}
+                </span>
+              </div>
+
+              {selectedElement.pt.scoreDetails && selectedElement.pt.scoreDetails.length > 0 && (
+                <div style={{ fontSize: '11px', color: '#4b5563', backgroundColor: '#f3f4f6', padding: '8px', borderRadius: '4px' }}>
+                  <div style={{ fontWeight: '600', marginBottom: '4px' }}>Scoring breakdown:</div>
+                  {selectedElement.pt.scoreDetails.map((detail, i) => (
+                    <div key={i} style={{ marginBottom: '2px' }}>{detail}</div>
+                  ))}
+                </div>
+              )}
+
+              {selectedElement.pt.patterns && selectedElement.pt.patterns.length > 0 && (
+                <div style={{ marginTop: '8px', fontSize: '11px' }}>
+                  <strong>Pattern matched:</strong> {selectedElement.pt.patterns.map(p => p.description).join('; ')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
