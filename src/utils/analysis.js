@@ -542,7 +542,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     }
 
     // Analyze dissonances with new scoring system
-    const dissonanceAnalysis = analyzeAllDissonances(sims, subject, comes);
+    const dissonanceAnalysis = analyzeAllDissonances(sims);
 
     // Evaluate each dissonance based on score
     for (const d of dissonanceAnalysis.dissonances) {
@@ -622,7 +622,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       const snapBeat = Math.round(sim.onset * 2) / 2;
       if (!beatSnapshots.has(snapBeat)) {
         // Get dissonance scoring
-        const scoring = scoreDissonance(sim, sims, subject, comes);
+        const scoring = scoreDissonance(sim, sims);
 
         beatSnapshots.set(snapBeat, {
           onset: sim.onset,

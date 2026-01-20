@@ -63,9 +63,8 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
     gridStrong: '#9ca3af',
   };
 
-  // Build issue/warning lookup by onset for highlighting
+  // Build issue lookup by onset for highlighting
   const issueOnsets = new Set(issues.map(i => Math.round(i.onset * 4) / 4));
-  const warningOnsets = new Set(warnings.map(w => Math.round(w.onset * 4) / 4));
 
   // Font styles
   const fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -289,7 +288,6 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
       {intervalPoints.map((pt, i) => {
         const x = tToX(pt.onset);
         const isIssue = issueOnsets.has(Math.round(pt.onset * 4) / 4);
-        const isWarning = warningOnsets.has(Math.round(pt.onset * 4) / 4);
         const score = pt.score || 0;
 
         // Determine color based on score (if dissonance) or interval type (if consonant)

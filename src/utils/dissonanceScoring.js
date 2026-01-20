@@ -11,7 +11,6 @@ import { pitchName, metricWeight } from './formatter';
 
 // Configuration
 let treatP4AsDissonant = false; // Toggle for P4 treatment
-const P4_PENALTY = -0.3; // Smaller penalty when P4 is treated as dissonant
 
 export function setP4Treatment(dissonant) {
   treatP4AsDissonant = dissonant;
@@ -37,7 +36,7 @@ function getIntervalMagnitude(semitones) {
  * Determine motion type between two simultaneities
  * Returns: 'oblique', 'contrary', 'similar', 'parallel'
  */
-function getMotionType(prevSim, currSim, v1Notes, v2Notes) {
+function getMotionType(prevSim, currSim) {
   if (!prevSim) return { type: 'unknown', v1Moved: true, v2Moved: true };
 
   const v1Moved = currSim.voice1Note !== prevSim.voice1Note &&
@@ -72,15 +71,6 @@ function getMotionType(prevSim, currSim, v1Notes, v2Notes) {
 }
 
 /**
- * Get the melodic interval for a voice between two simultaneities
- */
-function getVoiceMelodicInterval(prevSim, currSim, voice) {
-  const prevNote = voice === 1 ? prevSim.voice1Note : prevSim.voice2Note;
-  const currNote = voice === 1 ? currSim.voice1Note : currSim.voice2Note;
-  return currNote.pitch - prevNote.pitch;
-}
-
-/**
  * Check if this is a strong beat (weight >= 0.75)
  */
 function isStrongBeat(onset) {
@@ -90,7 +80,7 @@ function isStrongBeat(onset) {
 /**
  * Score the entry into a dissonance (C → D)
  */
-function scoreEntry(prevSim, currSim, v1Notes, v2Notes) {
+function scoreEntry(prevSim, currSim) {
   let score = 0; // Base
   const details = [];
 
@@ -98,7 +88,7 @@ function scoreEntry(prevSim, currSim, v1Notes, v2Notes) {
     return { score: 0, details: ['No previous simultaneity'] };
   }
 
-  const motion = getMotionType(prevSim, currSim, v1Notes, v2Notes);
+  const motion = getMotionType(prevSim, currSim);
 
   // Motion modifier
   if (motion.type === 'oblique') {
@@ -148,7 +138,7 @@ function scoreEntry(prevSim, currSim, v1Notes, v2Notes) {
 /**
  * Score the exit from a dissonance (D → C)
  */
-function scoreExit(currSim, nextSim, entryInfo, v1Notes, v2Notes) {
+function scoreExit(currSim, nextSim, entryInfo) {
   let score = 1.0; // Base for resolving
   const details = ['Base resolution: +1.0'];
 
@@ -156,7 +146,7 @@ function scoreExit(currSim, nextSim, entryInfo, v1Notes, v2Notes) {
     return { score: -1.0, details: ['No resolution - dissonance unresolved: -1.0'], motion: null };
   }
 
-  const motion = getMotionType(currSim, nextSim, v1Notes, v2Notes);
+  const motion = getMotionType(currSim, nextSim);
 
   // Resolution modifier - check how each voice resolves
   let v1Resolution = null;
@@ -399,7 +389,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
  * Main scoring function for a dissonance
  * Analyzes the C → D → C chain and returns comprehensive score
  */
-export function scoreDissonance(currSim, allSims, v1Notes, v2Notes, options = {}) {
+export function scoreDissonance(currSim, allSims) {
   // Find previous and next simultaneities
   const prevSims = allSims.filter(s => s.onset < currSim.onset);
   const nextSims = allSims.filter(s => s.onset > currSim.onset);
@@ -429,10 +419,10 @@ export function scoreDissonance(currSim, allSims, v1Notes, v2Notes, options = {}
   }
 
   // Score entry
-  const entryInfo = scoreEntry(prevSim, currSim, v1Notes, v2Notes);
+  const entryInfo = scoreEntry(prevSim, currSim);
 
   // Score exit
-  const exitInfo = scoreExit(currSim, nextSim, entryInfo, v1Notes, v2Notes);
+  const exitInfo = scoreExit(currSim, nextSim, entryInfo);
 
   // Check patterns
   const patternInfo = checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo);
@@ -494,11 +484,11 @@ export function scoreDissonance(currSim, allSims, v1Notes, v2Notes, options = {}
 /**
  * Analyze all dissonances in a passage
  */
-export function analyzeAllDissonances(sims, v1Notes, v2Notes, options = {}) {
+export function analyzeAllDissonances(sims) {
   const results = [];
 
   for (const sim of sims) {
-    const scoring = scoreDissonance(sim, sims, v1Notes, v2Notes, options);
+    const scoring = scoreDissonance(sim, sims);
     results.push({
       onset: sim.onset,
       ...scoring,
