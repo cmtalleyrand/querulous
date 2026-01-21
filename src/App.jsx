@@ -3,6 +3,8 @@ import {
   PianoRoll,
   IntervalTimeline,
   StrettoViz,
+  IntervalAnalysisViz,
+  InvertibilityViz,
   Section,
   ObservationList,
   DataRow,
@@ -476,16 +478,16 @@ export default function App() {
             {/* Countersubject Sections */}
             {results.countersubject && (
               <>
-                <Section title="Countersubject + Answer" helpKey="countersubject">
-                  <div style={{ display: 'flex', gap: '16px', marginBottom: '10px', alignItems: 'flex-end' }}>
+                <Section title="Answer + Countersubject" helpKey="countersubject">
+                  <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', alignItems: 'flex-end' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '10px', color: '#546e7a', marginBottom: '4px' }}>
+                      <label style={{ display: 'block', fontSize: '11px', color: '#546e7a', marginBottom: '4px' }}>
                         CS Position
                       </label>
                       <select
                         value={csPos}
                         onChange={(e) => setCsPos(e.target.value)}
-                        style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}
+                        style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                       >
                         {CS_POSITION_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -493,13 +495,13 @@ export default function App() {
                       </select>
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '10px', color: '#546e7a', marginBottom: '4px' }}>
+                      <label style={{ display: 'block', fontSize: '11px', color: '#546e7a', marginBottom: '4px' }}>
                         Octave Shift
                       </label>
                       <select
                         value={csShift}
                         onChange={(e) => setCsShift(e.target.value)}
-                        style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}
+                        style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
                       >
                         {OCTAVE_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
@@ -507,53 +509,21 @@ export default function App() {
                       </select>
                     </div>
                   </div>
-                  <PianoRoll
-                    voices={[
-                      { notes: results.answerNotes, color: '#ffb74d', label: 'Answer' },
-                      {
-                        notes: results.countersubject.map((n) => ({ ...n, pitch: n.pitch + csOctaveShift })),
-                        color: '#81c784',
-                        label: 'CS',
-                        opacity: 0.85,
-                      },
-                    ]}
-                    title="Answer with Countersubject"
+                  <IntervalAnalysisViz
+                    voice1={{ notes: results.answerNotes, color: '#f59e0b', label: 'Answer' }}
+                    voice2={{ notes: results.countersubject.map((n) => ({ ...n, pitch: n.pitch + csOctaveShift })), color: '#22c55e', label: 'CS' }}
+                    title="Answer + Countersubject"
+                    formatter={results.formatter}
                   />
-                  {results.answerCsSims && (
-                    <IntervalTimeline
-                      sims={results.answerCsSims}
-                      title="Interval profile (Answer + CS)"
-                      maxTime={Math.max(
-                        ...results.answerNotes.map((n) => n.onset + n.duration),
-                        ...results.countersubject.map((n) => n.onset + n.duration)
-                      )}
-                    />
-                  )}
                 </Section>
 
                 <Section title="Subject + Countersubject">
-                  <PianoRoll
-                    voices={[
-                      { notes: results.subject, color: '#5c6bc0', label: 'Subject' },
-                      {
-                        notes: results.countersubject.map((n) => ({ ...n, pitch: n.pitch + csOctaveShift })),
-                        color: '#81c784',
-                        label: 'CS',
-                        opacity: 0.85,
-                      },
-                    ]}
-                    title="Subject with Countersubject"
+                  <IntervalAnalysisViz
+                    voice1={{ notes: results.subject, color: '#6366f1', label: 'Subject' }}
+                    voice2={{ notes: results.countersubject.map((n) => ({ ...n, pitch: n.pitch + csOctaveShift })), color: '#22c55e', label: 'CS' }}
+                    title="Subject + Countersubject"
+                    formatter={results.formatter}
                   />
-                  {results.subjectCsSims && (
-                    <IntervalTimeline
-                      sims={results.subjectCsSims}
-                      title="Interval profile (Subject + CS)"
-                      maxTime={Math.max(
-                        ...results.subject.map((n) => n.onset + n.duration),
-                        ...results.countersubject.map((n) => n.onset + n.duration)
-                      )}
-                    />
-                  )}
                 </Section>
               </>
             )}
@@ -790,13 +760,22 @@ export default function App() {
                   Countersubject Analysis
                 </h2>
 
-                <Section title="Double Counterpoint" helpKey="doubleCounterpoint">
-                  <DataRow
-                    data={{
-                      'Original (CS above)': `${results.doubleCounterpoint.original.thirds} 3rds, ${results.doubleCounterpoint.original.sixths} 6ths, ${results.doubleCounterpoint.original.perfects} perfect`,
-                      'Inverted (CS below)': `${results.doubleCounterpoint.inverted.thirds} 3rds, ${results.doubleCounterpoint.inverted.sixths} 6ths, ${results.doubleCounterpoint.inverted.perfects} perfect`,
-                    }}
+                <Section title="Double Counterpoint (Invertibility)" helpKey="doubleCounterpoint">
+                  <InvertibilityViz
+                    subject={results.subject}
+                    cs={results.countersubject.map((n) => ({ ...n, pitch: n.pitch + csOctaveShift }))}
+                    formatter={results.formatter}
+                    originalIssues={results.doubleCounterpoint.original.issues || []}
+                    invertedIssues={results.doubleCounterpoint.inverted.issues || []}
                   />
+                  <div style={{ marginTop: '12px' }}>
+                    <DataRow
+                      data={{
+                        'Original (CS above)': `${results.doubleCounterpoint.original.thirds} 3rds, ${results.doubleCounterpoint.original.sixths} 6ths, ${results.doubleCounterpoint.original.perfects} perfect`,
+                        'Inverted (CS below)': `${results.doubleCounterpoint.inverted.thirds} 3rds, ${results.doubleCounterpoint.inverted.sixths} 6ths, ${results.doubleCounterpoint.inverted.perfects} perfect`,
+                      }}
+                    />
+                  </div>
                   <ObservationList observations={results.doubleCounterpoint.observations} />
                 </Section>
 

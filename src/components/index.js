@@ -1,5 +1,5 @@
 // Visualization components
-export { PianoRoll, IntervalTimeline, StrettoViz } from './visualizations';
+export { PianoRoll, IntervalTimeline, StrettoViz, IntervalAnalysisViz, InvertibilityViz } from './visualizations';
 
 // UI components
 export { Section, Observation, ObservationList, DataRow, Select, ABCBox, InfoButton, HelpModal } from './ui';
