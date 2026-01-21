@@ -11,6 +11,7 @@ import {
   Select,
   ABCBox,
   ScoreDashboard,
+  IssuesSummary,
 } from './components';
 import {
   NOTE_TO_MIDI,
@@ -470,8 +471,11 @@ export default function App() {
             {/* Score Dashboard */}
             <ScoreDashboard scoreResult={scoreResult} hasCountersubject={!!results.countersubject} />
 
+            {/* Issues Summary - Show problems first */}
+            <IssuesSummary results={results} scoreResult={scoreResult} />
+
             {/* Subject Visualization */}
-            <Section title="Subject" helpKey="subject">
+            <Section title="Subject" helpKey="subject" defaultCollapsed={true}>
               <PianoRoll voices={[{ notes: results.subject, color: '#5c6bc0', label: 'Subject' }]} />
             </Section>
 
@@ -529,7 +533,7 @@ export default function App() {
             )}
 
             {/* Harmonic Implication */}
-            <Section title="Harmonic Implication" helpKey="harmonicImplication">
+            <Section title="Harmonic Implication" helpKey="harmonicImplication" defaultCollapsed={true}>
               <DataRow
                 data={{
                   Opening: `${results.harmonicImplication.opening.degree} ${results.harmonicImplication.opening.isTonicChordTone ? '(tonic)' : ''}`,
@@ -734,7 +738,7 @@ export default function App() {
             </Section>
 
             {/* Rhythmic Profile */}
-            <Section title="Rhythmic Profile" helpKey="rhythmicVariety">
+            <Section title="Rhythmic Profile" helpKey="rhythmicVariety" defaultCollapsed={true}>
               <DataRow
                 data={{
                   'Note values': results.rhythmicVariety.uniqueDurations,
@@ -779,7 +783,7 @@ export default function App() {
                   <ObservationList observations={results.doubleCounterpoint.observations} />
                 </Section>
 
-                <Section title="Rhythmic Complementarity" helpKey="rhythmicComplementarity">
+                <Section title="Rhythmic Complementarity" helpKey="rhythmicComplementarity" defaultCollapsed={true}>
                   <DataRow
                     data={{
                       Overlap: `${Math.round(results.rhythmicComplementarity.overlapRatio * 100)}%`,
@@ -789,7 +793,7 @@ export default function App() {
                   <ObservationList observations={results.rhythmicComplementarity.observations} />
                 </Section>
 
-                <Section title="Contour Independence" helpKey="contourIndependence">
+                <Section title="Contour Independence" helpKey="contourIndependence" defaultCollapsed={true}>
                   <DataRow
                     data={{
                       Parallel: `${results.contourIndependence.parallelMotions} (${Math.round(results.contourIndependence.parallelRatio * 100)}%)`,
@@ -809,7 +813,7 @@ export default function App() {
                   />
                 </Section>
 
-                <Section title="Modulatory Robustness" helpKey="modulatoryRobustness">
+                <Section title="Modulatory Robustness" helpKey="modulatoryRobustness" defaultCollapsed={true}>
                   <p style={{ fontSize: '12px', color: '#546e7a', marginBottom: '8px' }}>
                     How well does the countersubject work against the answer?
                   </p>
