@@ -121,9 +121,10 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               const x = tToX(n.onset);
               const y = pToY(n.pitch);
               const width = Math.max(8, n.duration * tScale - 3);
+              // Highlight if this note is SOUNDING at the highlighted time (not just starting)
               const isHighlighted = highlightedOnset !== null &&
                 intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
-                  Math.abs(pt.onset - n.onset) < 0.01);
+                  n.onset <= pt.onset && pt.onset < n.onset + n.duration);
 
               return (
                 <g key={`dux-${i}`}>
@@ -151,9 +152,10 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               const x = tToX(n.onset);
               const y = pToY(n.pitch);
               const width = Math.max(8, n.duration * tScale - 3);
+              // Highlight if this note is SOUNDING at the highlighted time (not just starting)
               const isHighlighted = highlightedOnset !== null &&
                 intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
-                  Math.abs(pt.onset - n.onset) < 0.01);
+                  n.onset <= pt.onset && pt.onset < n.onset + n.duration);
 
               return (
                 <g key={`comes-${i}`}>
@@ -182,14 +184,9 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
               const isSelected = selectedInterval?.onset === pt.onset;
 
-              // Get Y positions of the notes
-              const duxNote = dux.find(n => Math.abs(n.onset - pt.onset) < 0.01);
-              const comesNote = comes.find(n => Math.abs(n.onset - pt.onset) < 0.01);
-
-              if (!duxNote || !comesNote) return null;
-
-              const y1 = pToY(duxNote.pitch);
-              const y2 = pToY(comesNote.pitch);
+              // Use pitches from the interval point data (which correctly captures held notes)
+              const y1 = pToY(pt.duxPitch);
+              const y2 = pToY(pt.comesPitch);
               const midY = (y1 + y2) / 2;
 
               // Determine color based on consonance/score
