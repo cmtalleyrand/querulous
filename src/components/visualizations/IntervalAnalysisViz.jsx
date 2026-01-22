@@ -515,34 +515,71 @@ export function IntervalAnalysisViz({
             </>
           )}
 
-          {/* Consonance-specific info */}
-          {selectedInterval.isConsonant && selectedInterval.resolvesDissonance && (
-            <div style={{
-              backgroundColor: selectedInterval.category === 'consonant_good_resolution' ? '#ecfdf5' : '#fff7ed',
-              padding: '12px',
-              borderRadius: '6px',
-              fontSize: '12px',
-              color: selectedInterval.category === 'consonant_good_resolution' ? '#065f46' : '#9a3412',
-              border: `1px solid ${selectedInterval.category === 'consonant_good_resolution' ? '#a7f3d0' : '#fed7aa'}`,
-            }}>
-              <div style={{ fontWeight: '600', marginBottom: '4px' }}>
-                {selectedInterval.category === 'consonant_good_resolution' ? 'Good resolution' : 'Weak resolution'}
+          {/* Score breakdown - color coded */}
+          {selectedInterval.scoreDetails && selectedInterval.scoreDetails.length > 0 && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Score breakdown
               </div>
-              <div>This consonance resolves the preceding dissonance</div>
-            </div>
-          )}
+              {selectedInterval.scoreDetails.map((detail, i) => {
+                // Handle both old string format and new object format
+                const isObject = typeof detail === 'object';
+                const text = isObject ? detail.text : detail;
+                const subtext = isObject ? detail.subtext : null;
+                const impact = isObject ? detail.impact : 0;
+                const type = isObject ? detail.type : 'info';
 
-          {selectedInterval.isConsonant && selectedInterval.category === 'consonant_repetitive' && (
-            <div style={{
-              backgroundColor: '#fefce8',
-              padding: '12px',
-              borderRadius: '6px',
-              fontSize: '12px',
-              color: '#854d0e',
-              border: '1px solid #fef08a',
-            }}>
-              <div style={{ fontWeight: '600', marginBottom: '4px' }}>Repetitive interval</div>
-              <div>This interval class has been used frequently in recent simultaneities</div>
+                // Color code by type
+                let bgColor, borderColor, textColor, impactColor;
+                if (type === 'bonus' || impact > 0) {
+                  bgColor = '#dcfce7';
+                  borderColor = '#86efac';
+                  textColor = '#166534';
+                  impactColor = '#16a34a';
+                } else if (type === 'penalty' || impact < 0) {
+                  bgColor = '#fee2e2';
+                  borderColor = '#fca5a5';
+                  textColor = '#991b1b';
+                  impactColor = '#dc2626';
+                } else {
+                  bgColor = '#f3f4f6';
+                  borderColor = '#d1d5db';
+                  textColor = '#4b5563';
+                  impactColor = '#6b7280';
+                }
+
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '10px 12px',
+                      marginBottom: '6px',
+                      backgroundColor: bgColor,
+                      borderRadius: '6px',
+                      borderLeft: `3px solid ${borderColor}`,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '12px', color: textColor, fontWeight: '500' }}>{text}</div>
+                        {subtext && (
+                          <div style={{ fontSize: '11px', color: textColor, opacity: 0.8, marginTop: '4px' }}>{subtext}</div>
+                        )}
+                      </div>
+                      {impact !== 0 && (
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: '700',
+                          color: impactColor,
+                          marginLeft: '12px',
+                        }}>
+                          {impact > 0 ? '+' : ''}{typeof impact === 'number' ? impact.toFixed(1) : impact}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
           </div>

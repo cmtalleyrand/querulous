@@ -631,77 +631,96 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Viable distances - prominently displayed */}
-              {results.stretto.viableStrettos?.length > 0 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>
-                    Viable distances:
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {results.stretto.allResults.filter(s => s.viable).map((s, i) => {
-                      const isSelected = selectedStretto === s.distance;
-                      const isClean = s.clean;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => setSelectedStretto(s.distance)}
-                          style={{
-                            padding: '8px 14px',
-                            borderRadius: '6px',
-                            fontSize: '13px',
-                            fontWeight: '500',
-                            cursor: 'pointer',
-                            border: isSelected ? '2px solid #059669' : '1px solid #a7f3d0',
-                            backgroundColor: isSelected ? '#059669' : (isClean ? '#dcfce7' : '#fef9c3'),
-                            color: isSelected ? 'white' : (isClean ? '#065f46' : '#854d0e'),
-                            transition: 'all 0.15s',
-                          }}
-                        >
-                          {s.distanceFormatted}
-                          {isClean ? ' ✓' : ` (${s.warningCount})`}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* All distances with gradation by severity */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                  All distances tested:
                 </div>
-              )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {results.stretto.allResults.map((s, i) => {
+                    const isSelected = selectedStretto === s.distance;
+                    const issueCount = s.issueCount || 0;
+                    const warningCount = s.warningCount || 0;
 
-              {/* Other distances tested - collapsed by default */}
-              {results.stretto.problematicStrettos?.length > 0 && (
-                <details style={{ marginBottom: '16px' }}>
-                  <summary style={{
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    color: '#64748b',
-                    padding: '8px 0',
-                    fontWeight: '500',
-                  }}>
-                    Other distances tested ({results.stretto.problematicStrettos.length})
-                  </summary>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px', paddingLeft: '8px' }}>
-                    {results.stretto.allResults.filter(s => !s.viable).map((s, i) => {
-                      const isSelected = selectedStretto === s.distance;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => setSelectedStretto(s.distance)}
-                          style={{
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            cursor: 'pointer',
-                            border: isSelected ? '2px solid #475569' : '1px solid #e2e8f0',
-                            backgroundColor: isSelected ? '#475569' : '#f8fafc',
-                            color: isSelected ? 'white' : '#64748b',
-                          }}
-                        >
-                          {s.distanceFormatted}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </details>
-              )}
+                    // Gradation: clean → warnings only → 1-2 issues → 3-4 issues → 5+ issues
+                    let bgColor, borderColor, textColor, badge;
+                    if (isSelected) {
+                      bgColor = '#1f2937';
+                      borderColor = '#1f2937';
+                      textColor = 'white';
+                    } else if (s.clean) {
+                      // Clean - bright green
+                      bgColor = '#dcfce7';
+                      borderColor = '#86efac';
+                      textColor = '#166534';
+                      badge = '✓';
+                    } else if (s.viable) {
+                      // Viable with warnings - yellow-green
+                      bgColor = '#fef9c3';
+                      borderColor = '#fde047';
+                      textColor = '#854d0e';
+                      badge = `⚠${warningCount}`;
+                    } else if (issueCount <= 2) {
+                      // Close to viable - light orange
+                      bgColor = '#ffedd5';
+                      borderColor = '#fdba74';
+                      textColor = '#c2410c';
+                      badge = issueCount.toString();
+                    } else if (issueCount <= 4) {
+                      // Moderate issues - orange
+                      bgColor = '#fee2e2';
+                      borderColor = '#fca5a5';
+                      textColor = '#b91c1c';
+                      badge = issueCount.toString();
+                    } else {
+                      // Many issues - red
+                      bgColor = '#fecaca';
+                      borderColor = '#f87171';
+                      textColor = '#991b1b';
+                      badge = issueCount.toString();
+                    }
+
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setSelectedStretto(s.distance)}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          cursor: 'pointer',
+                          border: `1.5px solid ${borderColor}`,
+                          backgroundColor: bgColor,
+                          color: textColor,
+                          transition: 'all 0.15s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <span>{s.distanceFormatted}</span>
+                        {badge && (
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            opacity: isSelected ? 1 : 0.8,
+                          }}>
+                            {badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: '8px', fontSize: '10px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <span><span style={{ color: '#166534' }}>✓</span> = clean</span>
+                  <span><span style={{ color: '#854d0e' }}>⚠</span> = warnings</span>
+                  <span><span style={{ color: '#c2410c' }}>1-2</span> = close</span>
+                  <span><span style={{ color: '#b91c1c' }}>3-4</span> = moderate</span>
+                  <span><span style={{ color: '#991b1b' }}>5+</span> = many issues</span>
+                </div>
+              </div>
 
               {/* Selected stretto detail */}
               {selectedStretto !== null && (() => {

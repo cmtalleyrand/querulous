@@ -400,23 +400,51 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
  */
 function scoreConsonance(currSim, allSims, index, intervalHistory) {
   const intervalClass = currSim.interval.class;
+  const v1Pitch = pitchName(currSim.voice1Note.pitch);
+  const v2Pitch = pitchName(currSim.voice2Note.pitch);
+  const intervalName = currSim.interval.toString();
   const details = [];
   let score = 0;
   let category = 'consonant_normal';
 
-  // Track interval usage for repetition penalty
-  const recentIntervals = intervalHistory.slice(-4); // Last 4 intervals
-  const sameIntervalCount = recentIntervals.filter(ic => ic === intervalClass).length;
+  // Check for CONSECUTIVE same intervals (not just frequency)
+  const isPerfect = intervalClass === 1 || intervalClass === 5 || intervalClass === 8;
+  const isThird = intervalClass === 3;
+  const isSixth = intervalClass === 6;
 
-  // Repetition penalty: penalize if same interval class appears 3+ times in last 4
-  if (sameIntervalCount >= 3) {
+  // Count consecutive same interval class at end of history
+  let consecutiveCount = 0;
+  for (let i = intervalHistory.length - 1; i >= 0; i--) {
+    if (intervalHistory[i] === intervalClass) {
+      consecutiveCount++;
+    } else {
+      break;
+    }
+  }
+
+  // Repetition penalties:
+  // - 2+ consecutive perfect intervals (unison, 5th, octave) = penalty
+  // - 3+ consecutive 3rds = penalty
+  // - 3+ consecutive 6ths = penalty
+  if (isPerfect && consecutiveCount >= 1) {
+    // This would be the 2nd consecutive perfect
     score -= 0.5;
     category = 'consonant_repetitive';
-    details.push(`Excessive repetition of ${intervalClass}ths: -0.5`);
-  } else if (sameIntervalCount >= 2) {
-    score -= 0.2;
+    const intervalNames = { 1: 'unisons', 5: '5ths', 8: 'octaves' };
+    details.push({
+      text: `2nd consecutive ${intervalNames[intervalClass] || 'perfect interval'} (${v1Pitch}-${v2Pitch})`,
+      impact: -0.5,
+      type: 'penalty',
+    });
+  } else if ((isThird || isSixth) && consecutiveCount >= 2) {
+    // This would be the 3rd consecutive 3rd or 6th
+    score -= 0.3;
     category = 'consonant_repetitive';
-    details.push(`Repeated ${intervalClass}th: -0.2`);
+    details.push({
+      text: `3rd consecutive ${intervalClass}th (${v1Pitch}-${v2Pitch})`,
+      impact: -0.3,
+      type: 'penalty',
+    });
   }
 
   // Check if this consonance resolves a preceding dissonance
@@ -424,51 +452,69 @@ function scoreConsonance(currSim, allSims, index, intervalHistory) {
   const prevSim = prevSims.length > 0 ? prevSims[prevSims.length - 1] : null;
 
   if (prevSim && !prevSim.interval.isConsonant()) {
-    // This consonance resolves a dissonance - check how well
+    const prevV1 = pitchName(prevSim.voice1Note.pitch);
+    const prevV2 = pitchName(prevSim.voice2Note.pitch);
+    const prevInterval = prevSim.interval.toString();
     const motion = getMotionType(prevSim, currSim);
 
-    // Check if resolution was by step (good) or leap (less good)
+    // Check resolution quality
     let goodResolution = true;
+    const resolutionDetails = [];
 
     if (motion.v1Moved) {
-      const interval = Math.abs(currSim.voice1Note.pitch - prevSim.voice1Note.pitch);
-      if (interval > 2) {
+      const semitones = Math.abs(currSim.voice1Note.pitch - prevSim.voice1Note.pitch);
+      const direction = currSim.voice1Note.pitch > prevSim.voice1Note.pitch ? 'up' : 'down';
+      if (semitones > 2) {
         goodResolution = false;
-        details.push('V1 resolved by leap');
+        resolutionDetails.push(`Voice 1 leapt ${semitones} semitones ${direction} (${prevV1}→${v1Pitch})`);
+      } else {
+        resolutionDetails.push(`Voice 1 stepped ${direction} (${prevV1}→${v1Pitch})`);
       }
+    } else {
+      resolutionDetails.push(`Voice 1 held (${v1Pitch})`);
     }
+
     if (motion.v2Moved) {
-      const interval = Math.abs(currSim.voice2Note.pitch - prevSim.voice2Note.pitch);
-      if (interval > 2) {
+      const semitones = Math.abs(currSim.voice2Note.pitch - prevSim.voice2Note.pitch);
+      const direction = currSim.voice2Note.pitch > prevSim.voice2Note.pitch ? 'up' : 'down';
+      if (semitones > 2) {
         goodResolution = false;
-        details.push('V2 resolved by leap');
+        resolutionDetails.push(`Voice 2 leapt ${semitones} semitones ${direction} (${prevV2}→${v2Pitch})`);
+      } else {
+        resolutionDetails.push(`Voice 2 stepped ${direction} (${prevV2}→${v2Pitch})`);
       }
+    } else {
+      resolutionDetails.push(`Voice 2 held (${v2Pitch})`);
     }
 
     if (goodResolution) {
       score += 0.5;
       category = 'consonant_good_resolution';
-      details.push('Good stepwise resolution: +0.5');
+      details.push({
+        text: `Good resolution: ${prevInterval} (${prevV1}/${prevV2}) → ${intervalName} (${v1Pitch}/${v2Pitch})`,
+        subtext: resolutionDetails.join('; '),
+        impact: +0.5,
+        type: 'bonus',
+      });
     } else {
       score -= 0.3;
       category = 'consonant_bad_resolution';
-      details.push('Leap resolution: -0.3');
+      details.push({
+        text: `Weak resolution: ${prevInterval} → ${intervalName} by leap`,
+        subtext: resolutionDetails.join('; '),
+        impact: -0.3,
+        type: 'penalty',
+      });
     }
   }
 
-  // Bonus for imperfect consonances (3rds, 6ths) - more flexible
-  if (intervalClass === 3 || intervalClass === 6) {
-    if (category === 'consonant_normal') {
-      details.push('Imperfect consonance (flexible)');
-    }
-  }
-
-  // Slight caution for perfect consonances (unisons, 5ths, 8ves) on weak beats
-  if ((intervalClass === 1 || intervalClass === 5 || intervalClass === 8) && !isStrongBeat(currSim.onset)) {
-    // Perfect consonances on weak beats can feel static
-    if (category === 'consonant_normal' && sameIntervalCount === 0) {
-      details.push('Perfect consonance on weak beat');
-    }
+  // Add basic interval info if no other details
+  if (details.length === 0) {
+    details.push({
+      text: `${intervalName}: ${v1Pitch} against ${v2Pitch}`,
+      impact: 0,
+      type: 'info',
+    });
   }
 
   return {
@@ -478,6 +524,9 @@ function scoreConsonance(currSim, allSims, index, intervalHistory) {
     label: intervalClass === 1 ? 'U' : intervalClass === 8 ? '8' : intervalClass.toString(),
     isConsonant: true,
     intervalClass,
+    intervalName,
+    v1Pitch,
+    v2Pitch,
     details,
     resolvesDissonance: prevSim && !prevSim.interval.isConsonant(),
   };
