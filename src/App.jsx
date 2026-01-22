@@ -562,9 +562,38 @@ export default function App() {
               </div>
             </Section>
 
-            {/* Stretto Viability */}
-            <Section title="Stretto Viability" helpKey="strettoViability">
-              <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', alignItems: 'flex-end' }}>
+            {/* Stretto Possibilities */}
+            <Section title="Stretto Possibilities" helpKey="strettoViability">
+              {/* Summary first - what we found */}
+              {(() => {
+                const cleanCount = results.stretto.cleanStrettos?.length || 0;
+                const viableCount = results.stretto.viableStrettos?.length || 0;
+                const withWarnings = viableCount - cleanCount;
+
+                return (
+                  <div style={{
+                    padding: '14px 16px',
+                    marginBottom: '16px',
+                    borderRadius: '8px',
+                    backgroundColor: viableCount > 0 ? '#ecfdf5' : '#f8fafc',
+                    border: viableCount > 0 ? '1px solid #a7f3d0' : '1px solid #e2e8f0',
+                  }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: viableCount > 0 ? '#065f46' : '#475569', marginBottom: '6px' }}>
+                      {viableCount > 0
+                        ? `${viableCount} viable stretto distance${viableCount !== 1 ? 's' : ''} found`
+                        : 'No clean stretto distances at this configuration'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: viableCount > 0 ? '#047857' : '#64748b' }}>
+                      {cleanCount > 0 && <span style={{ marginRight: '12px' }}>{cleanCount} clean</span>}
+                      {withWarnings > 0 && <span>{withWarnings} with minor issues</span>}
+                      {viableCount === 0 && <span>Stretto may still be possible with modification or at different intervals</span>}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Settings row */}
+              <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'flex-end' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '10px', color: '#546e7a', marginBottom: '4px' }}>
                     Octave Displacement
@@ -597,92 +626,127 @@ export default function App() {
                     Treat P4 as dissonant
                   </label>
                 </div>
-                <span style={{ fontSize: '12px', color: '#757575', paddingBottom: '8px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8', paddingBottom: '8px' }}>
                   Testing at {strettoStep}-beat intervals
                 </span>
               </div>
 
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ fontSize: '12px', fontWeight: '600', color: '#37474f', marginBottom: '6px' }}>
-                  Select distance:
+              {/* Viable distances - prominently displayed */}
+              {results.stretto.viableStrettos?.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#065f46', marginBottom: '8px' }}>
+                    Viable distances:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {results.stretto.allResults.filter(s => s.viable).map((s, i) => {
+                      const isSelected = selectedStretto === s.distance;
+                      const isClean = s.clean;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setSelectedStretto(s.distance)}
+                          style={{
+                            padding: '8px 14px',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            border: isSelected ? '2px solid #059669' : '1px solid #a7f3d0',
+                            backgroundColor: isSelected ? '#059669' : (isClean ? '#dcfce7' : '#fef9c3'),
+                            color: isSelected ? 'white' : (isClean ? '#065f46' : '#854d0e'),
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {s.distanceFormatted}
+                          {isClean ? ' ✓' : ` (${s.warningCount})`}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                  {results.stretto.allResults.map((s, i) => {
-                    // Determine button style based on status
-                    let bgColor, borderColor, textColor, label;
-                    if (selectedStretto === s.distance) {
-                      bgColor = '#37474f';
-                      borderColor = '#37474f';
-                      textColor = 'white';
-                    } else if (!s.viable) {
-                      bgColor = '#ffebee';
-                      borderColor = '#ef9a9a';
-                      textColor = '#c62828';
-                    } else if (!s.clean) {
-                      bgColor = '#fff8e1';
-                      borderColor = '#ffe082';
-                      textColor = '#f57c00';
-                    } else {
-                      bgColor = '#e8f5e9';
-                      borderColor = '#a5d6a7';
-                      textColor = '#2e7d32';
-                    }
+              )}
 
-                    if (!s.viable) {
-                      label = `(${s.issueCount})`;
-                    } else if (!s.clean) {
-                      label = `⚠${s.warningCount}`;
-                    } else {
-                      label = '✓';
-                    }
+              {/* Other distances tested - collapsed by default */}
+              {results.stretto.problematicStrettos?.length > 0 && (
+                <details style={{ marginBottom: '16px' }}>
+                  <summary style={{
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    color: '#64748b',
+                    padding: '8px 0',
+                    fontWeight: '500',
+                  }}>
+                    Other distances tested ({results.stretto.problematicStrettos.length})
+                  </summary>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px', paddingLeft: '8px' }}>
+                    {results.stretto.allResults.filter(s => !s.viable).map((s, i) => {
+                      const isSelected = selectedStretto === s.distance;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => setSelectedStretto(s.distance)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            border: isSelected ? '2px solid #475569' : '1px solid #e2e8f0',
+                            backgroundColor: isSelected ? '#475569' : '#f8fafc',
+                            color: isSelected ? 'white' : '#64748b',
+                          }}
+                        >
+                          {s.distanceFormatted}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </details>
+              )}
 
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => setSelectedStretto(s.distance)}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                          border: '1px solid',
-                          backgroundColor: bgColor,
-                          borderColor: borderColor,
-                          color: textColor,
-                        }}
-                      >
-                        {s.distanceFormatted} {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
+              {/* Selected stretto detail */}
               {selectedStretto !== null && (() => {
                 const s = results.stretto.allResults.find((r) => r.distance === selectedStretto);
                 if (!s) return null;
                 return (
                   <div
                     style={{
-                      padding: '12px',
-                      backgroundColor: '#fafafa',
-                      borderRadius: '5px',
-                      border: '1px solid #e0e0e0',
+                      padding: '14px',
+                      backgroundColor: s.viable ? '#f0fdf4' : '#f8fafc',
+                      borderRadius: '8px',
+                      border: s.viable ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
                     }}
                   >
                     <div
                       style={{
-                        marginBottom: '8px',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        color: s.viable ? (s.clean ? '#2e7d32' : '#f57c00') : '#c62828',
+                        marginBottom: '10px',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: s.viable ? (s.clean ? '#065f46' : '#854d0e') : '#475569',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
                       }}
                     >
-                      {s.distanceFormatted} — {s.overlapPercent}% overlap — {
-                        s.viable
-                          ? (s.clean ? 'Clean' : `${s.warningCount} warning${s.warningCount > 1 ? 's' : ''}`)
-                          : `${s.issueCount} issue${s.issueCount > 1 ? 's' : ''}`
-                      }
+                      <span>{s.distanceFormatted}</span>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: '400',
+                        padding: '2px 8px',
+                        borderRadius: '10px',
+                        backgroundColor: s.viable ? (s.clean ? '#dcfce7' : '#fef9c3') : '#f1f5f9',
+                        color: s.viable ? (s.clean ? '#059669' : '#a16207') : '#64748b',
+                      }}>
+                        {s.overlapPercent}% overlap
+                      </span>
+                      {s.viable && (
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          color: s.clean ? '#059669' : '#d97706',
+                        }}>
+                          {s.clean ? 'Clean' : `${s.warningCount} consideration${s.warningCount !== 1 ? 's' : ''}`}
+                        </span>
+                      )}
                     </div>
                     <StrettoViz
                       subject={results.subject}
@@ -694,33 +758,33 @@ export default function App() {
                       octaveDisp={strettoOctaveVal}
                     />
                     {(s.issues.length > 0 || (s.warnings && s.warnings.length > 0)) && (
-                      <div style={{ marginTop: '8px' }}>
-                        {s.issues.map((is, j) => (
-                          <div
-                            key={`issue-${j}`}
-                            style={{
-                              fontSize: '12px',
-                              color: '#c62828',
-                              marginTop: '3px',
-                              paddingLeft: '7px',
-                              borderLeft: '2px solid #ef9a9a',
-                            }}
-                          >
-                            {is.description}
-                          </div>
-                        ))}
+                      <div style={{ marginTop: '10px' }}>
                         {s.warnings && s.warnings.map((w, j) => (
                           <div
                             key={`warn-${j}`}
                             style={{
                               fontSize: '12px',
-                              color: '#e65100',
-                              marginTop: '3px',
-                              paddingLeft: '7px',
-                              borderLeft: '2px solid #ffcc80',
+                              color: '#a16207',
+                              marginTop: '4px',
+                              paddingLeft: '10px',
+                              borderLeft: '2px solid #fcd34d',
                             }}
                           >
-                            ⚠ {w.description}
+                            {w.description}
+                          </div>
+                        ))}
+                        {s.issues.map((is, j) => (
+                          <div
+                            key={`issue-${j}`}
+                            style={{
+                              fontSize: '12px',
+                              color: '#64748b',
+                              marginTop: '4px',
+                              paddingLeft: '10px',
+                              borderLeft: '2px solid #cbd5e1',
+                            }}
+                          >
+                            {is.description}
                           </div>
                         ))}
                       </div>
@@ -728,13 +792,6 @@ export default function App() {
                   </div>
                 );
               })()}
-
-              <div style={{ marginTop: '12px', fontSize: '12px', color: '#546e7a' }}>
-                <strong>Summary:</strong>{' '}
-                {results.stretto.cleanStrettos?.length || 0} clean,{' '}
-                {(results.stretto.viableStrettos?.length || 0) - (results.stretto.cleanStrettos?.length || 0)} with warnings,{' '}
-                {results.stretto.problematicStrettos.length} with issues
-              </div>
             </Section>
 
             {/* Rhythmic Profile */}

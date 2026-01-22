@@ -46,10 +46,13 @@ export function IntervalAnalysisViz({
 
     // Deduplicate and build interval points with scoring
     const beatSnapshots = new Map();
-    for (const sim of sims) {
+    const intervalHistory = []; // Track for repetition detection
+
+    for (let i = 0; i < sims.length; i++) {
+      const sim = sims[i];
       const snapBeat = Math.round(sim.onset * 4) / 4;
       if (!beatSnapshots.has(snapBeat)) {
-        const scoring = scoreDissonance(sim, sims);
+        const scoring = scoreDissonance(sim, sims, i, intervalHistory);
         beatSnapshots.set(snapBeat, {
           onset: sim.onset,
           v1Pitch: sim.voice1Note.pitch,
@@ -60,12 +63,15 @@ export function IntervalAnalysisViz({
           isStrong: sim.metricWeight >= 0.75,
           dissonanceLabel: scoring.label,
           dissonanceType: scoring.type,
+          category: scoring.category || 'consonant_normal',
           score: scoring.score,
           scoreDetails: scoring.details,
           patterns: scoring.patterns,
           entry: scoring.entry,
           exit: scoring.exit,
+          resolvesDissonance: scoring.resolvesDissonance,
         });
+        intervalHistory.push(sim.interval.class);
       }
     }
 
@@ -124,14 +130,46 @@ export function IntervalAnalysisViz({
     if (pt) setSelectedInterval(pt);
   };
 
-  // Get score color
-  const getScoreStyle = (score, isConsonant) => {
-    if (isConsonant) return { color: '#16a34a', bg: '#dcfce7', label: 'Consonant' };
-    if (score >= 1.5) return { color: '#15803d', bg: '#dcfce7', label: 'Excellent' };
-    if (score >= 0.5) return { color: '#16a34a', bg: '#d1fae5', label: 'Good' };
-    if (score >= 0) return { color: '#ca8a04', bg: '#fef9c3', label: 'Acceptable' };
-    if (score >= -1) return { color: '#ea580c', bg: '#ffedd5', label: 'Marginal' };
-    return { color: '#dc2626', bg: '#fee2e2', label: 'Problematic' };
+  // Semantic color scheme based on interval context
+  // Good: bright green (good resolution), bright purple (good dissonance handling)
+  // Meh: pale green (normal consonance), yellowish (repetitive)
+  // Bad: orange (bad resolution), red-purple/red (bad dissonance)
+  const getScoreStyle = (pt) => {
+    const { category, score, isConsonant } = pt;
+
+    // Consonances
+    if (isConsonant) {
+      switch (category) {
+        case 'consonant_good_resolution':
+          return { color: '#059669', bg: '#a7f3d0', label: 'Good resolution', lineColor: '#10b981' };
+        case 'consonant_bad_resolution':
+          return { color: '#ea580c', bg: '#fed7aa', label: 'Poor resolution', lineColor: '#f97316' };
+        case 'consonant_repetitive':
+          return { color: '#a16207', bg: '#fef08a', label: 'Repetitive', lineColor: '#ca8a04' };
+        default: // consonant_normal
+          return { color: '#4ade80', bg: '#dcfce7', label: 'Consonant', lineColor: '#86efac' };
+      }
+    }
+
+    // Dissonances - purple spectrum for handled, red for bad
+    switch (category) {
+      case 'dissonant_good':
+        // Bright purple for well-handled dissonances - brighter the better
+        if (score >= 2.0) return { color: '#7c3aed', bg: '#ddd6fe', label: 'Excellent', lineColor: '#8b5cf6' };
+        if (score >= 1.0) return { color: '#8b5cf6', bg: '#ede9fe', label: 'Good', lineColor: '#a78bfa' };
+        return { color: '#a78bfa', bg: '#f3f0ff', label: 'Acceptable', lineColor: '#c4b5fd' };
+
+      case 'dissonant_marginal':
+        // Purple-red for marginal
+        return { color: '#c026d3', bg: '#fae8ff', label: 'Marginal', lineColor: '#d946ef' };
+
+      case 'dissonant_bad':
+      default:
+        // Red for problematic dissonances - darker = worse
+        if (score <= -2.0) return { color: '#b91c1c', bg: '#fecaca', label: 'Severe', lineColor: '#dc2626' };
+        if (score <= -1.0) return { color: '#dc2626', bg: '#fee2e2', label: 'Problematic', lineColor: '#ef4444' };
+        return { color: '#ea580c', bg: '#ffedd5', label: 'Weak', lineColor: '#f97316' };
+    }
   };
 
   return (
@@ -237,11 +275,16 @@ export function IntervalAnalysisViz({
               const midY = (y1 + y2) / 2;
               const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
               const isSelected = selectedInterval?.onset === pt.onset;
-              const style = getScoreStyle(pt.score, pt.isConsonant);
+              const style = getScoreStyle(pt);
 
               const label = pt.isConsonant
                 ? (pt.intervalClass === 1 ? 'U' : pt.intervalClass === 8 ? '8' : pt.intervalClass.toString())
                 : (pt.dissonanceLabel || '!');
+
+              // Line style varies by category
+              const lineColor = style.lineColor || style.color;
+              const lineWidth = isSelected ? 3 : (pt.isConsonant ? 2 : 2.5);
+              const lineDash = pt.isConsonant ? 'none' : '5,3';
 
               return (
                 <g key={`int-${i}`} style={{ cursor: 'pointer' }} onClick={() => handleIntervalClick(pt)}>
@@ -254,8 +297,8 @@ export function IntervalAnalysisViz({
 
                   {/* Connecting line */}
                   <line x1={x} y1={y1} x2={x} y2={y2}
-                    stroke={style.color} strokeWidth={isSelected ? 3 : 2}
-                    strokeDasharray={pt.isConsonant ? 'none' : '4,2'} />
+                    stroke={lineColor} strokeWidth={lineWidth}
+                    strokeDasharray={lineDash} />
 
                   {/* Label bubble */}
                   <rect x={x - 16} y={midY - 12} width={32} height={24}
@@ -264,8 +307,8 @@ export function IntervalAnalysisViz({
                     {label}
                   </text>
 
-                  {/* Score badge for dissonances */}
-                  {!pt.isConsonant && (
+                  {/* Score badge - show for all with non-zero scores */}
+                  {(pt.score !== 0 || !pt.isConsonant) && (
                     <g transform={`translate(${x}, ${midY + 18})`}>
                       <text fontSize="10" fill={style.color} textAnchor="middle" fontWeight="500">
                         {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(1)}
@@ -380,27 +423,29 @@ export function IntervalAnalysisViz({
             </div>
           </div>
 
-          {/* Score section for dissonances */}
-          {!selectedInterval.isConsonant && (
-            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px' }}>
-                <div style={{ color: '#6b7280', fontSize: '13px' }}>Score:</div>
-                <div style={{
-                  padding: '6px 16px',
-                  borderRadius: '6px',
-                  fontWeight: '700',
-                  fontSize: '18px',
-                  ...(() => {
-                    const s = getScoreStyle(selectedInterval.score, false);
-                    return { backgroundColor: s.bg, color: s.color };
-                  })(),
-                }}>
-                  {selectedInterval.score >= 0 ? '+' : ''}{selectedInterval.score.toFixed(1)}
-                </div>
-                <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                  {getScoreStyle(selectedInterval.score, false).label}
-                </div>
+          {/* Score section */}
+          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px' }}>
+              <div style={{ color: '#6b7280', fontSize: '13px' }}>Score:</div>
+              <div style={{
+                padding: '6px 16px',
+                borderRadius: '6px',
+                fontWeight: '700',
+                fontSize: '18px',
+                ...(() => {
+                  const s = getScoreStyle(selectedInterval);
+                  return { backgroundColor: s.bg, color: s.color };
+                })(),
+              }}>
+                {selectedInterval.score >= 0 ? '+' : ''}{selectedInterval.score.toFixed(1)}
               </div>
+              <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                {getScoreStyle(selectedInterval).label}
+              </div>
+            </div>
+
+          {!selectedInterval.isConsonant && (
+            <>
 
               {/* Motion description */}
               {selectedInterval.entry && (
@@ -467,8 +512,40 @@ export function IntervalAnalysisViz({
                   </div>
                 </details>
               )}
+            </>
+          )}
+
+          {/* Consonance-specific info */}
+          {selectedInterval.isConsonant && selectedInterval.resolvesDissonance && (
+            <div style={{
+              backgroundColor: selectedInterval.category === 'consonant_good_resolution' ? '#ecfdf5' : '#fff7ed',
+              padding: '12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              color: selectedInterval.category === 'consonant_good_resolution' ? '#065f46' : '#9a3412',
+              border: `1px solid ${selectedInterval.category === 'consonant_good_resolution' ? '#a7f3d0' : '#fed7aa'}`,
+            }}>
+              <div style={{ fontWeight: '600', marginBottom: '4px' }}>
+                {selectedInterval.category === 'consonant_good_resolution' ? 'Good resolution' : 'Weak resolution'}
+              </div>
+              <div>This consonance resolves the preceding dissonance</div>
             </div>
           )}
+
+          {selectedInterval.isConsonant && selectedInterval.category === 'consonant_repetitive' && (
+            <div style={{
+              backgroundColor: '#fefce8',
+              padding: '12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              color: '#854d0e',
+              border: '1px solid #fef08a',
+            }}>
+              <div style={{ fontWeight: '600', marginBottom: '4px' }}>Repetitive interval</div>
+              <div>This interval class has been used frequently in recent simultaneities</div>
+            </div>
+          )}
+          </div>
         </div>
       )}
     </div>

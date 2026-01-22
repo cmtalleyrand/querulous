@@ -5,6 +5,15 @@
  * Scores: +1.0 to +2.0 = Excellent (Suspensions, Passing Tones)
  *         0.0 = Neutral/Acceptable
  *         Negative = Weak or Error-prone
+ *
+ * Semantic Categories for visualization:
+ *   consonant_normal:      Normal consonant interval (pale green)
+ *   consonant_repetitive:  Same interval repeated too often (yellowish)
+ *   consonant_good_resolution: Consonance after well-resolved dissonance (bright green)
+ *   consonant_bad_resolution:  Consonance after poorly-resolved dissonance (orange)
+ *   dissonant_good:        Well-handled dissonance (purple, brighter = better)
+ *   dissonant_marginal:    Acceptable but not ideal dissonance (purple-ish)
+ *   dissonant_bad:         Poorly handled dissonance (red)
  */
 
 import { pitchName, metricWeight } from './formatter';
@@ -386,10 +395,99 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
 }
 
 /**
+ * Score a consonance based on context
+ * Tracks repetition and resolution quality
+ */
+function scoreConsonance(currSim, allSims, index, intervalHistory) {
+  const intervalClass = currSim.interval.class;
+  const details = [];
+  let score = 0;
+  let category = 'consonant_normal';
+
+  // Track interval usage for repetition penalty
+  const recentIntervals = intervalHistory.slice(-4); // Last 4 intervals
+  const sameIntervalCount = recentIntervals.filter(ic => ic === intervalClass).length;
+
+  // Repetition penalty: penalize if same interval class appears 3+ times in last 4
+  if (sameIntervalCount >= 3) {
+    score -= 0.5;
+    category = 'consonant_repetitive';
+    details.push(`Excessive repetition of ${intervalClass}ths: -0.5`);
+  } else if (sameIntervalCount >= 2) {
+    score -= 0.2;
+    category = 'consonant_repetitive';
+    details.push(`Repeated ${intervalClass}th: -0.2`);
+  }
+
+  // Check if this consonance resolves a preceding dissonance
+  const prevSims = allSims.filter(s => s.onset < currSim.onset);
+  const prevSim = prevSims.length > 0 ? prevSims[prevSims.length - 1] : null;
+
+  if (prevSim && !prevSim.interval.isConsonant()) {
+    // This consonance resolves a dissonance - check how well
+    const motion = getMotionType(prevSim, currSim);
+
+    // Check if resolution was by step (good) or leap (less good)
+    let goodResolution = true;
+
+    if (motion.v1Moved) {
+      const interval = Math.abs(currSim.voice1Note.pitch - prevSim.voice1Note.pitch);
+      if (interval > 2) {
+        goodResolution = false;
+        details.push('V1 resolved by leap');
+      }
+    }
+    if (motion.v2Moved) {
+      const interval = Math.abs(currSim.voice2Note.pitch - prevSim.voice2Note.pitch);
+      if (interval > 2) {
+        goodResolution = false;
+        details.push('V2 resolved by leap');
+      }
+    }
+
+    if (goodResolution) {
+      score += 0.5;
+      category = 'consonant_good_resolution';
+      details.push('Good stepwise resolution: +0.5');
+    } else {
+      score -= 0.3;
+      category = 'consonant_bad_resolution';
+      details.push('Leap resolution: -0.3');
+    }
+  }
+
+  // Bonus for imperfect consonances (3rds, 6ths) - more flexible
+  if (intervalClass === 3 || intervalClass === 6) {
+    if (category === 'consonant_normal') {
+      details.push('Imperfect consonance (flexible)');
+    }
+  }
+
+  // Slight caution for perfect consonances (unisons, 5ths, 8ves) on weak beats
+  if ((intervalClass === 1 || intervalClass === 5 || intervalClass === 8) && !isStrongBeat(currSim.onset)) {
+    // Perfect consonances on weak beats can feel static
+    if (category === 'consonant_normal' && sameIntervalCount === 0) {
+      details.push('Perfect consonance on weak beat');
+    }
+  }
+
+  return {
+    type: 'consonant',
+    category,
+    score,
+    label: intervalClass === 1 ? 'U' : intervalClass === 8 ? '8' : intervalClass.toString(),
+    isConsonant: true,
+    intervalClass,
+    details,
+    resolvesDissonance: prevSim && !prevSim.interval.isConsonant(),
+  };
+}
+
+/**
  * Main scoring function for a dissonance
  * Analyzes the C → D → C chain and returns comprehensive score
  */
-export function scoreDissonance(currSim, allSims) {
+export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = []) {
   // Find previous and next simultaneities
   const prevSims = allSims.filter(s => s.onset < currSim.onset);
   const nextSims = allSims.filter(s => s.onset > currSim.onset);
@@ -409,13 +507,8 @@ export function scoreDissonance(currSim, allSims) {
   }
 
   if (!isDissonant) {
-    return {
-      type: 'consonant',
-      score: 0,
-      label: currSim.interval.class.toString(),
-      isConsonant: true,
-      details: [],
-    };
+    // Score as consonance with context
+    return scoreConsonance(currSim, allSims, index, intervalHistory);
   }
 
   // Score entry
@@ -430,9 +523,16 @@ export function scoreDissonance(currSim, allSims) {
   // Calculate total score
   const totalScore = entryInfo.score + exitInfo.score + patternInfo.bonus;
 
-  // Determine type label
+  // Determine type label and semantic category
   let type = 'unprepared';
   let label = '!';
+  let category = 'dissonant_bad';
+
+  if (totalScore >= 1.0) {
+    category = 'dissonant_good';
+  } else if (totalScore >= -0.5) {
+    category = 'dissonant_marginal';
+  }
 
   if (patternInfo.patterns.length > 0) {
     const mainPattern = patternInfo.patterns[0];
@@ -459,6 +559,7 @@ export function scoreDissonance(currSim, allSims) {
 
   return {
     type,
+    category,
     score: totalScore,
     label,
     isConsonant: false,
@@ -482,23 +583,30 @@ export function scoreDissonance(currSim, allSims) {
 }
 
 /**
- * Analyze all dissonances in a passage
+ * Analyze all intervals in a passage with context tracking
  */
 export function analyzeAllDissonances(sims) {
   const results = [];
+  const intervalHistory = []; // Track interval classes for repetition detection
 
-  for (const sim of sims) {
-    const scoring = scoreDissonance(sim, sims);
+  for (let i = 0; i < sims.length; i++) {
+    const sim = sims[i];
+    const scoring = scoreDissonance(sim, sims, i, intervalHistory);
     results.push({
       onset: sim.onset,
       ...scoring,
     });
+
+    // Track interval history
+    intervalHistory.push(sim.interval.class);
   }
 
   // Calculate summary statistics
+  const consonances = results.filter(r => r.isConsonant);
   const dissonances = results.filter(r => !r.isConsonant);
   const goodDissonances = dissonances.filter(r => r.score >= 0);
   const badDissonances = dissonances.filter(r => r.score < 0);
+  const repetitiveConsonances = consonances.filter(r => r.category === 'consonant_repetitive');
 
   const typeCounts = {};
   for (const d of dissonances) {
@@ -507,9 +615,13 @@ export function analyzeAllDissonances(sims) {
 
   return {
     all: results,
+    consonances,
     dissonances,
     summary: {
+      totalIntervals: results.length,
+      totalConsonances: consonances.length,
       totalDissonances: dissonances.length,
+      repetitiveConsonances: repetitiveConsonances.length,
       goodCount: goodDissonances.length,
       badCount: badDissonances.length,
       averageScore: dissonances.length > 0
