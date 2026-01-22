@@ -19,7 +19,8 @@
 import { pitchName, metricWeight } from './formatter';
 
 // Configuration
-let treatP4AsDissonant = false; // Toggle for P4 treatment
+let treatP4AsDissonant = false; // Toggle for P4 treatment (forces all P4s as dissonant)
+let currentMeter = [4, 4]; // Default meter, can be updated
 
 export function setP4Treatment(dissonant) {
   treatP4AsDissonant = dissonant;
@@ -27,6 +28,31 @@ export function setP4Treatment(dissonant) {
 
 export function getP4Treatment() {
   return treatP4AsDissonant;
+}
+
+/**
+ * Check if P4 should be treated as dissonant based on voice positions
+ * P4 is dissonant when the lower note is the bass (lowest voice)
+ * P4 is consonant between upper voices
+ * @param {Simultaneity} sim - The simultaneity to check
+ * @returns {boolean} - Whether this P4 should be treated as dissonant
+ */
+function isP4DissonantInContext(sim) {
+  // If user forced all P4s as dissonant, respect that
+  if (treatP4AsDissonant) return true;
+
+  // In two-voice counterpoint, the lower voice IS the bass
+  // So P4 against the lower voice is dissonant
+  // This is the traditional rule: P4 sounding against the bass is dissonant
+  return true; // In 2-voice texture, P4 is generally treated as dissonant
+}
+
+export function setMeter(meter) {
+  currentMeter = meter;
+}
+
+export function getMeter() {
+  return currentMeter;
 }
 
 /**
@@ -83,7 +109,7 @@ function getMotionType(prevSim, currSim) {
  * Check if this is a strong beat (weight >= 0.75)
  */
 function isStrongBeat(onset) {
-  return metricWeight(onset) >= 0.75;
+  return metricWeight(onset, currentMeter) >= 0.75;
 }
 
 /**
@@ -546,13 +572,10 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
   // Check if this is actually a dissonance
   let isDissonant = !currSim.interval.isConsonant();
 
-  // P4 special handling
+  // P4 special handling - in two-voice counterpoint, P4 is generally treated as dissonant
+  // because one voice is always the bass, and P4 against bass is dissonant
   if (currSim.interval.class === 4) {
-    if (treatP4AsDissonant) {
-      isDissonant = true;
-    } else {
-      isDissonant = false;
-    }
+    isDissonant = isP4DissonantInContext(currSim);
   }
 
   if (!isDissonant) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { pitchName } from '../../utils/formatter';
+import { getMeter } from '../../utils/dissonanceScoring';
 
 /**
  * Stretto Visualization component
@@ -94,27 +95,54 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                hasWarnings ? `${warnings.length} warning${warnings.length !== 1 ? 's' : ''}` : 'Clean'}
             </text>
 
-            {/* Beat grid */}
-            {Array.from({ length: Math.ceil(totalDuration) + 1 }, (_, i) => {
-              const x = tToX(i);
-              const isDownbeat = i % 4 === 0;
-              return (
-                <g key={`grid-${i}`}>
-                  <line
-                    x1={x} y1={headerHeight} x2={x} y2={h - 10}
-                    stroke={isDownbeat ? '#9ca3af' : '#e5e7eb'}
-                    strokeWidth={isDownbeat ? 1 : 0.5}
-                  />
-                  <text x={x} y={h - 2} fontSize="10" fill="#9ca3af" textAnchor="middle">
-                    {i + 1}
-                  </text>
-                </g>
-              );
-            })}
+            {/* Beat grid - meter-aware */}
+            {(() => {
+              const meter = getMeter();
+              const beatsPerMeasure = meter[0];
+              const isCompound = (meter[0] % 3 === 0 && meter[1] === 8 && meter[0] >= 3);
+              let measureNum = 1;
 
-            {/* Voice labels */}
-            <text x={12} y={pToY(dux[0].pitch) + 5} fontSize="11" fontWeight="600" fill={colors.dux}>Dux</text>
-            <text x={12} y={pToY(comes[0].pitch) + 5} fontSize="11" fontWeight="600" fill={colors.comes}>Comes</text>
+              return Array.from({ length: Math.ceil(totalDuration) + 1 }, (_, i) => {
+                const x = tToX(i);
+                const posInMeasure = i % beatsPerMeasure;
+                const isDownbeat = posInMeasure === 0;
+                const isMainBeat = isCompound ? (posInMeasure % 3 === 0) : true;
+
+                return (
+                  <g key={`grid-${i}`}>
+                    <line
+                      x1={x} y1={headerHeight} x2={x} y2={h - 18}
+                      stroke={isDownbeat ? '#64748b' : (isMainBeat ? '#9ca3af' : '#e5e7eb')}
+                      strokeWidth={isDownbeat ? 1.5 : (isMainBeat ? 0.75 : 0.5)}
+                    />
+                    {isDownbeat ? (
+                      <text x={x} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
+                        m.{measureNum++}
+                      </text>
+                    ) : isMainBeat ? (
+                      <text x={x} y={h - 4} fontSize="9" fill="#9ca3af" textAnchor="middle">
+                        {isCompound ? Math.floor(posInMeasure / 3) + 1 : posInMeasure + 1}
+                      </text>
+                    ) : null}
+                  </g>
+                );
+              });
+            })()}
+
+            {/* Voice labels - indicate upper/lower based on actual pitch */}
+            {(() => {
+              const duxIsHigher = octaveDisp < 0; // If octaveDisp is negative, comes is lower, so dux is higher
+              return (
+                <>
+                  <text x={12} y={pToY(maxP - 1) + 5} fontSize="11" fontWeight="600" fill={duxIsHigher ? colors.dux : colors.comes}>
+                    {duxIsHigher ? 'Dux' : 'Comes'} (upper)
+                  </text>
+                  <text x={12} y={pToY(minP + 1) + 5} fontSize="11" fontWeight="600" fill={duxIsHigher ? colors.comes : colors.dux}>
+                    {duxIsHigher ? 'Comes' : 'Dux'} (lower)
+                  </text>
+                </>
+              );
+            })()}
 
             {/* Dux notes */}
             {dux.map((n, i) => {

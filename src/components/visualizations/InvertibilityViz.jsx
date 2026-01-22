@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
+import { getMeter } from '../../utils/dissonanceScoring';
 
 /**
  * Invertibility Visualization
@@ -20,6 +21,8 @@ export function InvertibilityViz({
   const analysis = useMemo(() => {
     if (!subject?.length || !cs?.length) return null;
 
+    const meter = getMeter();
+
     const findSims = (v1, v2) => {
       const sims = [];
       for (const n1 of v1) {
@@ -30,7 +33,7 @@ export function InvertibilityViz({
           const e2 = n2.onset + n2.duration;
           if (s1 < e2 && s2 < e1) {
             const start = Math.max(s1, s2);
-            sims.push(new Simultaneity(start, n1, n2, metricWeight(start)));
+            sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
           }
         }
       }
@@ -168,14 +171,36 @@ export function InvertibilityViz({
               Double Counterpoint at the Octave
             </text>
 
-            {/* Beat grid */}
-            {Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => (
-              <g key={`grid-${i}`}>
-                <line x1={tToX(i)} y1={36} x2={tToX(i)} y2={h - 16}
-                  stroke={i % 4 === 0 ? '#94a3b8' : '#e2e8f0'} strokeWidth={i % 4 === 0 ? 1 : 0.5} />
-                <text x={tToX(i)} y={h - 4} fontSize="10" fill="#94a3b8" textAnchor="middle">{i + 1}</text>
-              </g>
-            ))}
+            {/* Beat grid - meter-aware */}
+            {(() => {
+              const meter = getMeter();
+              const beatsPerMeasure = meter[0];
+              const isCompound = (meter[0] % 3 === 0 && meter[1] === 8 && meter[0] >= 3);
+              let measureNum = 1;
+
+              return Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => {
+                const posInMeasure = i % beatsPerMeasure;
+                const isDownbeat = posInMeasure === 0;
+                const isMainBeat = isCompound ? (posInMeasure % 3 === 0) : true;
+
+                return (
+                  <g key={`grid-${i}`}>
+                    <line x1={tToX(i)} y1={36} x2={tToX(i)} y2={h - 18}
+                      stroke={isDownbeat ? '#64748b' : (isMainBeat ? '#94a3b8' : '#e2e8f0')}
+                      strokeWidth={isDownbeat ? 1.5 : (isMainBeat ? 0.75 : 0.5)} />
+                    {isDownbeat ? (
+                      <text x={tToX(i)} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
+                        m.{measureNum++}
+                      </text>
+                    ) : isMainBeat ? (
+                      <text x={tToX(i)} y={h - 4} fontSize="9" fill="#94a3b8" textAnchor="middle">
+                        {isCompound ? Math.floor(posInMeasure / 3) + 1 : posInMeasure + 1}
+                      </text>
+                    ) : null}
+                  </g>
+                );
+              });
+            })()}
 
             {/* Subject notes - always shown */}
             {analysis.subject.map((n, i) => {

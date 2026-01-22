@@ -39,6 +39,7 @@ import {
   testModulatoryRobustness,
   calculateOverallScore,
   setP4Treatment,
+  setMeter,
 } from './utils';
 import { NoteEvent, ScaleDegree } from './types';
 
@@ -123,6 +124,9 @@ export default function App() {
       // Get time signature - use parsed from ABC or selected
       const timeSigOption = TIME_SIGNATURE_OPTIONS.find(t => t.value === selTimeSig);
       const meter = h.meter || timeSigOption?.meter || [4, 4];
+
+      // Set the meter for all analysis functions to use
+      setMeter(meter);
 
       // Parse subject with spelling key for accidentals, analysis key for scale degrees
       const subjectParsed = parseABC(subjectInput, tonic, analysisMode, effNL, spellingKeySig);

@@ -1,3 +1,5 @@
+import { getMeter } from '../../utils/dissonanceScoring';
+
 /**
  * Interval Timeline visualization component
  * Shows consonant vs dissonant intervals over time
@@ -33,18 +35,30 @@ export function IntervalTimeline({ sims, title, maxTime }) {
         role="img"
         aria-label={title || 'Interval timeline'}
       >
-        {/* Beat lines */}
-        {Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => (
-          <line
-            key={i}
-            x1={tToX(i)}
-            y1={5}
-            x2={tToX(i)}
-            y2={h - 5}
-            stroke={i % 4 === 0 ? '#bdbdbd' : '#eee'}
-            strokeWidth={i % 4 === 0 ? 1 : 0.5}
-          />
-        ))}
+        {/* Beat lines - meter-aware */}
+        {(() => {
+          const meter = getMeter();
+          const beatsPerMeasure = meter[0];
+          const isCompound = (meter[0] % 3 === 0 && meter[1] === 8 && meter[0] >= 3);
+
+          return Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => {
+            const posInMeasure = i % beatsPerMeasure;
+            const isDownbeat = posInMeasure === 0;
+            const isMainBeat = isCompound ? (posInMeasure % 3 === 0) : true;
+
+            return (
+              <line
+                key={i}
+                x1={tToX(i)}
+                y1={5}
+                x2={tToX(i)}
+                y2={h - 5}
+                stroke={isDownbeat ? '#9ca3af' : (isMainBeat ? '#bdbdbd' : '#eee')}
+                strokeWidth={isDownbeat ? 1.5 : (isMainBeat ? 0.75 : 0.5)}
+              />
+            );
+          });
+        })()}
 
         {/* Interval blocks */}
         {sims.map((s, i) => {

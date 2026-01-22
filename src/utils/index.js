@@ -58,4 +58,6 @@ export {
   analyzeAllDissonances,
   setP4Treatment,
   getP4Treatment,
+  setMeter,
+  getMeter,
 } from './dissonanceScoring';

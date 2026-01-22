@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
-import { scoreDissonance } from '../../utils/dissonanceScoring';
+import { scoreDissonance, getMeter } from '../../utils/dissonanceScoring';
 
 /**
  * Unified Interval Analysis Visualization
@@ -27,6 +27,7 @@ export function IntervalAnalysisViz({
 
     const v1 = voice1.notes;
     const v2 = voice2.notes;
+    const meter = getMeter();
 
     // Find all simultaneities
     const sims = [];
@@ -38,7 +39,7 @@ export function IntervalAnalysisViz({
         const e2 = n2.onset + n2.duration;
         if (s1 < e2 && s2 < e1) {
           const start = Math.max(s1, s2);
-          sims.push(new Simultaneity(start, n1, n2, metricWeight(start)));
+          sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
         }
       }
     }
@@ -195,23 +196,47 @@ export function IntervalAnalysisViz({
               </text>
             )}
 
-            {/* Beat grid */}
-            {Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => {
-              const x = tToX(i);
-              const isDownbeat = i % 4 === 0;
-              return (
-                <g key={`grid-${i}`}>
-                  <line
-                    x1={x} y1={headerHeight} x2={x} y2={h - 12}
-                    stroke={isDownbeat ? '#94a3b8' : '#e2e8f0'}
-                    strokeWidth={isDownbeat ? 1 : 0.5}
-                  />
-                  <text x={x} y={h - 2} fontSize="10" fill="#94a3b8" textAnchor="middle">
-                    {i + 1}
-                  </text>
-                </g>
-              );
-            })}
+            {/* Beat grid - meter-aware */}
+            {(() => {
+              const meter = getMeter();
+              const beatsPerMeasure = meter[0];
+              const isCompound = (meter[0] % 3 === 0 && meter[1] === 8 && meter[0] >= 3);
+              // In compound meters, notes are in eighth-note units, so meter[0] is subdivisions
+              // In simple meters, beats correspond directly
+
+              const gridLines = [];
+              let measureNum = 1;
+
+              for (let i = 0; i <= Math.ceil(maxTime); i++) {
+                const x = tToX(i);
+                const posInMeasure = i % beatsPerMeasure;
+                const isDownbeat = posInMeasure === 0;
+
+                // In compound meters, main beats are every 3 units
+                const isMainBeat = isCompound ? (posInMeasure % 3 === 0) : true;
+
+                gridLines.push(
+                  <g key={`grid-${i}`}>
+                    <line
+                      x1={x} y1={headerHeight} x2={x} y2={h - 18}
+                      stroke={isDownbeat ? '#64748b' : (isMainBeat ? '#94a3b8' : '#e2e8f0')}
+                      strokeWidth={isDownbeat ? 1.5 : (isMainBeat ? 0.75 : 0.5)}
+                    />
+                    {/* Show measure.beat notation */}
+                    {isDownbeat ? (
+                      <text x={x} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
+                        m.{measureNum++}
+                      </text>
+                    ) : isMainBeat ? (
+                      <text x={x} y={h - 4} fontSize="9" fill="#94a3b8" textAnchor="middle">
+                        {isCompound ? Math.floor(posInMeasure / 3) + 1 : posInMeasure + 1}
+                      </text>
+                    ) : null}
+                  </g>
+                );
+              }
+              return gridLines;
+            })()}
 
             {/* Voice labels */}
             <text x={12} y={pToY(voice1.notes[0].pitch) + 5} fontSize="11" fontWeight="600" fill={voice1.color}>

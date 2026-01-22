@@ -1,6 +1,6 @@
 import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName } from './formatter';
-import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
+import { scoreDissonance, analyzeAllDissonances, getMeter } from './dissonanceScoring';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -235,9 +235,11 @@ export function analyzeDissonances(sims, v1Notes, v2Notes, formatter) {
 
 /**
  * Find all simultaneous note pairs between two voices
+ * Uses the current meter set in dissonanceScoring module
  */
 export function findSimultaneities(v1, v2) {
   const sims = [];
+  const meter = getMeter();
 
   for (const n1 of v1) {
     const s1 = n1.onset;
@@ -249,7 +251,7 @@ export function findSimultaneities(v1, v2) {
 
       if (s1 < e2 && s2 < e1) {
         const start = Math.max(s1, s2);
-        sims.push(new Simultaneity(start, n1, n2, metricWeight(start)));
+        sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
       }
     }
   }
@@ -390,6 +392,7 @@ export function testContourIndependence(subject, cs, formatter) {
 export function testHarmonicImplication(subject, tonic, mode, formatter) {
   if (!subject.length) return { error: 'No notes' };
 
+  const meter = getMeter();
   const degrees = subject.map((n) => n.scaleDegree);
   const observations = [];
 
@@ -429,7 +432,7 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
   for (let i = 0; i < subject.length; i++) {
     const d = degrees[i];
     if (
-      (d.degree === 5 && d.alteration === 0 && metricWeight(subject[i].onset) >= 0.5) ||
+      (d.degree === 5 && d.alteration === 0 && metricWeight(subject[i].onset, meter) >= 0.5) ||
       (d.degree === 7 && d.alteration === 0)
     ) {
       domArr = {
@@ -490,6 +493,7 @@ export function testRhythmicVariety(subject, formatter) {
 export function testRhythmicComplementarity(subject, cs) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
+  const meter = getMeter();
   const sOnsets = new Set(subject.map((n) => Math.round(n.onset * 100) / 100));
   const cOnsets = new Set(cs.map((n) => Math.round(n.onset * 100) / 100));
   const shared = [...sOnsets].filter((o) => cOnsets.has(o));
@@ -512,7 +516,7 @@ export function testRhythmicComplementarity(subject, cs) {
 
   let strong = 0;
   for (const o of shared) {
-    if (metricWeight(o) >= 0.75) strong++;
+    if (metricWeight(o, meter) >= 0.75) strong++;
   }
 
   return { overlapRatio: ratio, strongBeatCollisions: strong, observations };
@@ -701,6 +705,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
 export function testTonalAnswer(subject, mode, keyInfo, formatter) {
   if (!subject.length) return { error: 'Empty' };
 
+  const meter = getMeter();
   const degrees = subject.map((n) => n.scaleDegree);
   const tonalMotions = [];
   let mutationPoint = null;
@@ -733,7 +738,7 @@ export function testTonalAnswer(subject, mode, keyInfo, formatter) {
     if (i === 0 && c.degree === 5) {
       tonalMotions.push({ type: 'initial-5', description: 'Begins on ^5; answer begins on ^1' });
       for (let j = 1; j < degrees.length; j++) {
-        if (degrees[j].degree === 1 && degrees[j].alteration === 0 && metricWeight(subject[j].onset) >= 0.5) {
+        if (degrees[j].degree === 1 && degrees[j].alteration === 0 && metricWeight(subject[j].onset, meter) >= 0.5) {
           mutationPoint = j;
           break;
         }
