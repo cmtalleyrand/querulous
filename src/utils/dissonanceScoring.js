@@ -60,11 +60,71 @@ export function getMeter() {
  */
 function getIntervalMagnitude(semitones) {
   const abs = Math.abs(semitones);
-  if (abs === 0) return { type: 'unison', penalty: 0 };
-  if (abs <= 2) return { type: 'step', penalty: 0 };
-  if (abs <= 4) return { type: 'skip', penalty: -0.5 }; // m3, M3
-  if (abs === 5 || abs === 7 || abs === 12) return { type: 'perfect_leap', penalty: -1.0 }; // P4, P5, P8
-  return { type: 'large_leap', penalty: -2.0 }; // 6th+
+  if (abs === 0) return { type: 'unison', semitones: abs };
+  if (abs <= 2) return { type: 'step', semitones: abs };
+  if (abs <= 4) return { type: 'skip', semitones: abs }; // m3, M3 (3-4 semitones)
+  if (abs === 5 || abs === 7) return { type: 'perfect_leap', semitones: abs }; // P4, P5
+  if (abs === 12) return { type: 'octave', semitones: abs }; // P8
+  return { type: 'large_leap', semitones: abs }; // 6th+ (excluding octave)
+}
+
+/**
+ * Calculate resolution penalty based on entry leap type and resolution type
+ * User specification:
+ * - Skip (m3/M3, 3-4 st) entered: -0.5 if resolved by skip, -1 if P4/P5, -2 otherwise
+ * - P4/P5 entered: -1 if opposite skip, -1.5 if opposite P4/P5 or same-dir skip, -2 otherwise
+ */
+function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, entryDirection) {
+  const entryMag = getIntervalMagnitude(entryInterval);
+  const exitMag = getIntervalMagnitude(exitInterval);
+  const sameDirection = (entryDirection !== 0 && exitDirection !== 0 && Math.sign(entryDirection) === Math.sign(exitDirection));
+  const oppositeDirection = (entryDirection !== 0 && exitDirection !== 0 && Math.sign(entryDirection) !== Math.sign(exitDirection));
+
+  // Step resolution is always fine
+  if (exitMag.type === 'step') return { penalty: 0, reason: 'step resolution' };
+
+  // Unison/held note
+  if (exitMag.type === 'unison') return { penalty: 0, reason: 'no movement' };
+
+  // Skip entry (m3/M3, 3-4 semitones)
+  if (entryMag.type === 'skip') {
+    if (exitMag.type === 'skip') {
+      return { penalty: -0.5, reason: 'skip resolved by skip' };
+    }
+    if (exitMag.type === 'perfect_leap') {
+      return { penalty: -1.0, reason: 'skip resolved by P4/P5' };
+    }
+    // Large leap or octave
+    return { penalty: -2.0, reason: 'skip resolved by large leap' };
+  }
+
+  // Perfect leap entry (P4/P5)
+  if (entryMag.type === 'perfect_leap') {
+    if (exitMag.type === 'skip' && oppositeDirection) {
+      return { penalty: -1.0, reason: 'P4/P5 resolved by opposite skip' };
+    }
+    if (exitMag.type === 'perfect_leap' && oppositeDirection) {
+      return { penalty: -1.5, reason: 'P4/P5 resolved by opposite P4/P5' };
+    }
+    if (exitMag.type === 'skip' && sameDirection) {
+      return { penalty: -1.5, reason: 'P4/P5 resolved by same-direction skip' };
+    }
+    // Any other resolution
+    return { penalty: -2.0, reason: 'P4/P5 poorly resolved' };
+  }
+
+  // Large leap entry (6th, 7th, etc.)
+  if (entryMag.type === 'large_leap' || entryMag.type === 'octave') {
+    if (exitMag.type === 'step') {
+      return { penalty: 0, reason: 'large leap resolved by step' };
+    }
+    if (exitMag.type === 'skip' && oppositeDirection) {
+      return { penalty: -1.5, reason: 'large leap resolved by opposite skip' };
+    }
+    return { penalty: -2.5, reason: 'large leap poorly resolved' };
+  }
+
+  return { penalty: 0, reason: 'unknown entry type' };
 }
 
 /**
@@ -114,13 +174,14 @@ function isStrongBeat(onset) {
 
 /**
  * Score the entry into a dissonance (C → D)
+ * Entry penalties are now deferred to be calculated based on how the leap is resolved
  */
 function scoreEntry(prevSim, currSim) {
   let score = 0; // Base
   const details = [];
 
   if (!prevSim) {
-    return { score: 0, details: ['No previous simultaneity'] };
+    return { score: 0, details: ['No previous simultaneity'], motion: null, v1MelodicInterval: 0, v2MelodicInterval: 0 };
   }
 
   const motion = getMotionType(prevSim, currSim);
@@ -137,21 +198,21 @@ function scoreEntry(prevSim, currSim) {
     details.push(`Similar/parallel motion: -1.5`);
   }
 
-  // Magnitude modifier - check which voice(s) moved and by how much
+  // Record entry intervals for resolution penalty calculation (penalties applied in scoreExit)
+  const v1MelodicInterval = motion.v1Moved ? currSim.voice1Note.pitch - prevSim.voice1Note.pitch : 0;
+  const v2MelodicInterval = motion.v2Moved ? currSim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
+
+  // Note entry leap types for reference
   if (motion.v1Moved) {
-    const interval = Math.abs(currSim.voice1Note.pitch - prevSim.voice1Note.pitch);
-    const mag = getIntervalMagnitude(interval);
-    if (mag.penalty !== 0) {
-      score += mag.penalty;
-      details.push(`V1 ${mag.type} (${interval} st): ${mag.penalty}`);
+    const mag = getIntervalMagnitude(v1MelodicInterval);
+    if (mag.type !== 'step' && mag.type !== 'unison') {
+      details.push(`V1 entry: ${mag.type} (${Math.abs(v1MelodicInterval)} st)`);
     }
   }
   if (motion.v2Moved) {
-    const interval = Math.abs(currSim.voice2Note.pitch - prevSim.voice2Note.pitch);
-    const mag = getIntervalMagnitude(interval);
-    if (mag.penalty !== 0) {
-      score += mag.penalty;
-      details.push(`V2 ${mag.type} (${interval} st): ${mag.penalty}`);
+    const mag = getIntervalMagnitude(v2MelodicInterval);
+    if (mag.type !== 'step' && mag.type !== 'unison') {
+      details.push(`V2 entry: ${mag.type} (${Math.abs(v2MelodicInterval)} st)`);
     }
   }
 
@@ -165,91 +226,100 @@ function scoreEntry(prevSim, currSim) {
     score,
     details,
     motion,
-    v1MelodicInterval: motion.v1Moved ? currSim.voice1Note.pitch - prevSim.voice1Note.pitch : 0,
-    v2MelodicInterval: motion.v2Moved ? currSim.voice2Note.pitch - prevSim.voice2Note.pitch : 0,
+    v1MelodicInterval,
+    v2MelodicInterval,
   };
 }
 
 /**
  * Score the exit from a dissonance (D → C)
+ * Now uses proportional penalties based on entry leap size and resolution type
  */
 function scoreExit(currSim, nextSim, entryInfo) {
   let score = 1.0; // Base for resolving
   const details = ['Base resolution: +1.0'];
 
   if (!nextSim) {
-    return { score: -1.0, details: ['No resolution - dissonance unresolved: -1.0'], motion: null };
+    return { score: -1.0, details: ['No resolution - dissonance unresolved: -1.0'], motion: null, v1Resolution: null, v2Resolution: null };
   }
 
   const motion = getMotionType(currSim, nextSim);
 
-  // Resolution modifier - check how each voice resolves
+  // Resolution modifier - check how each voice resolves with proportional penalties
   let v1Resolution = null;
   let v2Resolution = null;
 
   if (motion.v1Moved) {
-    const interval = Math.abs(nextSim.voice1Note.pitch - currSim.voice1Note.pitch);
-    const mag = getIntervalMagnitude(interval);
+    const exitInterval = nextSim.voice1Note.pitch - currSim.voice1Note.pitch;
+    const exitMag = getIntervalMagnitude(exitInterval);
     v1Resolution = {
-      interval,
-      direction: Math.sign(nextSim.voice1Note.pitch - currSim.voice1Note.pitch),
-      magnitude: mag,
+      interval: Math.abs(exitInterval),
+      direction: Math.sign(exitInterval),
+      magnitude: exitMag,
     };
 
-    if (mag.type === 'skip') {
-      score -= 1.0;
-      details.push(`V1 skip resolution: -1.0`);
-    } else if (mag.type === 'perfect_leap') {
-      score -= 1.5;
-      details.push(`V1 perfect leap resolution: -1.5`);
-    } else if (mag.type === 'large_leap') {
-      score -= 2.5;
-      details.push(`V1 large leap resolution: -2.5`);
+    // Calculate proportional penalty based on how entry leap is resolved
+    if (entryInfo && entryInfo.v1MelodicInterval !== 0) {
+      const entryDir = Math.sign(entryInfo.v1MelodicInterval);
+      const penaltyInfo = calculateResolutionPenalty(
+        Math.abs(entryInfo.v1MelodicInterval),
+        Math.abs(exitInterval),
+        v1Resolution.direction,
+        entryDir
+      );
+      if (penaltyInfo.penalty !== 0) {
+        score += penaltyInfo.penalty;
+        details.push(`V1 ${penaltyInfo.reason}: ${penaltyInfo.penalty}`);
+      }
+    } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
+      // No entry leap but exit is a leap - apply standard penalties
+      if (exitMag.type === 'skip') {
+        score -= 0.5;
+        details.push(`V1 skip resolution: -0.5`);
+      } else if (exitMag.type === 'perfect_leap') {
+        score -= 1.0;
+        details.push(`V1 P4/P5 resolution: -1.0`);
+      } else {
+        score -= 1.5;
+        details.push(`V1 large leap resolution: -1.5`);
+      }
     }
   }
 
   if (motion.v2Moved) {
-    const interval = Math.abs(nextSim.voice2Note.pitch - currSim.voice2Note.pitch);
-    const mag = getIntervalMagnitude(interval);
+    const exitInterval = nextSim.voice2Note.pitch - currSim.voice2Note.pitch;
+    const exitMag = getIntervalMagnitude(exitInterval);
     v2Resolution = {
-      interval,
-      direction: Math.sign(nextSim.voice2Note.pitch - currSim.voice2Note.pitch),
-      magnitude: mag,
+      interval: Math.abs(exitInterval),
+      direction: Math.sign(exitInterval),
+      magnitude: exitMag,
     };
 
-    if (mag.type === 'skip') {
-      score -= 1.0;
-      details.push(`V2 skip resolution: -1.0`);
-    } else if (mag.type === 'perfect_leap') {
-      score -= 1.5;
-      details.push(`V2 perfect leap resolution: -1.5`);
-    } else if (mag.type === 'large_leap') {
-      score -= 2.5;
-      details.push(`V2 large leap resolution: -2.5`);
-    }
-  }
-
-  // Recovery violation check
-  // If entry was skip/leap, exit should be step in opposite direction
-  if (entryInfo && entryInfo.motion) {
-    const checkRecovery = (entryInterval, exitResolution, voice) => {
-      if (!exitResolution) return;
-      const entryMag = getIntervalMagnitude(entryInterval);
-      if (entryMag.type === 'skip' || entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap') {
-        // Entry was a leap - check if resolution is step in opposite direction
-        const entryDir = Math.sign(entryInterval);
-        if (exitResolution.magnitude.type !== 'step' || exitResolution.direction === entryDir) {
-          score -= 2.0;
-          details.push(`${voice} recovery violation (leap not recovered by opposite step): -2.0`);
-        }
+    // Calculate proportional penalty based on how entry leap is resolved
+    if (entryInfo && entryInfo.v2MelodicInterval !== 0) {
+      const entryDir = Math.sign(entryInfo.v2MelodicInterval);
+      const penaltyInfo = calculateResolutionPenalty(
+        Math.abs(entryInfo.v2MelodicInterval),
+        Math.abs(exitInterval),
+        v2Resolution.direction,
+        entryDir
+      );
+      if (penaltyInfo.penalty !== 0) {
+        score += penaltyInfo.penalty;
+        details.push(`V2 ${penaltyInfo.reason}: ${penaltyInfo.penalty}`);
       }
-    };
-
-    if (entryInfo.v1MelodicInterval !== 0 && v1Resolution) {
-      checkRecovery(entryInfo.v1MelodicInterval, v1Resolution, 'V1');
-    }
-    if (entryInfo.v2MelodicInterval !== 0 && v2Resolution) {
-      checkRecovery(entryInfo.v2MelodicInterval, v2Resolution, 'V2');
+    } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
+      // No entry leap but exit is a leap - apply standard penalties
+      if (exitMag.type === 'skip') {
+        score -= 0.5;
+        details.push(`V2 skip resolution: -0.5`);
+      } else if (exitMag.type === 'perfect_leap') {
+        score -= 1.0;
+        details.push(`V2 P4/P5 resolution: -1.0`);
+      } else {
+        score -= 1.5;
+        details.push(`V2 large leap resolution: -1.5`);
+      }
     }
   }
 

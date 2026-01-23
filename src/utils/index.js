@@ -28,6 +28,8 @@ export {
   testTonalAnswer,
   testDoubleCounterpoint,
   testModulatoryRobustness,
+  detectSequences,
+  testSequentialPotential,
 } from './analysis';
 
 // Scoring functions

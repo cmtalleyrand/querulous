@@ -173,22 +173,49 @@ export function calculateRhythmicVarietyScore(result) {
 
 /**
  * Calculate stretto viability score
+ * Now includes context about subject length for more informative results
  */
-export function calculateStrettoViabilityScore(result) {
-  if (!result || result.error) return { score: 0, details: [] };
+export function calculateStrettoViabilityScore(result, subjectLength = null) {
+  if (!result || result.error) return { score: 0, details: [], context: {} };
 
   const details = [];
   const totalTests = result.allResults?.length || 0;
   const viableCount = result.viableStrettos?.length || 0;
 
   if (totalTests === 0) {
-    return { score: 0, details: [{ factor: 'No stretto distances tested', impact: 0 }] };
+    return { score: 0, details: [{ factor: 'No stretto distances tested', impact: 0 }], context: {} };
   }
+
+  // Context information
+  const context = {
+    subjectLength,
+    testedDistances: totalTests,
+    viableDistances: viableCount,
+    viableRatio: viableCount / totalTests,
+  };
 
   // Base score from viable ratio
   const viableRatio = viableCount / totalTests;
   let score = Math.round(viableRatio * 70);
-  details.push({ factor: `${viableCount}/${totalTests} viable strettos`, impact: score });
+
+  // More informative description with ratio
+  const ratioPercent = Math.round(viableRatio * 100);
+  details.push({
+    factor: `${viableCount} of ${totalTests} distances viable (${ratioPercent}%)`,
+    impact: score,
+  });
+
+  // If we know subject length, add context
+  if (subjectLength) {
+    const beatsPerStretto = subjectLength / (viableCount || 1);
+    if (viableCount > 0) {
+      details.push({
+        factor: `Average ${beatsPerStretto.toFixed(1)} beats between viable entry points`,
+        impact: 0,
+        type: 'info',
+      });
+    }
+  }
 
   // Bonus for consecutive viable strettos (indicates flexibility)
   let maxConsecutive = 0;
@@ -204,7 +231,7 @@ export function calculateStrettoViabilityScore(result) {
 
   if (maxConsecutive >= 3) {
     score += 20;
-    details.push({ factor: `${maxConsecutive} consecutive viable distances`, impact: +20 });
+    details.push({ factor: `${maxConsecutive} consecutive viable distances—flexible entry timing`, impact: +20 });
   } else if (maxConsecutive >= 2) {
     score += 10;
     details.push({ factor: `${maxConsecutive} consecutive viable distances`, impact: +10 });
@@ -213,11 +240,23 @@ export function calculateStrettoViabilityScore(result) {
   // Bonus for having at least one viable close stretto (high overlap)
   const closeViable = result.viableStrettos?.filter((s) => s.overlapPercent >= 60);
   if (closeViable?.length > 0) {
+    const closestOverlap = Math.max(...closeViable.map(s => s.overlapPercent));
     score += 10;
-    details.push({ factor: 'Viable close stretto available', impact: +10 });
+    details.push({ factor: `Close stretto possible (${closestOverlap}% overlap)`, impact: +10 });
   }
 
-  return { score: Math.min(100, Math.max(0, score)), details };
+  // Count near-viable (1-2 issues) for additional context
+  const nearViable = result.allResults?.filter(r => !r.viable && r.issues?.length <= 2) || [];
+  if (nearViable.length > 0) {
+    context.nearViableCount = nearViable.length;
+    details.push({
+      factor: `${nearViable.length} distances nearly viable (1-2 issues)—potential with adjustments`,
+      impact: 0,
+      type: 'info',
+    });
+  }
+
+  return { score: Math.min(100, Math.max(0, score)), details, context };
 }
 
 /**
@@ -254,12 +293,23 @@ export function calculateTonalAnswerScore(result) {
 
 /**
  * Calculate double counterpoint score
+ * Now provides relative issue counts (issues per interval analyzed)
  */
 export function calculateDoubleCounterpointScore(result) {
-  if (!result || result.error) return { score: 0, details: [] };
+  if (!result || result.error) return { score: 0, details: [], context: {} };
 
   let score = 50; // Base score
   const details = [];
+
+  // Calculate total intervals for context
+  const origIntervals = result.original?.totalIntervals || result.original?.issues?.length || 0;
+  const invIntervals = result.inverted?.totalIntervals || result.inverted?.issues?.length || 0;
+
+  // Context
+  const context = {
+    originalIntervals: origIntervals,
+    invertedIntervals: invIntervals,
+  };
 
   // Original position issues
   const origIssues = result.original?.issues?.length || 0;
@@ -267,9 +317,15 @@ export function calculateDoubleCounterpointScore(result) {
     score += 25;
     details.push({ factor: 'No issues in original position', impact: +25 });
   } else {
-    const penalty = Math.min(25, origIssues * 8);
+    // Scale penalty by issue density, not just count
+    const issueRate = origIntervals > 0 ? origIssues / origIntervals : 1;
+    const penalty = Math.min(25, Math.round(issueRate * 50));
     score -= penalty;
-    details.push({ factor: `${origIssues} issues in original position`, impact: -penalty });
+    const ratePercent = origIntervals > 0 ? Math.round((origIssues / origIntervals) * 100) : 100;
+    details.push({
+      factor: `${origIssues} issues in original (${ratePercent}% of intervals)`,
+      impact: -penalty,
+    });
   }
 
   // Inverted position issues
@@ -278,9 +334,14 @@ export function calculateDoubleCounterpointScore(result) {
     score += 25;
     details.push({ factor: 'No issues in inverted position', impact: +25 });
   } else {
-    const penalty = Math.min(25, invIssues * 8);
+    const issueRate = invIntervals > 0 ? invIssues / invIntervals : 1;
+    const penalty = Math.min(25, Math.round(issueRate * 50));
     score -= penalty;
-    details.push({ factor: `${invIssues} issues in inverted position`, impact: -penalty });
+    const ratePercent = invIntervals > 0 ? Math.round((invIssues / invIntervals) * 100) : 100;
+    details.push({
+      factor: `${invIssues} issues inverted (${ratePercent}% of intervals)`,
+      impact: -penalty,
+    });
   }
 
   // Imperfect consonance ratio bonus
@@ -290,10 +351,19 @@ export function calculateDoubleCounterpointScore(result) {
 
   if (avgRatio >= 0.5) {
     score += 10;
-    details.push({ factor: 'Good imperfect consonance ratio', impact: +10 });
+    details.push({
+      factor: `${Math.round(avgRatio * 100)}% imperfect consonances—good for invertibility`,
+      impact: +10,
+    });
+  } else if (avgRatio < 0.3) {
+    details.push({
+      factor: `Only ${Math.round(avgRatio * 100)}% imperfect consonances—heavy on perfect intervals`,
+      impact: 0,
+      type: 'info',
+    });
   }
 
-  return { score: Math.min(100, Math.max(0, score)), details };
+  return { score: Math.min(100, Math.max(0, score)), details, context };
 }
 
 /**
@@ -415,12 +485,18 @@ export function calculateModulatoryRobustnessScore(result) {
 
 /**
  * Calculate overall fugue viability score
+ * Now accepts optional subject info for context-aware scoring
  */
-export function calculateOverallScore(results, hasCountersubject) {
+export function calculateOverallScore(results, hasCountersubject, subjectInfo = null) {
+  // Extract subject metrics if available
+  const subjectLength = subjectInfo?.length || results.subject?.length;
+  const subjectDuration = subjectInfo?.duration || results.subjectDuration;
+  const noteCount = subjectInfo?.noteCount || results.noteCount;
+
   const scores = {
     harmonicImplication: calculateHarmonicImplicationScore(results.harmonicImplication),
     rhythmicVariety: calculateRhythmicVarietyScore(results.rhythmicVariety),
-    strettoViability: calculateStrettoViabilityScore(results.stretto),
+    strettoViability: calculateStrettoViabilityScore(results.stretto, subjectDuration),
     tonalAnswer: calculateTonalAnswerScore(results.tonalAnswer),
   };
 
@@ -443,12 +519,20 @@ export function calculateOverallScore(results, hasCountersubject) {
 
   const overallScore = Math.round(weightedSum / totalWeight);
 
+  // Build context summary
+  const context = {
+    subjectNotes: noteCount,
+    subjectBeats: subjectDuration,
+    categoriesAnalyzed: Object.keys(scores).length,
+  };
+
   return {
     overall: overallScore,
     rating: getScoreRating(overallScore),
     color: getScoreColor(overallScore),
     bgColor: getScoreBgColor(overallScore),
     categories: scores,
+    context,
   };
 }
 

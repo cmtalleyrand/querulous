@@ -981,3 +981,163 @@ export function testModulatoryRobustness(subject, cs, formatter) {
 
   return { violations, intervalProfile: { consonant, dissonant, thirds, sixths, perfects }, observations };
 }
+
+/**
+ * Detect melodic sequences in a voice
+ * A sequence is a melodic pattern that repeats at a different pitch level
+ * @param {NoteEvent[]} notes - Array of notes to analyze
+ * @param {number} minLength - Minimum number of notes in a sequence unit (default 3)
+ * @returns {Object} - Detected sequences with their patterns and transposition levels
+ */
+export function detectSequences(notes, minLength = 3) {
+  if (notes.length < minLength * 2) {
+    return { sequences: [], hasSequences: false };
+  }
+
+  // Build interval pattern from the melody
+  const intervals = [];
+  for (let i = 1; i < notes.length; i++) {
+    intervals.push(notes[i].pitch - notes[i - 1].pitch);
+  }
+
+  const sequences = [];
+
+  // Try different sequence unit lengths
+  for (let unitLen = minLength; unitLen <= Math.floor(notes.length / 2); unitLen++) {
+    // Try each starting position
+    for (let start = 0; start <= intervals.length - unitLen * 2; start++) {
+      const pattern = intervals.slice(start, start + unitLen);
+
+      // Look for repetitions of this pattern
+      let repetitions = 1;
+      let transpositions = [];
+      let lastEnd = start + unitLen;
+
+      for (let pos = start + unitLen; pos <= intervals.length - unitLen; pos++) {
+        const candidate = intervals.slice(pos, pos + unitLen);
+
+        // Check if intervals match (allowing for the sequence to be at different pitch level)
+        if (arraysEqual(pattern, candidate)) {
+          // Calculate transposition from first note of each unit
+          const noteIndex1 = start;
+          const noteIndex2 = pos;
+          const transposition = notes[noteIndex2].pitch - notes[noteIndex1].pitch;
+
+          repetitions++;
+          transpositions.push(transposition);
+          lastEnd = pos + unitLen;
+          pos = lastEnd - 1; // Continue from end of this match
+        }
+      }
+
+      // If we found at least one repetition, record it
+      if (repetitions >= 2) {
+        // Check if this is a "real" sequence (consistent transposition)
+        const avgTransposition = transpositions.reduce((a, b) => a + b, 0) / transpositions.length;
+        const isConsistent = transpositions.every(t => Math.abs(t - avgTransposition) <= 1);
+
+        // Don't record if we already have a longer sequence covering this region
+        const overlaps = sequences.some(seq =>
+          seq.startIndex <= start && seq.endIndex >= lastEnd && seq.unitLength >= unitLen
+        );
+
+        if (!overlaps && isConsistent) {
+          sequences.push({
+            startIndex: start,
+            endIndex: lastEnd,
+            unitLength: unitLen,
+            repetitions,
+            pattern,
+            transposition: Math.round(avgTransposition),
+            transpositionPerUnit: transpositions,
+            isDescending: avgTransposition < 0,
+            isAscending: avgTransposition > 0,
+            startBeat: notes[start].onset,
+            endBeat: notes[Math.min(lastEnd, notes.length - 1)].onset,
+          });
+        }
+      }
+    }
+  }
+
+  // Sort by length (longer sequences are more significant)
+  sequences.sort((a, b) => (b.unitLength * b.repetitions) - (a.unitLength * a.repetitions));
+
+  // Remove subsequences of longer sequences
+  const filtered = sequences.filter((seq, i) => {
+    for (let j = 0; j < i; j++) {
+      const other = sequences[j];
+      if (seq.startIndex >= other.startIndex && seq.endIndex <= other.endIndex) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  return {
+    sequences: filtered,
+    hasSequences: filtered.length > 0,
+    longestSequence: filtered[0] || null,
+    totalSequentialNotes: filtered.reduce((sum, seq) => sum + (seq.endIndex - seq.startIndex + 1), 0),
+    sequenceRatio: filtered.length > 0 ? filtered.reduce((sum, seq) => sum + (seq.endIndex - seq.startIndex + 1), 0) / notes.length : 0,
+  };
+}
+
+/**
+ * Analyze sequences in subject for fugal development potential
+ */
+export function testSequentialPotential(subject, formatter) {
+  const sequenceAnalysis = detectSequences(subject, 3);
+  const observations = [];
+
+  if (sequenceAnalysis.hasSequences) {
+    const longest = sequenceAnalysis.longestSequence;
+    const direction = longest.isDescending ? 'descending' : (longest.isAscending ? 'ascending' : 'static');
+    const transpositionDesc = longest.transposition === 0 ? 'at same pitch' :
+      `by ${Math.abs(longest.transposition)} semitones ${direction}`;
+
+    observations.push({
+      type: 'strength',
+      description: `Contains ${longest.repetitions}-fold sequence (${longest.unitLength} notes each, ${transpositionDesc})`,
+    });
+
+    if (sequenceAnalysis.sequenceRatio > 0.5) {
+      observations.push({
+        type: 'info',
+        description: `${Math.round(sequenceAnalysis.sequenceRatio * 100)}% of subject is sequential—good for development`,
+      });
+    }
+
+    // Check for common sequence types
+    if (Math.abs(longest.transposition) === 2) {
+      observations.push({
+        type: 'info',
+        description: 'Sequence by step—typical for circle-of-fifths progressions',
+      });
+    } else if (Math.abs(longest.transposition) === 5 || Math.abs(longest.transposition) === 7) {
+      observations.push({
+        type: 'info',
+        description: 'Sequence by fourth/fifth—strong harmonic motion',
+      });
+    }
+  } else {
+    observations.push({
+      type: 'info',
+      description: 'No clear melodic sequences detected',
+    });
+  }
+
+  return {
+    ...sequenceAnalysis,
+    observations,
+  };
+}
+
+// Helper function
+function arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}

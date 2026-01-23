@@ -292,57 +292,103 @@ export function IntervalAnalysisViz({
               );
             })}
 
-            {/* Interval connectors */}
-            {intervalPoints.map((pt, i) => {
-              const x = tToX(pt.onset);
-              const y1 = pToY(pt.v1Pitch);
-              const y2 = pToY(pt.v2Pitch);
-              const midY = (y1 + y2) / 2;
-              const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
-              const isSelected = selectedInterval?.onset === pt.onset;
-              const style = getScoreStyle(pt);
+            {/* Interval connectors - adaptive density */}
+            {(() => {
+              // Calculate density to determine visualization mode
+              const avgGap = intervalPoints.length > 1
+                ? (intervalPoints[intervalPoints.length - 1].onset - intervalPoints[0].onset) / (intervalPoints.length - 1)
+                : 1;
+              const pixelGap = avgGap * tScale;
+              // Dense mode if less than 40px between intervals on average
+              const isDense = pixelGap < 40;
+              // Very dense if less than 25px
+              const isVeryDense = pixelGap < 25;
 
-              const label = pt.isConsonant
-                ? (pt.intervalClass === 1 ? 'U' : pt.intervalClass === 8 ? '8' : pt.intervalClass.toString())
-                : (pt.dissonanceLabel || '!');
+              return intervalPoints.map((pt, i) => {
+                const x = tToX(pt.onset);
+                const y1 = pToY(pt.v1Pitch);
+                const y2 = pToY(pt.v2Pitch);
+                const midY = (y1 + y2) / 2;
+                const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
+                const isSelected = selectedInterval?.onset === pt.onset;
+                const style = getScoreStyle(pt);
 
-              // Line style varies by category
-              const lineColor = style.lineColor || style.color;
-              const lineWidth = isSelected ? 3 : (pt.isConsonant ? 2 : 2.5);
-              const lineDash = pt.isConsonant ? 'none' : '5,3';
+                const label = pt.isConsonant
+                  ? (pt.intervalClass === 1 ? 'U' : pt.intervalClass === 8 ? '8' : pt.intervalClass.toString())
+                  : (pt.dissonanceLabel || '!');
 
-              return (
-                <g key={`int-${i}`} style={{ cursor: 'pointer' }} onClick={() => handleIntervalClick(pt)}>
-                  {/* Highlight */}
-                  {(isHighlighted || isSelected) && (
-                    <rect x={x - 22} y={Math.min(y1, y2) - noteHeight/2}
-                      width={44} height={Math.abs(y2 - y1) + noteHeight}
-                      fill="#fbbf24" opacity={0.25} rx={4} />
-                  )}
+                // Line style varies by category
+                const lineColor = style.lineColor || style.color;
+                const baseLineWidth = isVeryDense ? 4 : (isDense ? 3 : 2);
+                const lineWidth = isSelected ? baseLineWidth + 2 : (isHighlighted ? baseLineWidth + 1 : baseLineWidth);
+                const lineDash = pt.isConsonant ? 'none' : (isVeryDense ? '3,2' : '5,3');
 
-                  {/* Connecting line */}
-                  <line x1={x} y1={y1} x2={x} y2={y2}
-                    stroke={lineColor} strokeWidth={lineWidth}
-                    strokeDasharray={lineDash} />
+                // In very dense mode, use colored regions instead of labels
+                if (isVeryDense && !isHighlighted && !isSelected) {
+                  // Find the duration to next interval for colored region width
+                  const nextPt = intervalPoints[i + 1];
+                  const regionEnd = nextPt ? tToX(nextPt.onset) : x + 10;
+                  const regionWidth = Math.max(3, regionEnd - x - 1);
 
-                  {/* Label bubble */}
-                  <rect x={x - 16} y={midY - 12} width={32} height={24}
-                    fill={style.bg} stroke={style.color} strokeWidth={1.5} rx={4} />
-                  <text x={x} y={midY + 2} fontSize="12" fontWeight="600" fill={style.color} textAnchor="middle">
-                    {label}
-                  </text>
-
-                  {/* Score badge - show for all with non-zero scores */}
-                  {(pt.score !== 0 || !pt.isConsonant) && (
-                    <g transform={`translate(${x}, ${midY + 18})`}>
-                      <text fontSize="10" fill={style.color} textAnchor="middle" fontWeight="500">
-                        {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(1)}
-                      </text>
+                  return (
+                    <g key={`int-${i}`} style={{ cursor: 'pointer' }} onClick={() => handleIntervalClick(pt)}>
+                      {/* Colored region instead of line+bubble */}
+                      <rect
+                        x={x}
+                        y={Math.min(y1, y2)}
+                        width={regionWidth}
+                        height={Math.abs(y2 - y1) || 4}
+                        fill={style.bg}
+                        stroke={lineColor}
+                        strokeWidth={1}
+                        opacity={0.7}
+                      />
+                      {/* Small indicator dot for dissonances */}
+                      {!pt.isConsonant && (
+                        <circle cx={x + regionWidth/2} cy={midY} r={3} fill={style.color} />
+                      )}
                     </g>
-                  )}
-                </g>
-              );
-            })}
+                  );
+                }
+
+                // Dense mode: smaller labels, no scores shown inline
+                const bubbleWidth = isDense ? 22 : 32;
+                const bubbleHeight = isDense ? 16 : 24;
+                const fontSize = isDense ? 9 : 12;
+
+                return (
+                  <g key={`int-${i}`} style={{ cursor: 'pointer' }} onClick={() => handleIntervalClick(pt)}>
+                    {/* Highlight */}
+                    {(isHighlighted || isSelected) && (
+                      <rect x={x - bubbleWidth/2 - 6} y={Math.min(y1, y2) - noteHeight/2}
+                        width={bubbleWidth + 12} height={Math.abs(y2 - y1) + noteHeight}
+                        fill="#fbbf24" opacity={0.25} rx={4} />
+                    )}
+
+                    {/* Connecting line */}
+                    <line x1={x} y1={y1} x2={x} y2={y2}
+                      stroke={lineColor} strokeWidth={lineWidth}
+                      strokeDasharray={lineDash} />
+
+                    {/* Label bubble */}
+                    <rect x={x - bubbleWidth/2} y={midY - bubbleHeight/2} width={bubbleWidth} height={bubbleHeight}
+                      fill={style.bg} stroke={style.color} strokeWidth={isDense ? 1 : 1.5} rx={3} />
+                    <text x={x} y={midY + (isDense ? 3 : 4)} fontSize={fontSize} fontWeight="600" fill={style.color} textAnchor="middle">
+                      {label}
+                    </text>
+
+                    {/* Score badge - only show in non-dense mode or when selected/highlighted */}
+                    {!isDense && (pt.score !== 0 || !pt.isConsonant) && (
+                      <g transform={`translate(${x}, ${midY + bubbleHeight/2 + 6})`}>
+                        <text fontSize="10" fill={style.color} textAnchor="middle" fontWeight="500">
+                          {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(1)}
+                        </text>
+                      </g>
+                    )}
+                  </g>
+                );
+              });
+            })()}
           </svg>
         </div>
       </div>

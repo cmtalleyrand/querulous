@@ -123,8 +123,9 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
   let currentOnset = 0;
   let activeAccidentals = {};
 
-  // Pattern matches bar lines OR notes - bar lines reset accidentals per ABC standard
-  const pat = /(\|+:?|:\|+)|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
+  // Pattern matches bar lines, rests, OR notes - bar lines reset accidentals per ABC standard
+  // Rests are 'z' (audible rest) or 'x' (invisible rest) followed by optional duration
+  const pat = /(\|+:?|:\|+)|([zx])([\d]*\/?[\d]*)?|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
   let m;
 
   while ((m = pat.exec(noteText)) !== null) {
@@ -134,7 +135,25 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
       continue;
     }
 
-    const [, , acc, letter, octMod, durStr] = m;
+    // Check if this is a rest - advance time but don't create a note
+    if (m[2]) {
+      const restDurStr = m[3];
+      let restDur = defaultNoteLength;
+      if (restDurStr) {
+        if (restDurStr.includes('/')) {
+          const p = restDurStr.split('/');
+          restDur = (defaultNoteLength * (p[0] ? parseInt(p[0]) : 1)) / (p[1] ? parseInt(p[1]) : 2);
+        } else {
+          restDur = defaultNoteLength * parseInt(restDurStr);
+        }
+      }
+      currentOnset += restDur * 4;
+      continue;
+    }
+
+    const [, , , , acc, letter, octMod, durStr] = m;
+    if (!letter) continue;
+
     let pitch = NOTE_TO_MIDI[letter];
     if (pitch === undefined) continue;
 
