@@ -1,6 +1,15 @@
 /**
  * Utility class for formatting beat positions and durations in human-readable form
  * Supports both simple and compound meters
+ *
+ * IMPORTANT: Internal timing in this codebase uses "quarter-note units":
+ * - duration = noteLength * 4 (so an eighth note L:1/8 = 0.5 units)
+ * - This means 1 unit = 1 quarter note duration
+ *
+ * Meter handling converts between internal units and logical beats:
+ * - In 4/4: 1 beat = 1 quarter note = 1 internal unit
+ * - In 6/8: 1 measure = 6 eighth notes = 3 internal units
+ * - In 3/4: 1 measure = 3 quarter notes = 3 internal units
  */
 export class BeatFormatter {
   constructor(defaultNoteLength = 1 / 8, meter = [4, 4]) {
@@ -8,50 +17,65 @@ export class BeatFormatter {
     this.numerator = meter[0];
     this.denominator = meter[1];
 
-    // Determine if compound meter (6/8, 9/8, 12/8, 3/8)
-    this.isCompound = (this.numerator % 3 === 0 && this.denominator === 8 && this.numerator >= 3);
+    // Determine if compound meter (6/8, 9/8, 12/8)
+    // Note: 3/8 is typically simple, not compound
+    this.isCompound = (this.numerator % 3 === 0 && this.denominator === 8 && this.numerator >= 6);
+
+    // Calculate how many internal units (quarter notes) per measure
+    // A measure = numerator / denominator whole notes = numerator * 4 / denominator quarter notes
+    this.internalUnitsPerMeasure = (this.numerator * 4) / this.denominator;
 
     if (this.isCompound) {
       // In compound meters, group by 3 eighth notes = 1 beat
       this.beatsPerMeasure = this.numerator / 3;
       this.subdivisionsPerBeat = 3;
-      this.beatUnit = 3 / this.denominator; // e.g., 3/8 for compound meter
+      // Internal units per main beat: 3 eighth notes = 1.5 quarter notes
+      this.internalUnitsPerBeat = 1.5;
     } else {
       // Simple meters
       this.beatsPerMeasure = this.numerator;
       this.subdivisionsPerBeat = 2;
-      this.beatUnit = 1; // Each beat is 1 unit in our internal representation
+      // Internal units per beat depends on denominator
+      // In 4/4: beat = quarter note = 1 internal unit
+      // In 2/2: beat = half note = 2 internal units
+      // In 3/8: beat = eighth note = 0.5 internal units
+      this.internalUnitsPerBeat = 4 / this.denominator;
     }
+  }
 
-    // For internal timing: how many internal units per measure
-    // In simple 4/4: 4 beats per measure
-    // In compound 6/8: 2 main beats per measure, but 6 eighth-note subdivisions
-    this.unitsPerMeasure = this.numerator; // Raw numerator for measure calculation
+  /**
+   * Convert internal onset to position within measure (0 to beatsPerMeasure)
+   */
+  getPositionInMeasure(onset) {
+    const measureNum = Math.floor(onset / this.internalUnitsPerMeasure);
+    const posInMeasureUnits = onset - (measureNum * this.internalUnitsPerMeasure);
+    return posInMeasureUnits / this.internalUnitsPerBeat;
   }
 
   /**
    * Format a beat position as "m.X beat Y" with proper subdivision handling
    */
   formatBeat(beatPosition) {
-    const measure = Math.floor(beatPosition / this.unitsPerMeasure) + 1;
-    const posInMeasure = beatPosition % this.unitsPerMeasure;
+    const measure = Math.floor(beatPosition / this.internalUnitsPerMeasure) + 1;
+    const posInMeasureUnits = beatPosition % this.internalUnitsPerMeasure;
+    const posInBeats = posInMeasureUnits / this.internalUnitsPerBeat;
 
     if (this.isCompound) {
       // For compound meters, show beat and subdivision within the triplet group
-      const mainBeat = Math.floor(posInMeasure / 3) + 1;
-      const subInBeat = posInMeasure % 3;
+      const mainBeat = Math.floor(posInBeats) + 1;
+      const subInBeat = (posInBeats - Math.floor(posInBeats)) * 3; // 0, 1, or 2
 
       let subStr = '';
-      if (Math.abs(subInBeat - 1) < 0.1) subStr = '⅓';
-      else if (Math.abs(subInBeat - 2) < 0.1) subStr = '⅔';
-      else if (subInBeat > 0.01) subStr = `+${subInBeat.toFixed(1)}`;
+      if (Math.abs(subInBeat - 1) < 0.15) subStr = '⅓';
+      else if (Math.abs(subInBeat - 2) < 0.15) subStr = '⅔';
+      else if (subInBeat > 0.05) subStr = `+${(subInBeat / 3).toFixed(2)}`;
 
       const beatStr = subStr ? `${mainBeat}${subStr}` : `${mainBeat}`;
       return measure === 1 ? `beat ${beatStr}` : `m.${measure} beat ${beatStr}`;
     } else {
       // Simple meters
-      const wholeBeat = Math.floor(posInMeasure) + 1;
-      const fraction = posInMeasure - Math.floor(posInMeasure);
+      const wholeBeat = Math.floor(posInBeats) + 1;
+      const fraction = posInBeats - Math.floor(posInBeats);
 
       let sub = '';
       if (fraction > 0.01) {
@@ -113,6 +137,8 @@ export class BeatFormatter {
       display: `${this.numerator}/${this.denominator}`,
       beatsPerMeasure: this.beatsPerMeasure,
       isCompound: this.isCompound,
+      internalUnitsPerMeasure: this.internalUnitsPerMeasure,
+      internalUnitsPerBeat: this.internalUnitsPerBeat,
       description: this.isCompound
         ? `${this.beatsPerMeasure} main beats per measure (compound)`
         : `${this.beatsPerMeasure} beats per measure (simple)`,
@@ -130,92 +156,108 @@ export function pitchName(midi) {
 
 /**
  * Get metric weight for a beat position (downbeats are stronger)
- * @param {number} onset - The beat position
+ * @param {number} onset - The internal position (in quarter-note units)
  * @param {number[]} meter - The meter as [numerator, denominator], defaults to [4, 4]
+ *
+ * Internal timing uses quarter-note units:
+ * - 4/4: measure = 4 internal units (4 quarter notes)
+ * - 6/8: measure = 3 internal units (6 eighth notes = 3 quarter notes)
+ * - 3/4: measure = 3 internal units (3 quarter notes)
+ * - 2/2: measure = 4 internal units (2 half notes = 4 quarter notes)
  */
 export function metricWeight(onset, meter = [4, 4]) {
   const numerator = meter[0];
   const denominator = meter[1];
 
-  // Determine if compound meter
-  const isCompound = (numerator % 3 === 0 && denominator === 8 && numerator >= 3);
+  // Calculate internal units per measure
+  // A measure has (numerator / denominator) whole notes = (numerator * 4 / denominator) quarter notes
+  const unitsPerMeasure = (numerator * 4) / denominator;
+
+  // Determine if compound meter (6/8, 9/8, 12/8 but NOT 3/8)
+  const isCompound = (numerator % 3 === 0 && denominator === 8 && numerator >= 6);
+
+  // Get position within measure (in internal units)
+  const posInMeasure = onset % unitsPerMeasure;
 
   if (isCompound) {
-    // Compound meter: beats grouped in 3s
-    // 6/8 = 2 main beats, each subdivided into 3
-    // 12/8 = 4 main beats, each subdivided into 3
+    // Compound meter: beats grouped in 3 eighth notes = 1.5 internal units
     const mainBeats = numerator / 3;
-    const posInMeasure = onset % numerator;
-    const mainBeatPos = Math.floor(posInMeasure / 3);
-    const subPos = posInMeasure % 3;
+    const unitsPerMainBeat = 1.5; // 3 eighth notes = 1.5 quarter notes
 
-    // Downbeat of measure (beat 1)
-    if (Math.abs(posInMeasure) < 0.01) return 1.0;
+    // Which main beat are we on?
+    const mainBeatNum = Math.floor(posInMeasure / unitsPerMainBeat);
+    const posInMainBeat = posInMeasure % unitsPerMainBeat;
 
-    // Other main beats (start of each triplet group)
-    if (Math.abs(subPos) < 0.01) {
-      // In 6/8: beat 4 (second main beat) is secondary accent
-      // In 12/8: beats 4, 7, 10 are secondary accents
-      if (mainBeats === 2) {
-        return 0.75; // Secondary beat in 6/8
-      } else if (mainBeats === 4) {
-        // In 12/8: beat 7 (third main beat) gets more weight than 4 and 10
-        if (mainBeatPos === 2) return 0.75;
+    // Downbeat of measure
+    if (Math.abs(posInMeasure) < 0.05) return 1.0;
+
+    // Start of other main beats
+    if (Math.abs(posInMainBeat) < 0.05) {
+      // In 6/8: beat 2 (second main beat) is secondary accent
+      if (mainBeats === 2) return 0.75;
+      // In 12/8: beat 3 (middle) gets more weight
+      if (mainBeats === 4) {
+        if (mainBeatNum === 2) return 0.75;
         return 0.6;
-      } else if (mainBeats === 3) {
-        // In 9/8: beats 4 and 7 are secondary
-        return 0.65;
       }
+      // In 9/8: other main beats
+      if (mainBeats === 3) return 0.65;
       return 0.6;
     }
 
-    // Subdivisions within a beat
-    if (Math.abs(subPos - 1) < 0.01 || Math.abs(subPos - 2) < 0.01) {
-      return 0.3; // Weak subdivisions
+    // Subdivisions within the main beat (2nd and 3rd eighth of the triplet)
+    // 0.5 units = 2nd eighth, 1.0 units = 3rd eighth
+    if (Math.abs(posInMainBeat - 0.5) < 0.05 || Math.abs(posInMainBeat - 1.0) < 0.05) {
+      return 0.3;
     }
 
     return 0.2; // Off-beat
   } else {
     // Simple meter
-    const posInMeasure = onset % numerator;
+    // Units per beat depends on denominator: 4/4 = 1 unit/beat, 2/2 = 2 units/beat, 3/8 = 0.5 units/beat
+    const unitsPerBeat = 4 / denominator;
+    const beatNum = Math.floor(posInMeasure / unitsPerBeat);
+    const posInBeat = posInMeasure % unitsPerBeat;
 
     // Downbeat
-    if (Math.abs(posInMeasure) < 0.01) return 1.0;
+    if (Math.abs(posInMeasure) < 0.05) return 1.0;
 
-    // Check for secondary accents based on meter
-    if (numerator === 4) {
-      // 4/4: beat 3 is secondary accent
-      if (Math.abs(posInMeasure - 2) < 0.01) return 0.75;
-      // Beats 2 and 4
-      if (Math.abs(posInMeasure - 1) < 0.01 || Math.abs(posInMeasure - 3) < 0.01) return 0.5;
-    } else if (numerator === 3) {
-      // 3/4: beats 2 and 3 are weak
-      if (Math.abs(posInMeasure - 1) < 0.01 || Math.abs(posInMeasure - 2) < 0.01) return 0.5;
-    } else if (numerator === 2) {
-      // 2/4: beat 2 is weak
-      if (Math.abs(posInMeasure - 1) < 0.01) return 0.5;
-    } else if (numerator === 5) {
-      // 5/4: typically grouped 3+2 or 2+3, beat 1 strongest, beat 3 or 4 secondary
-      if (Math.abs(posInMeasure - 3) < 0.01) return 0.7; // Common 3+2 grouping
-      if (Math.abs(posInMeasure - 2) < 0.01) return 0.6;
-      return 0.5;
-    } else if (numerator === 6) {
-      // 6/4: beats 1 and 4 are strong
-      if (Math.abs(posInMeasure - 3) < 0.01) return 0.75;
-      return 0.5;
-    } else {
-      // Generic: downbeat strong, others weaker
-      return 0.5;
+    // On a beat boundary?
+    const onBeat = Math.abs(posInBeat) < 0.05;
+
+    if (onBeat) {
+      // Check for secondary accents based on meter
+      if (numerator === 4) {
+        // 4/4: beat 3 is secondary accent
+        if (beatNum === 2) return 0.75;
+        // Beats 2 and 4
+        return 0.5;
+      } else if (numerator === 3) {
+        // 3/4: beats 2 and 3 are weak
+        return 0.5;
+      } else if (numerator === 2) {
+        // 2/4 or 2/2: beat 2 is weak
+        return 0.5;
+      } else if (numerator === 5) {
+        // 5/4: typically grouped 3+2, beat 4 is secondary
+        if (beatNum === 3) return 0.7;
+        if (beatNum === 2) return 0.6;
+        return 0.5;
+      } else if (numerator === 6 && denominator === 4) {
+        // 6/4: beat 4 is secondary accent
+        if (beatNum === 3) return 0.75;
+        return 0.5;
+      } else {
+        // Generic: other beats are weaker
+        return 0.5;
+      }
     }
 
-    // Subdivisions (half beats, etc.)
-    const beatFraction = posInMeasure - Math.floor(posInMeasure);
-    if (beatFraction > 0.01) {
-      if (Math.abs(beatFraction - 0.5) < 0.05) return 0.35; // Off-beat eighth
-      return 0.25; // Other subdivisions
-    }
-
-    return 0.4; // Fallback for beats not explicitly handled
+    // Subdivisions (not on a beat boundary)
+    const beatFraction = posInBeat / unitsPerBeat;
+    if (Math.abs(beatFraction - 0.5) < 0.05) return 0.35; // Off-beat (e.g., eighth in 4/4)
+    if (Math.abs(beatFraction - 0.25) < 0.05 || Math.abs(beatFraction - 0.75) < 0.05) return 0.25; // Sixteenths
+    return 0.2; // Other subdivisions
   }
 }
 
@@ -224,7 +266,7 @@ export function metricWeight(onset, meter = [4, 4]) {
  */
 export function metricPosition(onset, meter = [4, 4]) {
   const weight = metricWeight(onset, meter);
-  if (weight >= 0.9) return { weight, label: 'downbeat', severity: 'strong' };
+  if (weight >= 0.95) return { weight, label: 'downbeat', severity: 'strong' };
   if (weight >= 0.7) return { weight, label: 'secondary accent', severity: 'moderate' };
   if (weight >= 0.45) return { weight, label: 'weak beat', severity: 'mild' };
   if (weight >= 0.3) return { weight, label: 'subdivision', severity: 'light' };
@@ -237,9 +279,28 @@ export function metricPosition(onset, meter = [4, 4]) {
  */
 export function metricSeverity(onset, meter = [4, 4]) {
   const weight = metricWeight(onset, meter);
-  if (weight >= 0.9) return 1.5; // downbeat - 50% more severe
+  if (weight >= 0.95) return 1.5; // downbeat - 50% more severe
   if (weight >= 0.7) return 1.2; // secondary accent - 20% more severe
   if (weight >= 0.45) return 1.0; // weak beat - baseline
   if (weight >= 0.3) return 0.8; // subdivision - 20% less severe
   return 0.6; // off-beat - 40% less severe
+}
+
+/**
+ * Check if a given onset is during a rest in a voice
+ * @param {number} onset - The time position to check
+ * @param {Array} notes - The array of NoteEvents for the voice
+ * @returns {boolean} - True if the onset falls during a gap between notes (rest)
+ */
+export function isDuringRest(onset, notes) {
+  if (!notes || notes.length === 0) return true;
+
+  for (const note of notes) {
+    const start = note.onset;
+    const end = note.onset + note.duration;
+    if (onset >= start && onset < end) {
+      return false; // Onset is during this note, not a rest
+    }
+  }
+  return true; // Onset is not during any note = rest
 }

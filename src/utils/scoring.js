@@ -173,7 +173,7 @@ export function calculateRhythmicVarietyScore(result) {
 
 /**
  * Calculate stretto viability score
- * Now includes context about subject length for more informative results
+ * Uses weighted severity (accounting for beat strength, duration, consecutiveness)
  */
 export function calculateStrettoViabilityScore(result, subjectLength = null) {
   if (!result || result.error) return { score: 0, details: [], context: {} };
@@ -181,6 +181,7 @@ export function calculateStrettoViabilityScore(result, subjectLength = null) {
   const details = [];
   const totalTests = result.allResults?.length || 0;
   const viableCount = result.viableStrettos?.length || 0;
+  const summary = result.summary || {};
 
   if (totalTests === 0) {
     return { score: 0, details: [{ factor: 'No stretto distances tested', impact: 0 }], context: {} };
@@ -192,11 +193,13 @@ export function calculateStrettoViabilityScore(result, subjectLength = null) {
     testedDistances: totalTests,
     viableDistances: viableCount,
     viableRatio: viableCount / totalTests,
+    avgWeightedSeverity: summary.avgWeightedSeverity,
+    maxWeightedSeverity: summary.maxWeightedSeverity,
   };
 
   // Base score from viable ratio
   const viableRatio = viableCount / totalTests;
-  let score = Math.round(viableRatio * 70);
+  let score = Math.round(viableRatio * 50); // Reduced from 70 to make room for severity-based scoring
 
   // More informative description with ratio
   const ratioPercent = Math.round(viableRatio * 100);
@@ -204,6 +207,36 @@ export function calculateStrettoViabilityScore(result, subjectLength = null) {
     factor: `${viableCount} of ${totalTests} distances viable (${ratioPercent}%)`,
     impact: score,
   });
+
+  // Bonus/penalty based on average weighted severity across all strettos
+  // Low average severity = issues are minor (weak beats, short notes, scattered)
+  const avgSeverity = summary.avgWeightedSeverity || 0;
+  if (avgSeverity === 0) {
+    score += 20;
+    details.push({ factor: 'All strettos clean—no issues', impact: +20 });
+  } else if (avgSeverity < 2) {
+    score += 15;
+    details.push({ factor: `Low average severity (${avgSeverity.toFixed(1)})—issues minor`, impact: +15 });
+  } else if (avgSeverity < 4) {
+    score += 5;
+    details.push({ factor: `Moderate severity (${avgSeverity.toFixed(1)})`, impact: +5 });
+  } else if (avgSeverity >= 6) {
+    score -= 10;
+    details.push({ factor: `High average severity (${avgSeverity.toFixed(1)})—issues on strong beats/long notes`, impact: -10 });
+  }
+
+  // Penalty for strettos with consecutive issues (compounds problems)
+  const hasConsecutiveIssues = result.allResults?.some(r => r.maxConsecutiveIssues >= 2);
+  if (hasConsecutiveIssues) {
+    const worstConsecutive = Math.max(...result.allResults.map(r => r.maxConsecutiveIssues || 0));
+    if (worstConsecutive >= 3) {
+      score -= 10;
+      details.push({ factor: `Consecutive issues (${worstConsecutive} in a row)—compounds problems`, impact: -10 });
+    } else {
+      score -= 5;
+      details.push({ factor: 'Some consecutive issues detected', impact: -5 });
+    }
+  }
 
   // If we know subject length, add context
   if (subjectLength) {
@@ -230,11 +263,11 @@ export function calculateStrettoViabilityScore(result, subjectLength = null) {
   }
 
   if (maxConsecutive >= 3) {
-    score += 20;
-    details.push({ factor: `${maxConsecutive} consecutive viable distances—flexible entry timing`, impact: +20 });
+    score += 15;
+    details.push({ factor: `${maxConsecutive} consecutive viable distances—flexible entry timing`, impact: +15 });
   } else if (maxConsecutive >= 2) {
-    score += 10;
-    details.push({ factor: `${maxConsecutive} consecutive viable distances`, impact: +10 });
+    score += 8;
+    details.push({ factor: `${maxConsecutive} consecutive viable distances`, impact: +8 });
   }
 
   // Bonus for having at least one viable close stretto (high overlap)
@@ -245,12 +278,12 @@ export function calculateStrettoViabilityScore(result, subjectLength = null) {
     details.push({ factor: `Close stretto possible (${closestOverlap}% overlap)`, impact: +10 });
   }
 
-  // Count near-viable (1-2 issues) for additional context
-  const nearViable = result.allResults?.filter(r => !r.viable && r.issues?.length <= 2) || [];
+  // Count near-viable (low weighted severity) for additional context
+  const nearViable = result.allResults?.filter(r => !r.viable && (r.weightedSeverity || 0) < 3) || [];
   if (nearViable.length > 0) {
     context.nearViableCount = nearViable.length;
     details.push({
-      factor: `${nearViable.length} distances nearly viable (1-2 issues)—potential with adjustments`,
+      factor: `${nearViable.length} distances nearly viable (low severity issues)—minor adjustments needed`,
       impact: 0,
       type: 'info',
     });

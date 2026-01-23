@@ -2,7 +2,7 @@
 export * from './constants';
 
 // Formatting utilities
-export { BeatFormatter, pitchName, metricWeight } from './formatter';
+export { BeatFormatter, pitchName, metricWeight, metricPosition, metricSeverity, isDuringRest } from './formatter';
 
 // ABC parsing and generation
 export {
@@ -62,4 +62,9 @@ export {
   getP4Treatment,
   setMeter,
   getMeter,
+  setSequenceRanges,
+  getSequenceRanges,
+  setSequenceBeatRanges,
+  isOnsetInSequence,
+  isNoteInSequence,
 } from './dissonanceScoring';

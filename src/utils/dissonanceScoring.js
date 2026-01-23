@@ -21,6 +21,7 @@ import { pitchName, metricWeight } from './formatter';
 // Configuration
 let treatP4AsDissonant = false; // Toggle for P4 treatment (forces all P4s as dissonant)
 let currentMeter = [4, 4]; // Default meter, can be updated
+let sequenceNoteRanges = []; // Ranges of note indices that are part of sequences (for penalty mitigation)
 
 export function setP4Treatment(dissonant) {
   treatP4AsDissonant = dissonant;
@@ -56,6 +57,57 @@ export function getMeter() {
 }
 
 /**
+ * Set the sequence note ranges for leap penalty mitigation
+ * @param {Array} ranges - Array of {start, end} objects indicating note indices in sequences
+ */
+export function setSequenceRanges(ranges) {
+  sequenceNoteRanges = ranges || [];
+}
+
+export function getSequenceRanges() {
+  return sequenceNoteRanges;
+}
+
+/**
+ * Check if a note index is within a sequence
+ * @param {number} noteIndex - The index of the note in the voice
+ * @returns {boolean} - True if the note is part of a detected sequence
+ */
+export function isNoteInSequence(noteIndex) {
+  for (const range of sequenceNoteRanges) {
+    if (noteIndex >= range.start && noteIndex <= range.end) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Store sequence beat ranges (onset-based) for checking by time
+let sequenceBeatRanges = [];
+
+/**
+ * Set sequence beat ranges (by onset time)
+ * @param {Array} ranges - Array of {startBeat, endBeat} objects
+ */
+export function setSequenceBeatRanges(ranges) {
+  sequenceBeatRanges = ranges || [];
+}
+
+/**
+ * Check if an onset time falls within a sequence
+ * @param {number} onset - The onset time to check
+ * @returns {boolean} - True if the onset is during a melodic sequence
+ */
+export function isOnsetInSequence(onset) {
+  for (const range of sequenceBeatRanges) {
+    if (onset >= range.startBeat && onset <= range.endBeat) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Classify interval magnitude
  */
 function getIntervalMagnitude(semitones) {
@@ -73,58 +125,89 @@ function getIntervalMagnitude(semitones) {
  * User specification:
  * - Skip (m3/M3, 3-4 st) entered: -0.5 if resolved by skip, -1 if P4/P5, -2 otherwise
  * - P4/P5 entered: -1 if opposite skip, -1.5 if opposite P4/P5 or same-dir skip, -2 otherwise
+ *
+ * SEQUENCE MITIGATION: If the leap is part of a detected melodic sequence,
+ * the penalty is reduced by 75% (mitigating the "size and direction" penalties).
+ * Sequences are structured repetitions that justify unusual leaps.
+ *
+ * @param {number} entryInterval - Entry interval in semitones
+ * @param {number} exitInterval - Exit interval in semitones
+ * @param {number} exitDirection - Direction of exit (positive = up, negative = down)
+ * @param {number} entryDirection - Direction of entry
+ * @param {boolean} inSequence - Whether this leap is part of a melodic sequence
  */
-function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, entryDirection) {
+function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, entryDirection, inSequence = false) {
   const entryMag = getIntervalMagnitude(entryInterval);
   const exitMag = getIntervalMagnitude(exitInterval);
   const sameDirection = (entryDirection !== 0 && exitDirection !== 0 && Math.sign(entryDirection) === Math.sign(exitDirection));
   const oppositeDirection = (entryDirection !== 0 && exitDirection !== 0 && Math.sign(entryDirection) !== Math.sign(exitDirection));
 
   // Step resolution is always fine
-  if (exitMag.type === 'step') return { penalty: 0, reason: 'step resolution' };
+  if (exitMag.type === 'step') return { penalty: 0, reason: 'step resolution', inSequence };
 
   // Unison/held note
-  if (exitMag.type === 'unison') return { penalty: 0, reason: 'no movement' };
+  if (exitMag.type === 'unison') return { penalty: 0, reason: 'no movement', inSequence };
+
+  let basePenalty = 0;
+  let reason = '';
 
   // Skip entry (m3/M3, 3-4 semitones)
   if (entryMag.type === 'skip') {
     if (exitMag.type === 'skip') {
-      return { penalty: -0.5, reason: 'skip resolved by skip' };
+      basePenalty = -0.5;
+      reason = 'skip resolved by skip';
+    } else if (exitMag.type === 'perfect_leap') {
+      basePenalty = -1.0;
+      reason = 'skip resolved by P4/P5';
+    } else {
+      // Large leap or octave
+      basePenalty = -2.0;
+      reason = 'skip resolved by large leap';
     }
-    if (exitMag.type === 'perfect_leap') {
-      return { penalty: -1.0, reason: 'skip resolved by P4/P5' };
-    }
-    // Large leap or octave
-    return { penalty: -2.0, reason: 'skip resolved by large leap' };
   }
-
   // Perfect leap entry (P4/P5)
-  if (entryMag.type === 'perfect_leap') {
+  else if (entryMag.type === 'perfect_leap') {
     if (exitMag.type === 'skip' && oppositeDirection) {
-      return { penalty: -1.0, reason: 'P4/P5 resolved by opposite skip' };
+      basePenalty = -1.0;
+      reason = 'P4/P5 resolved by opposite skip';
+    } else if (exitMag.type === 'perfect_leap' && oppositeDirection) {
+      basePenalty = -1.5;
+      reason = 'P4/P5 resolved by opposite P4/P5';
+    } else if (exitMag.type === 'skip' && sameDirection) {
+      basePenalty = -1.5;
+      reason = 'P4/P5 resolved by same-direction skip';
+    } else {
+      // Any other resolution
+      basePenalty = -2.0;
+      reason = 'P4/P5 poorly resolved';
     }
-    if (exitMag.type === 'perfect_leap' && oppositeDirection) {
-      return { penalty: -1.5, reason: 'P4/P5 resolved by opposite P4/P5' };
-    }
-    if (exitMag.type === 'skip' && sameDirection) {
-      return { penalty: -1.5, reason: 'P4/P5 resolved by same-direction skip' };
-    }
-    // Any other resolution
-    return { penalty: -2.0, reason: 'P4/P5 poorly resolved' };
   }
-
   // Large leap entry (6th, 7th, etc.)
-  if (entryMag.type === 'large_leap' || entryMag.type === 'octave') {
+  else if (entryMag.type === 'large_leap' || entryMag.type === 'octave') {
     if (exitMag.type === 'step') {
-      return { penalty: 0, reason: 'large leap resolved by step' };
+      return { penalty: 0, reason: 'large leap resolved by step', inSequence };
     }
     if (exitMag.type === 'skip' && oppositeDirection) {
-      return { penalty: -1.5, reason: 'large leap resolved by opposite skip' };
+      basePenalty = -1.5;
+      reason = 'large leap resolved by opposite skip';
+    } else {
+      basePenalty = -2.5;
+      reason = 'large leap poorly resolved';
     }
-    return { penalty: -2.5, reason: 'large leap poorly resolved' };
   }
 
-  return { penalty: 0, reason: 'unknown entry type' };
+  // Apply sequence mitigation: reduce penalty by 75% if in a sequence
+  if (inSequence && basePenalty < 0) {
+    const mitigatedPenalty = basePenalty * 0.25; // Keep only 25% of penalty
+    return {
+      penalty: mitigatedPenalty,
+      reason: reason + ' (mitigated: in sequence)',
+      inSequence: true,
+      originalPenalty: basePenalty,
+    };
+  }
+
+  return { penalty: basePenalty, reason, inSequence: false };
 }
 
 /**
@@ -234,6 +317,7 @@ function scoreEntry(prevSim, currSim) {
 /**
  * Score the exit from a dissonance (D → C)
  * Now uses proportional penalties based on entry leap size and resolution type
+ * Penalties are mitigated if the melodic motion is part of a sequence
  */
 function scoreExit(currSim, nextSim, entryInfo) {
   let score = 1.0; // Base for resolving
@@ -244,6 +328,10 @@ function scoreExit(currSim, nextSim, entryInfo) {
   }
 
   const motion = getMotionType(currSim, nextSim);
+
+  // Check if either voice's motion is part of a sequence (by onset time)
+  const v1InSequence = isOnsetInSequence(currSim.onset);
+  const v2InSequence = isOnsetInSequence(currSim.onset);
 
   // Resolution modifier - check how each voice resolves with proportional penalties
   let v1Resolution = null;
@@ -256,6 +344,7 @@ function scoreExit(currSim, nextSim, entryInfo) {
       interval: Math.abs(exitInterval),
       direction: Math.sign(exitInterval),
       magnitude: exitMag,
+      inSequence: v1InSequence,
     };
 
     // Calculate proportional penalty based on how entry leap is resolved
@@ -265,24 +354,34 @@ function scoreExit(currSim, nextSim, entryInfo) {
         Math.abs(entryInfo.v1MelodicInterval),
         Math.abs(exitInterval),
         v1Resolution.direction,
-        entryDir
+        entryDir,
+        v1InSequence
       );
       if (penaltyInfo.penalty !== 0) {
         score += penaltyInfo.penalty;
-        details.push(`V1 ${penaltyInfo.reason}: ${penaltyInfo.penalty}`);
+        details.push(`V1 ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
       }
     } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
-      // No entry leap but exit is a leap - apply standard penalties
+      // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
+      let penalty = 0;
+      let reason = '';
       if (exitMag.type === 'skip') {
-        score -= 0.5;
-        details.push(`V1 skip resolution: -0.5`);
+        penalty = -0.5;
+        reason = 'V1 skip resolution';
       } else if (exitMag.type === 'perfect_leap') {
-        score -= 1.0;
-        details.push(`V1 P4/P5 resolution: -1.0`);
+        penalty = -1.0;
+        reason = 'V1 P4/P5 resolution';
       } else {
-        score -= 1.5;
-        details.push(`V1 large leap resolution: -1.5`);
+        penalty = -1.5;
+        reason = 'V1 large leap resolution';
       }
+      // Apply sequence mitigation
+      if (v1InSequence) {
+        penalty *= 0.25;
+        reason += ' (mitigated: in sequence)';
+      }
+      score += penalty;
+      details.push(`${reason}: ${penalty.toFixed(2)}`);
     }
   }
 
@@ -293,6 +392,7 @@ function scoreExit(currSim, nextSim, entryInfo) {
       interval: Math.abs(exitInterval),
       direction: Math.sign(exitInterval),
       magnitude: exitMag,
+      inSequence: v2InSequence,
     };
 
     // Calculate proportional penalty based on how entry leap is resolved
@@ -302,24 +402,34 @@ function scoreExit(currSim, nextSim, entryInfo) {
         Math.abs(entryInfo.v2MelodicInterval),
         Math.abs(exitInterval),
         v2Resolution.direction,
-        entryDir
+        entryDir,
+        v2InSequence
       );
       if (penaltyInfo.penalty !== 0) {
         score += penaltyInfo.penalty;
-        details.push(`V2 ${penaltyInfo.reason}: ${penaltyInfo.penalty}`);
+        details.push(`V2 ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
       }
     } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
-      // No entry leap but exit is a leap - apply standard penalties
+      // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
+      let penalty = 0;
+      let reason = '';
       if (exitMag.type === 'skip') {
-        score -= 0.5;
-        details.push(`V2 skip resolution: -0.5`);
+        penalty = -0.5;
+        reason = 'V2 skip resolution';
       } else if (exitMag.type === 'perfect_leap') {
-        score -= 1.0;
-        details.push(`V2 P4/P5 resolution: -1.0`);
+        penalty = -1.0;
+        reason = 'V2 P4/P5 resolution';
       } else {
-        score -= 1.5;
-        details.push(`V2 large leap resolution: -1.5`);
+        penalty = -1.5;
+        reason = 'V2 large leap resolution';
       }
+      // Apply sequence mitigation
+      if (v2InSequence) {
+        penalty *= 0.25;
+        reason += ' (mitigated: in sequence)';
+      }
+      score += penalty;
+      details.push(`${reason}: ${penalty.toFixed(2)}`);
     }
   }
 
