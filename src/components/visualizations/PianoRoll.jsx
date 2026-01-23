@@ -20,8 +20,16 @@ export function PianoRoll({ voices, title }) {
   const pRange = maxP - minP;
   const nH = Math.max(8, Math.min(16, 200 / pRange));
   const h = pRange * nH + 44;
-  const w = 560;
-  const tScale = (w - 52) / maxT;
+
+  // Dynamic width based on duration - minimum 40 pixels per beat for readability
+  const minPixelsPerBeat = 40;
+  const minWidth = 300;
+  const maxWidth = 800;
+  const calculatedWidth = maxT * minPixelsPerBeat + 60;
+  const w = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+  const needsScroll = calculatedWidth > maxWidth;
+  const scrollWidth = needsScroll ? calculatedWidth : w;
+  const tScale = (scrollWidth - 52) / maxT;
 
   const pToY = (p) => h - 20 - (p - minP) * nH;
   const tToX = (t) => 46 + t * tScale;
@@ -67,17 +75,22 @@ export function PianoRoll({ voices, title }) {
       {title && (
         <div style={{ fontSize: '12px', color: '#546e7a', marginBottom: '4px' }}>{title}</div>
       )}
-      <svg
-        width={w}
-        height={h}
-        style={{
-          backgroundColor: '#fafafa',
-          borderRadius: '4px',
-          border: '1px solid #e0e0e0',
-        }}
-        role="img"
-        aria-label={title || 'Piano roll visualization'}
-      >
+      <div style={{
+        maxWidth: `${maxWidth}px`,
+        overflowX: needsScroll ? 'auto' : 'visible',
+        borderRadius: '4px',
+        border: '1px solid #e0e0e0',
+      }}>
+        <svg
+          width={scrollWidth}
+          height={h}
+          style={{
+            backgroundColor: '#fafafa',
+            display: 'block',
+          }}
+          role="img"
+          aria-label={title || 'Piano roll visualization'}
+        >
         {/* Beat grid lines - meter-aware */}
         {(() => {
           const meter = getMeter();
@@ -143,7 +156,7 @@ export function PianoRoll({ voices, title }) {
         )}
 
         {/* Legend */}
-        <g transform={`translate(${w - 120}, 6)`}>
+        <g transform={`translate(${scrollWidth - 120}, 6)`}>
           {voices.map((v, i) => (
             <g key={i} transform={`translate(0, ${i * 14})`}>
               <rect x={0} y={0} width={10} height={10} fill={v.color} rx={2} opacity={v.opacity || 1} />
@@ -174,6 +187,7 @@ export function PianoRoll({ voices, title }) {
           </g>
         )}
       </svg>
+      </div>
 
       {/* Selected note detail panel */}
       {selectedNote && (

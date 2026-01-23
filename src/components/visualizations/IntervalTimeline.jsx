@@ -7,9 +7,17 @@ import { getMeter } from '../../utils/dissonanceScoring';
 export function IntervalTimeline({ sims, title, maxTime }) {
   if (!sims.length) return null;
 
-  const w = 560;
+  // Dynamic width based on duration - minimum 40 pixels per beat for readability
+  const minPixelsPerBeat = 40;
+  const minWidth = 300;
+  const maxWidth = 800;
+  const calculatedWidth = maxTime * minPixelsPerBeat + 60;
+  const w = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+  const needsScroll = calculatedWidth > maxWidth;
+  const scrollWidth = needsScroll ? calculatedWidth : w;
+
   const h = 50;
-  const tScale = (w - 50) / maxTime;
+  const tScale = (scrollWidth - 50) / maxTime;
   const tToX = (t) => 45 + t * tScale;
 
   // Color code: green = consonant, red = dissonant, darker on strong beats
@@ -24,17 +32,22 @@ export function IntervalTimeline({ sims, title, maxTime }) {
       {title && (
         <div style={{ fontSize: '11px', color: '#546e7a', marginBottom: '3px' }}>{title}</div>
       )}
-      <svg
-        width={w}
-        height={h}
-        style={{
-          backgroundColor: '#fafafa',
-          borderRadius: '4px',
-          border: '1px solid #e0e0e0',
-        }}
-        role="img"
-        aria-label={title || 'Interval timeline'}
-      >
+      <div style={{
+        maxWidth: `${maxWidth}px`,
+        overflowX: needsScroll ? 'auto' : 'visible',
+        borderRadius: '4px',
+        border: '1px solid #e0e0e0',
+      }}>
+        <svg
+          width={scrollWidth}
+          height={h}
+          style={{
+            backgroundColor: '#fafafa',
+            display: 'block',
+          }}
+          role="img"
+          aria-label={title || 'Interval timeline'}
+        >
         {/* Beat lines - meter-aware */}
         {(() => {
           const meter = getMeter();
@@ -76,15 +89,16 @@ export function IntervalTimeline({ sims, title, maxTime }) {
         })}
 
         {/* Legend */}
-        <rect x={w - 80} y={5} width={12} height={12} fill="rgb(100,180,100)" rx={2} />
-        <text x={w - 65} y={14} fontSize="8" fill="#546e7a">
+        <rect x={scrollWidth - 80} y={5} width={12} height={12} fill="rgb(100,180,100)" rx={2} />
+        <text x={scrollWidth - 65} y={14} fontSize="8" fill="#546e7a">
           cons.
         </text>
-        <rect x={w - 80} y={20} width={12} height={12} fill="rgb(200,80,80)" rx={2} />
-        <text x={w - 65} y={29} fontSize="8" fill="#546e7a">
+        <rect x={scrollWidth - 80} y={20} width={12} height={12} fill="rgb(200,80,80)" rx={2} />
+        <text x={scrollWidth - 65} y={29} fontSize="8" fill="#546e7a">
           diss.
         </text>
       </svg>
+      </div>
     </div>
   );
 }
