@@ -1,4 +1,5 @@
 import { getMeter } from '../../utils/dissonanceScoring';
+import { generateGridLines } from '../../utils/vizConstants';
 
 /**
  * Interval Timeline visualization component
@@ -51,26 +52,19 @@ export function IntervalTimeline({ sims, title, maxTime }) {
         {/* Beat lines - meter-aware */}
         {(() => {
           const meter = getMeter();
-          const beatsPerMeasure = meter[0];
-          const isCompound = (meter[0] % 3 === 0 && meter[1] === 8 && meter[0] >= 3);
+          const gridLines = generateGridLines(maxTime, meter, { showSubdivisions: false });
 
-          return Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => {
-            const posInMeasure = i % beatsPerMeasure;
-            const isDownbeat = posInMeasure === 0;
-            const isMainBeat = isCompound ? (posInMeasure % 3 === 0) : true;
-
-            return (
-              <line
-                key={i}
-                x1={tToX(i)}
-                y1={5}
-                x2={tToX(i)}
-                y2={h - 5}
-                stroke={isDownbeat ? '#9ca3af' : (isMainBeat ? '#bdbdbd' : '#eee')}
-                strokeWidth={isDownbeat ? 1.5 : (isMainBeat ? 0.75 : 0.5)}
-              />
-            );
-          });
+          return gridLines.map((line, i) => (
+            <line
+              key={i}
+              x1={tToX(line.time)}
+              y1={5}
+              x2={tToX(line.time)}
+              y2={h - 5}
+              stroke={line.isDownbeat ? '#9ca3af' : (line.isMainBeat ? '#bdbdbd' : '#eee')}
+              strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)}
+            />
+          ));
         })()}
 
         {/* Interval blocks */}

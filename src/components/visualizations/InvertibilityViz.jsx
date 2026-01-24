@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { getMeter } from '../../utils/dissonanceScoring';
+import { generateGridLines } from '../../utils/vizConstants';
 
 /**
  * Invertibility Visualization
@@ -174,32 +175,24 @@ export function InvertibilityViz({
             {/* Beat grid - meter-aware */}
             {(() => {
               const meter = getMeter();
-              const beatsPerMeasure = meter[0];
-              const isCompound = (meter[0] % 3 === 0 && meter[1] === 8 && meter[0] >= 3);
-              let measureNum = 1;
+              const gridLines = generateGridLines(maxTime, meter, { showSubdivisions: false });
 
-              return Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => {
-                const posInMeasure = i % beatsPerMeasure;
-                const isDownbeat = posInMeasure === 0;
-                const isMainBeat = isCompound ? (posInMeasure % 3 === 0) : true;
-
-                return (
-                  <g key={`grid-${i}`}>
-                    <line x1={tToX(i)} y1={36} x2={tToX(i)} y2={h - 18}
-                      stroke={isDownbeat ? '#64748b' : (isMainBeat ? '#94a3b8' : '#e2e8f0')}
-                      strokeWidth={isDownbeat ? 1.5 : (isMainBeat ? 0.75 : 0.5)} />
-                    {isDownbeat ? (
-                      <text x={tToX(i)} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
-                        m.{measureNum++}
-                      </text>
-                    ) : isMainBeat ? (
-                      <text x={tToX(i)} y={h - 4} fontSize="9" fill="#94a3b8" textAnchor="middle">
-                        {isCompound ? Math.floor(posInMeasure / 3) + 1 : posInMeasure + 1}
-                      </text>
-                    ) : null}
-                  </g>
-                );
-              });
+              return gridLines.map((line, i) => (
+                <g key={`grid-${i}`}>
+                  <line x1={tToX(line.time)} y1={36} x2={tToX(line.time)} y2={h - 18}
+                    stroke={line.isDownbeat ? '#64748b' : (line.isMainBeat ? '#94a3b8' : '#e2e8f0')}
+                    strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)} />
+                  {line.measureNum ? (
+                    <text x={tToX(line.time)} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
+                      m.{line.measureNum}
+                    </text>
+                  ) : line.beatNum ? (
+                    <text x={tToX(line.time)} y={h - 4} fontSize="9" fill="#94a3b8" textAnchor="middle">
+                      {line.beatNum}
+                    </text>
+                  ) : null}
+                </g>
+              ));
             })()}
 
             {/* Subject notes - always shown */}

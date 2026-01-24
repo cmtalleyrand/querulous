@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { pitchName } from '../../utils/formatter';
 import { getMeter } from '../../utils/dissonanceScoring';
+import { generateGridLines } from '../../utils/vizConstants';
 
 /**
  * Stretto Visualization component
@@ -98,30 +99,24 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
             {/* Beat grid - meter-aware */}
             {(() => {
               const meter = getMeter();
-              const beatsPerMeasure = meter[0];
-              const isCompound = (meter[0] % 3 === 0 && meter[1] === 8 && meter[0] >= 3);
-              let measureNum = 1;
+              const gridLines = generateGridLines(totalDuration, meter, { showSubdivisions: false });
 
-              return Array.from({ length: Math.ceil(totalDuration) + 1 }, (_, i) => {
-                const x = tToX(i);
-                const posInMeasure = i % beatsPerMeasure;
-                const isDownbeat = posInMeasure === 0;
-                const isMainBeat = isCompound ? (posInMeasure % 3 === 0) : true;
-
+              return gridLines.map((line, i) => {
+                const x = tToX(line.time);
                 return (
                   <g key={`grid-${i}`}>
                     <line
                       x1={x} y1={headerHeight} x2={x} y2={h - 18}
-                      stroke={isDownbeat ? '#64748b' : (isMainBeat ? '#9ca3af' : '#e5e7eb')}
-                      strokeWidth={isDownbeat ? 1.5 : (isMainBeat ? 0.75 : 0.5)}
+                      stroke={line.isDownbeat ? '#64748b' : (line.isMainBeat ? '#9ca3af' : '#e5e7eb')}
+                      strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)}
                     />
-                    {isDownbeat ? (
+                    {line.measureNum ? (
                       <text x={x} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
-                        m.{measureNum++}
+                        m.{line.measureNum}
                       </text>
-                    ) : isMainBeat ? (
+                    ) : line.beatNum ? (
                       <text x={x} y={h - 4} fontSize="9" fill="#9ca3af" textAnchor="middle">
-                        {isCompound ? Math.floor(posInMeasure / 3) + 1 : posInMeasure + 1}
+                        {line.beatNum}
                       </text>
                     ) : null}
                   </g>

@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { scoreDissonance, getMeter } from '../../utils/dissonanceScoring';
+import { getGridMetrics, generateGridLines } from '../../utils/vizConstants';
 
 /**
  * Unified Interval Analysis Visualization
@@ -199,43 +200,30 @@ export function IntervalAnalysisViz({
             {/* Beat grid - meter-aware */}
             {(() => {
               const meter = getMeter();
-              const beatsPerMeasure = meter[0];
-              const isCompound = (meter[0] % 3 === 0 && meter[1] === 8 && meter[0] >= 3);
-              // In compound meters, notes are in eighth-note units, so meter[0] is subdivisions
-              // In simple meters, beats correspond directly
+              const gridLines = generateGridLines(maxTime, meter, { showSubdivisions: false });
 
-              const gridLines = [];
-              let measureNum = 1;
-
-              for (let i = 0; i <= Math.ceil(maxTime); i++) {
-                const x = tToX(i);
-                const posInMeasure = i % beatsPerMeasure;
-                const isDownbeat = posInMeasure === 0;
-
-                // In compound meters, main beats are every 3 units
-                const isMainBeat = isCompound ? (posInMeasure % 3 === 0) : true;
-
-                gridLines.push(
+              return gridLines.map((line, i) => {
+                const x = tToX(line.time);
+                return (
                   <g key={`grid-${i}`}>
                     <line
                       x1={x} y1={headerHeight} x2={x} y2={h - 18}
-                      stroke={isDownbeat ? '#64748b' : (isMainBeat ? '#94a3b8' : '#e2e8f0')}
-                      strokeWidth={isDownbeat ? 1.5 : (isMainBeat ? 0.75 : 0.5)}
+                      stroke={line.isDownbeat ? '#64748b' : (line.isMainBeat ? '#94a3b8' : '#e2e8f0')}
+                      strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)}
                     />
                     {/* Show measure.beat notation */}
-                    {isDownbeat ? (
+                    {line.measureNum ? (
                       <text x={x} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
-                        m.{measureNum++}
+                        m.{line.measureNum}
                       </text>
-                    ) : isMainBeat ? (
+                    ) : line.beatNum ? (
                       <text x={x} y={h - 4} fontSize="9" fill="#94a3b8" textAnchor="middle">
-                        {isCompound ? Math.floor(posInMeasure / 3) + 1 : posInMeasure + 1}
+                        {line.beatNum}
                       </text>
                     ) : null}
                   </g>
                 );
-              }
-              return gridLines;
+              });
             })()}
 
             {/* Voice labels */}
