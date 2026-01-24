@@ -326,53 +326,65 @@ export function calculateTonalAnswerScore(result) {
 
 /**
  * Calculate double counterpoint score
- * Now provides relative issue counts (issues per interval analyzed)
+ * Uses actual dissonance scores from detailed analysis, not just issue counts
  */
 export function calculateDoubleCounterpointScore(result) {
   if (!result || result.error) return { score: 0, details: [], context: {} };
 
-  let score = 50; // Base score
   const details = [];
 
-  // Calculate total intervals for context
-  const origIntervals = result.original?.totalIntervals || result.original?.issues?.length || 0;
-  const invIntervals = result.inverted?.totalIntervals || result.inverted?.issues?.length || 0;
+  // Get detailed scoring data
+  const origScoring = result.original?.detailedScoring?.summary;
+  const invScoring = result.inverted?.detailedScoring?.summary;
 
   // Context
   const context = {
-    originalIntervals: origIntervals,
-    invertedIntervals: invIntervals,
+    originalIntervals: origScoring?.totalIntervals || 0,
+    invertedIntervals: invScoring?.totalIntervals || 0,
+    originalAvgScore: origScoring?.averageScore || 0,
+    invertedAvgScore: invScoring?.averageScore || 0,
   };
 
-  // Original position issues
-  const origIssues = result.original?.issues?.length || 0;
-  if (origIssues === 0) {
-    score += 25;
-    details.push({ factor: 'No issues in original position', impact: +25 });
-  } else {
-    // Scale penalty by issue density, not just count
-    const issueRate = origIntervals > 0 ? origIssues / origIntervals : 1;
-    const penalty = Math.min(25, Math.round(issueRate * 50));
-    score -= penalty;
-    const ratePercent = origIntervals > 0 ? Math.round((origIssues / origIntervals) * 100) : 100;
+  // Start with base score of 50
+  let score = 50;
+
+  // Use average dissonance scores if available (more nuanced than issue counting)
+  if (origScoring && origScoring.totalDissonances > 0) {
+    const avgScore = origScoring.averageScore;
+    // Average score ranges roughly -3 to +3, map to -20 to +20 impact
+    const impact = Math.round(avgScore * 7);
+    score += impact;
     details.push({
-      factor: `${origIssues} issues in original (${ratePercent}% of intervals)`,
-      impact: -penalty,
+      factor: `Original dissonance handling: avg ${avgScore.toFixed(2)}`,
+      impact: impact,
     });
+  } else if (origScoring) {
+    score += 15;
+    details.push({ factor: 'No dissonances in original position', impact: +15 });
   }
 
-  // Inverted position issues
-  const invIssues = result.inverted?.issues?.length || 0;
-  if (invIssues === 0) {
-    score += 25;
-    details.push({ factor: 'No issues in inverted position', impact: +25 });
-  } else {
-    const issueRate = invIntervals > 0 ? invIssues / invIntervals : 1;
-    const penalty = Math.min(25, Math.round(issueRate * 50));
-    score -= penalty;
-    const ratePercent = invIntervals > 0 ? Math.round((invIssues / invIntervals) * 100) : 100;
+  if (invScoring && invScoring.totalDissonances > 0) {
+    const avgScore = invScoring.averageScore;
+    const impact = Math.round(avgScore * 7);
+    score += impact;
     details.push({
-      factor: `${invIssues} issues inverted (${ratePercent}% of intervals)`,
+      factor: `Inverted dissonance handling: avg ${avgScore.toFixed(2)}`,
+      impact: impact,
+    });
+  } else if (invScoring) {
+    score += 15;
+    details.push({ factor: 'No dissonances in inverted position', impact: +15 });
+  }
+
+  // Parallel perfects are still critical issues
+  const origIssues = result.original?.issues?.length || 0;
+  const invIssues = result.inverted?.issues?.length || 0;
+  if (origIssues > 0 || invIssues > 0) {
+    const totalIssues = origIssues + invIssues;
+    const penalty = Math.min(30, totalIssues * 10);
+    score -= penalty;
+    details.push({
+      factor: `${totalIssues} critical issue${totalIssues !== 1 ? 's' : ''} (parallel 5ths/8ves, P4 vs bass)`,
       impact: -penalty,
     });
   }
@@ -389,10 +401,10 @@ export function calculateDoubleCounterpointScore(result) {
       impact: +10,
     });
   } else if (avgRatio < 0.3) {
+    score -= 5;
     details.push({
-      factor: `Only ${Math.round(avgRatio * 100)}% imperfect consonances—heavy on perfect intervals`,
-      impact: 0,
-      type: 'info',
+      factor: `Only ${Math.round(avgRatio * 100)}% imperfect consonances—risky for inversion`,
+      impact: -5,
     });
   }
 
@@ -476,12 +488,26 @@ export function calculateContourIndependenceScore(result) {
 
 /**
  * Calculate modulatory robustness score
+ * Uses detailed dissonance scores when available
  */
 export function calculateModulatoryRobustnessScore(result) {
   if (!result || result.error) return { score: 0, details: [] };
 
   let score = 50; // Base score
   const details = [];
+
+  // Use detailed dissonance scoring if available
+  const detailedScoring = result.detailedScoring?.summary;
+  if (detailedScoring && detailedScoring.totalDissonances > 0) {
+    const avgScore = detailedScoring.averageScore;
+    // Map average score (-3 to +3) to impact (-15 to +15)
+    const impact = Math.round(avgScore * 5);
+    score += impact;
+    details.push({
+      factor: `Dissonance handling vs answer: avg ${avgScore.toFixed(2)}`,
+      impact: impact,
+    });
+  }
 
   const profile = result.intervalProfile;
   if (profile) {
@@ -490,11 +516,11 @@ export function calculateModulatoryRobustnessScore(result) {
       const consPercent = Math.round((profile.consonant / total) * 100);
 
       if (consPercent >= 80) {
-        score += 35;
-        details.push({ factor: `${consPercent}% consonant on strong beats`, impact: +35 });
+        score += 25;
+        details.push({ factor: `${consPercent}% consonant on strong beats`, impact: +25 });
       } else if (consPercent >= 60) {
-        score += 20;
-        details.push({ factor: `${consPercent}% consonant on strong beats`, impact: +20 });
+        score += 15;
+        details.push({ factor: `${consPercent}% consonant on strong beats`, impact: +15 });
       } else {
         score -= 10;
         details.push({ factor: `Only ${consPercent}% consonant on strong beats`, impact: -10 });
@@ -505,8 +531,8 @@ export function calculateModulatoryRobustnessScore(result) {
   // Parallel perfect violations
   const violations = result.violations?.length || 0;
   if (violations === 0) {
-    score += 15;
-    details.push({ factor: 'No parallel perfect violations', impact: +15 });
+    score += 10;
+    details.push({ factor: 'No parallel perfect violations', impact: +10 });
   } else {
     const penalty = Math.min(30, violations * 10);
     score -= penalty;

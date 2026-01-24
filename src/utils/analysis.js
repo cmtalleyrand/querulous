@@ -931,6 +931,9 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
     // Analyze dissonances with classification
     const dissonanceAnalysis = analyzeDissonances(sims, v1, v2, formatter);
 
+    // Get detailed scoring from dissonanceScoring module
+    const detailedScoring = analyzeAllDissonances(sims);
+
     // Only flag unprepared strong-beat dissonances as issues
     for (const d of dissonanceAnalysis.unprepared) {
       if (d.metricWeight >= 0.75) {
@@ -948,6 +951,8 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
       perfects,
       dissonant,
       dissonanceAnalysis,
+      detailedScoring, // Include detailed scores for use in scoring.js
+      totalIntervals: sims.length,
       imperfectRatio: strong.length > 0 ? (thirds + sixths) / strong.length : 0,
     };
   };
@@ -1094,7 +1099,15 @@ export function testModulatoryRobustness(subject, cs, formatter) {
     }
   }
 
-  return { violations, intervalProfile: { consonant, dissonant, thirds, sixths, perfects }, observations };
+  // Get detailed dissonance scoring
+  const detailedScoring = analyzeAllDissonances(sims);
+
+  return {
+    violations,
+    intervalProfile: { consonant, dissonant, thirds, sixths, perfects },
+    observations,
+    detailedScoring, // Include for use in scoring.js
+  };
 }
 
 /**
