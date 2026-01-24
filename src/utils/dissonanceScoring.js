@@ -256,29 +256,120 @@ function isStrongBeat(onset) {
 }
 
 /**
+ * Calculate rest context between two simultaneities
+ * A "phantom note" extends for duration/2 beats after the note ends
+ * @returns Object with rest analysis for entry and exit
+ */
+function analyzeRestContext(prevSim, currSim, nextSim) {
+  const result = {
+    entryFromRest: { v1: false, v2: false, v1RestDuration: 0, v2RestDuration: 0 },
+    exitToRest: { v1: false, v2: false, v1RestDuration: 0, v2RestDuration: 0 },
+    resolvedByAbandonment: false,
+  };
+
+  if (prevSim) {
+    // Check if there was a rest before current simultaneity
+    const v1PrevEnd = prevSim.voice1Note.onset + prevSim.voice1Note.duration;
+    const v2PrevEnd = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
+
+    // If note ended before current onset, there was a rest
+    if (v1PrevEnd < currSim.onset - 0.01) {
+      result.entryFromRest.v1 = true;
+      result.entryFromRest.v1RestDuration = currSim.onset - v1PrevEnd;
+    }
+    if (v2PrevEnd < currSim.onset - 0.01) {
+      result.entryFromRest.v2 = true;
+      result.entryFromRest.v2RestDuration = currSim.onset - v2PrevEnd;
+    }
+  }
+
+  if (nextSim) {
+    // Check if there's a rest between current and next simultaneity
+    const v1CurrEnd = currSim.voice1Note.onset + currSim.voice1Note.duration;
+    const v2CurrEnd = currSim.voice2Note.onset + currSim.voice2Note.duration;
+
+    if (v1CurrEnd < nextSim.onset - 0.01) {
+      result.exitToRest.v1 = true;
+      result.exitToRest.v1RestDuration = nextSim.onset - v1CurrEnd;
+    }
+    if (v2CurrEnd < nextSim.onset - 0.01) {
+      result.exitToRest.v2 = true;
+      result.exitToRest.v2RestDuration = nextSim.onset - v2CurrEnd;
+    }
+
+    // Check if one voice "abandons" the other (drops out while dissonance holds)
+    // Voice 1 abandons if it ends while voice 2 is still sounding
+    const v1AbandonedV2 = v1CurrEnd < v2CurrEnd - 0.01 && v1CurrEnd < nextSim.onset - 0.01;
+    const v2AbandonedV1 = v2CurrEnd < v1CurrEnd - 0.01 && v2CurrEnd < nextSim.onset - 0.01;
+    result.resolvedByAbandonment = v1AbandonedV2 || v2AbandonedV1;
+  } else {
+    // No next simultaneity - check if notes extend to end
+    const v1CurrEnd = currSim.voice1Note.onset + currSim.voice1Note.duration;
+    const v2CurrEnd = currSim.voice2Note.onset + currSim.voice2Note.duration;
+    // If one voice ends significantly before the other
+    if (Math.abs(v1CurrEnd - v2CurrEnd) > 0.1) {
+      result.resolvedByAbandonment = true;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Check if entry is from a "fresh start" (rest longer than note duration)
+ * In this case, motion bonuses/penalties should be reduced
+ */
+function getEntryRestModifier(restContext, currSim) {
+  let modifier = 1.0; // Default: full motion scoring
+
+  if (restContext.entryFromRest.v1) {
+    const noteDur = currSim.voice1Note.duration;
+    if (restContext.entryFromRest.v1RestDuration > noteDur) {
+      modifier *= 0.5; // Halve if rest was longer than note
+    }
+  }
+  if (restContext.entryFromRest.v2) {
+    const noteDur = currSim.voice2Note.duration;
+    if (restContext.entryFromRest.v2RestDuration > noteDur) {
+      modifier *= 0.5;
+    }
+  }
+
+  return modifier;
+}
+
+/**
  * Score the entry into a dissonance (C → D)
  * Entry penalties are now deferred to be calculated based on how the leap is resolved
+ * Rest handling: If entering from a rest longer than the note duration, motion bonuses/penalties are halved
  */
-function scoreEntry(prevSim, currSim) {
+function scoreEntry(prevSim, currSim, restContext = null) {
   let score = 0; // Base
   const details = [];
 
   if (!prevSim) {
-    return { score: 0, details: ['No previous simultaneity'], motion: null, v1MelodicInterval: 0, v2MelodicInterval: 0 };
+    return { score: 0, details: ['No previous simultaneity'], motion: null, v1MelodicInterval: 0, v2MelodicInterval: 0, restModifier: 1.0 };
   }
 
   const motion = getMotionType(prevSim, currSim);
 
-  // Motion modifier
+  // Calculate rest modifier if context provided
+  const restModifier = restContext ? getEntryRestModifier(restContext, currSim) : 1.0;
+  const restNote = restModifier < 1.0 ? ' (reduced: entry from rest)' : '';
+
+  // Motion modifier - apply rest modifier
   if (motion.type === 'oblique') {
-    score += 0.5;
-    details.push(`Oblique motion: +0.5`);
+    const adj = 0.5 * restModifier;
+    score += adj;
+    details.push(`Oblique motion: +${adj.toFixed(2)}${restNote}`);
   } else if (motion.type === 'contrary') {
-    score += 0.5;
-    details.push(`Contrary motion: +0.5`);
+    const adj = 0.5 * restModifier;
+    score += adj;
+    details.push(`Contrary motion: +${adj.toFixed(2)}${restNote}`);
   } else if (motion.type === 'similar' || motion.type === 'parallel') {
-    score -= 1.5;
-    details.push(`Similar/parallel motion: -1.5`);
+    const adj = -1.5 * restModifier;
+    score += adj;
+    details.push(`Similar/parallel motion: ${adj.toFixed(2)}${restNote}`);
   }
 
   // Record entry intervals for resolution penalty calculation (penalties applied in scoreExit)
@@ -311,6 +402,7 @@ function scoreEntry(prevSim, currSim) {
     motion,
     v1MelodicInterval,
     v2MelodicInterval,
+    restModifier,
   };
 }
 
@@ -318,13 +410,35 @@ function scoreEntry(prevSim, currSim) {
  * Score the exit from a dissonance (D → C)
  * Now uses proportional penalties based on entry leap size and resolution type
  * Penalties are mitigated if the melodic motion is part of a sequence
+ * Rest handling: -0.5 penalty if resolved by abandonment (one voice drops out)
  */
-function scoreExit(currSim, nextSim, entryInfo) {
+function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
   let score = 1.0; // Base for resolving
   const details = ['Base resolution: +1.0'];
 
   if (!nextSim) {
-    return { score: -1.0, details: ['No resolution - dissonance unresolved: -1.0'], motion: null, v1Resolution: null, v2Resolution: null };
+    return { score: -1.0, details: ['No resolution - dissonance unresolved: -1.0'], motion: null, v1Resolution: null, v2Resolution: null, resolvedByAbandonment: false };
+  }
+
+  // Check for resolution by abandonment (one voice drops out)
+  if (restContext && restContext.resolvedByAbandonment) {
+    score -= 0.5;
+    details.push('Resolved by abandonment (voice dropped out): -0.5');
+  }
+
+  // Check for phantom note situation: if there's a long rest before resolution,
+  // the "resolution" is delayed and less meaningful
+  if (restContext) {
+    const v1RestDur = restContext.exitToRest.v1RestDuration || 0;
+    const v2RestDur = restContext.exitToRest.v2RestDuration || 0;
+    const v1PhantomLimit = currSim.voice1Note.duration / 2;
+    const v2PhantomLimit = currSim.voice2Note.duration / 2;
+
+    // If rest exceeds phantom note duration, resolution is "distant"
+    if (v1RestDur > v1PhantomLimit || v2RestDur > v2PhantomLimit) {
+      score -= 0.3;
+      details.push('Delayed resolution (rest exceeds phantom duration): -0.3');
+    }
   }
 
   const motion = getMotionType(currSim, nextSim);
@@ -450,6 +564,7 @@ function scoreExit(currSim, nextSim, entryInfo) {
     motion,
     v1Resolution,
     v2Resolution,
+    resolvedByAbandonment: restContext?.resolvedByAbandonment || false,
   };
 }
 
@@ -763,11 +878,14 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
     return scoreConsonance(currSim, allSims, index, intervalHistory);
   }
 
-  // Score entry
-  const entryInfo = scoreEntry(prevSim, currSim);
+  // Analyze rest context for entry/exit handling
+  const restContext = analyzeRestContext(prevSim, currSim, nextSim);
 
-  // Score exit
-  const exitInfo = scoreExit(currSim, nextSim, entryInfo);
+  // Score entry (with rest context for motion modifier reduction)
+  const entryInfo = scoreEntry(prevSim, currSim, restContext);
+
+  // Score exit (with rest context for abandonment and phantom note handling)
+  const exitInfo = scoreExit(currSim, nextSim, entryInfo, restContext);
 
   // Check patterns
   const patternInfo = checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo);
