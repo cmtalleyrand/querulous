@@ -407,18 +407,24 @@ function scoreEntry(prevSim, currSim, restContext = null) {
 }
 
 /**
- * Score the exit from a dissonance (D → C)
+ * Score the exit from a dissonance (D → ?)
  * Now uses proportional penalties based on entry leap size and resolution type
  * Penalties are mitigated if the melodic motion is part of a sequence
  * Rest handling: -0.5 penalty if resolved by abandonment (one voice drops out)
  */
 function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
-  let score = 1.0; // Base for resolving
-  const details = ['Base resolution: +1.0'];
-
   if (!nextSim) {
-    return { score: -1.0, details: ['No resolution - dissonance unresolved: -1.0'], motion: null, v1Resolution: null, v2Resolution: null, resolvedByAbandonment: false };
+    return { score: -1.0, details: ['Unresolved (no following note)'], motion: null, v1Resolution: null, v2Resolution: null, resolvedByAbandonment: false };
   }
+
+  // Check if this is actually a resolution (D → C) or just movement (D → D)
+  const isProperResolution = nextSim.interval.isConsonant() ||
+    (nextSim.interval.class === 4 && !treatP4AsDissonant); // P4 can be consonant
+
+  let score = isProperResolution ? 1.0 : -0.5;
+  const details = isProperResolution
+    ? ['Resolves to consonance: +1.0']
+    : ['Leads to another dissonance (no resolution): -0.5'];
 
   // Check for resolution by abandonment (one voice drops out)
   if (restContext && restContext.resolvedByAbandonment) {
@@ -483,7 +489,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
         penalty = -0.5;
         reason = 'V1 skip resolution';
       } else if (exitMag.type === 'perfect_leap') {
-        penalty = -1.0;
+        penalty = -0.5;
         reason = 'V1 P4/P5 resolution';
       } else {
         penalty = -1.5;
@@ -531,7 +537,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
         penalty = -0.5;
         reason = 'V2 skip resolution';
       } else if (exitMag.type === 'perfect_leap') {
-        penalty = -1.0;
+        penalty = -0.5;
         reason = 'V2 P4/P5 resolution';
       } else {
         penalty = -1.5;
@@ -547,16 +553,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
     }
   }
 
-  // Check if resolution goes to consonance
-  if (!nextSim.interval.isConsonant()) {
-    // Special case: P4 might be treated as consonant
-    if (nextSim.interval.class === 4 && !treatP4AsDissonant) {
-      // P4 treated as consonant, ok
-    } else {
-      score -= 1.5;
-      details.push(`Resolution to dissonance: -1.5`);
-    }
-  }
+  // Already handled at function start - no redundant check needed
 
   return {
     score,
@@ -842,7 +839,7 @@ function scoreConsonance(currSim, allSims, index, intervalHistory) {
     type: 'consonant',
     category,
     score,
-    label: intervalClass === 1 ? 'U' : intervalClass === 8 ? '8' : intervalClass.toString(),
+    label: intervalClass.toString(),
     isConsonant: true,
     intervalClass,
     intervalName,

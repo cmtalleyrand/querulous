@@ -79,7 +79,7 @@ export function IntervalTimeline({ sims, title, maxTime }) {
             <g key={i}>
               <rect x={x} y={10} width={width} height={30} fill={style.color} rx={2} opacity={style.opacity * 0.8} />
               <text x={x + width / 2} y={29} fontSize="9" fill="white" textAnchor="middle" fontWeight="500">
-                {s.interval.class === 1 ? 'U' : s.interval.class === 8 ? '8' : s.interval.class}
+                {s.interval.class}
               </text>
             </g>
           );

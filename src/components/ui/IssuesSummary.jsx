@@ -40,28 +40,42 @@ export function IssuesSummary({ results, scoreResult }) {
     }
   }
 
-  // Stretto issues - summarize the problematic ones
+  // Stretto issues - show each problematic stretto individually
   if (results.stretto?.problematicStrettos?.length > 0) {
-    const issueCount = results.stretto.problematicStrettos.length;
+    const issues = results.stretto.problematicStrettos.map(s => ({
+      description: `Stretto at ${s.distance} beats: ${s.issues?.length || 0} issue${(s.issues?.length || 0) !== 1 ? 's' : ''} (${s.issues?.map(i => i.description || i.type || 'voice-leading').join(', ') || 'voice-leading issues'})`,
+    }));
     categories.push({
       name: 'Stretto Viability',
-      issues: [{ description: `${issueCount} stretto distance${issueCount > 1 ? 's' : ''} have voice-leading issues` }],
+      issues,
       warnings: [],
       icon: '🎼',
       detail: `${results.stretto.cleanStrettos?.length || 0} clean, ${(results.stretto.viableStrettos?.length || 0) - (results.stretto.cleanStrettos?.length || 0)} with warnings`,
     });
   }
 
-  // Double counterpoint issues
+  // Double counterpoint issues - show each issue individually, not as summary
   if (results.doubleCounterpoint) {
     const issues = [];
     const warnings = [];
 
+    // Show each original position issue separately
     if (results.doubleCounterpoint.original?.issues?.length > 0) {
-      issues.push({ description: `Original position: ${results.doubleCounterpoint.original.issues.length} issue${results.doubleCounterpoint.original.issues.length > 1 ? 's' : ''}` });
+      for (const issue of results.doubleCounterpoint.original.issues) {
+        issues.push({
+          description: `Original: ${issue.description || issue}`,
+          onset: issue.onset,
+        });
+      }
     }
+    // Show each inverted position issue separately
     if (results.doubleCounterpoint.inverted?.issues?.length > 0) {
-      issues.push({ description: `Inverted position: ${results.doubleCounterpoint.inverted.issues.length} issue${results.doubleCounterpoint.inverted.issues.length > 1 ? 's' : ''}` });
+      for (const issue of results.doubleCounterpoint.inverted.issues) {
+        issues.push({
+          description: `Inverted: ${issue.description || issue}`,
+          onset: issue.onset,
+        });
+      }
     }
 
     if (results.doubleCounterpoint.observations) {

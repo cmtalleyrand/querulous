@@ -1,8 +1,44 @@
 import { useState, useMemo } from 'react';
-import { pitchName, metricWeight } from '../../utils/formatter';
+import { pitchName, metricWeight, metricPosition } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { scoreDissonance, getMeter } from '../../utils/dissonanceScoring';
 import { getGridMetrics, generateGridLines } from '../../utils/vizConstants';
+
+// Dissonance type definitions for tooltips
+const DISSONANCE_DEFINITIONS = {
+  passing: {
+    name: 'Passing Tone (PT)',
+    definition: 'Occurs on a weak beat, approached by step from one direction, left by step in the same direction. Connects two consonances.',
+  },
+  neighbor: {
+    name: 'Neighbor Tone (N)',
+    definition: 'Steps away from a consonance and returns to the same note. Also called auxiliary note. Usually on weak beats.',
+  },
+  suspension: {
+    name: 'Suspension (Sus)',
+    definition: 'Preparation: consonant note held into next beat. Dissonance: held note clashes with moving voice. Resolution: suspended note moves DOWN by step.',
+  },
+  appoggiatura: {
+    name: 'Appoggiatura (App)',
+    definition: 'Approached by leap to a strong beat dissonance, resolves by step (usually down). Creates expressive emphasis.',
+  },
+  anticipation: {
+    name: 'Anticipation (Ant)',
+    definition: 'Arrives early—the note of the next consonance sounds before its time. Usually short and on weak beats.',
+  },
+  cambiata: {
+    name: 'Cambiata (Cam)',
+    definition: 'Note of Cambiata figure: step down to dissonance, skip down a third, then resolves.',
+  },
+  escape_tone: {
+    name: 'Escape Tone (Esc)',
+    definition: 'Approached by step, left by leap in opposite direction. Less common than passing tones.',
+  },
+  unprepared: {
+    name: 'Unprepared Dissonance',
+    definition: 'Strong-beat dissonance not fitting standard ornamental patterns. Generally avoided in strict style.',
+  },
+};
 
 /**
  * Unified Interval Analysis Visualization
@@ -18,6 +54,7 @@ export function IntervalAnalysisViz({
   showProblemsOnly = false, // Only show intervals with issues
 }) {
   const [highlightedOnset, setHighlightedOnset] = useState(null);
+  const [showTypeDefinition, setShowTypeDefinition] = useState(false);
   const [selectedInterval, setSelectedInterval] = useState(null);
 
   // Calculate simultaneities and interval data
@@ -301,7 +338,7 @@ export function IntervalAnalysisViz({
                 const regionHeight = Math.max(6, Math.abs(y2 - y1));
 
                 const label = pt.isConsonant
-                  ? (pt.intervalClass === 1 ? 'U' : pt.intervalClass === 8 ? '8' : pt.intervalClass.toString())
+                  ? pt.intervalClass.toString()
                   : (pt.dissonanceLabel || '!');
 
                 return (
@@ -478,13 +515,46 @@ export function IntervalAnalysisViz({
             </div>
             <div>
               <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '2px' }}>Metric Position</div>
-              <div style={{ fontWeight: '500' }}>{selectedInterval.isStrong ? 'Strong beat' : 'Weak beat'}</div>
+              <div style={{ fontWeight: '500', textTransform: 'capitalize' }}>{metricPosition(selectedInterval.onset, getMeter()).label}</div>
             </div>
             <div>
               <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '2px' }}>Type</div>
-              <div style={{ fontWeight: '500' }}>
-                {selectedInterval.isConsonant ? 'Consonant' : (selectedInterval.dissonanceType || 'Dissonant')}
-              </div>
+              {selectedInterval.isConsonant ? (
+                <div style={{ fontWeight: '500' }}>Consonant</div>
+              ) : (
+                <div>
+                  <button
+                    onClick={() => setShowTypeDefinition(!showTypeDefinition)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      fontWeight: '500',
+                      color: '#4f46e5',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      textDecorationStyle: 'dotted',
+                      fontSize: 'inherit',
+                    }}
+                    title="Click for definition"
+                  >
+                    {DISSONANCE_DEFINITIONS[selectedInterval.dissonanceType]?.name || selectedInterval.dissonanceType || 'Dissonant'}
+                  </button>
+                  {showTypeDefinition && DISSONANCE_DEFINITIONS[selectedInterval.dissonanceType] && (
+                    <div style={{
+                      marginTop: '6px',
+                      padding: '8px 10px',
+                      backgroundColor: '#f3f4f6',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      color: '#374151',
+                      lineHeight: '1.4',
+                    }}>
+                      {DISSONANCE_DEFINITIONS[selectedInterval.dissonanceType].definition}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <div style={{ color: '#6b7280', fontSize: '11px', marginBottom: '2px' }}>Interval</div>

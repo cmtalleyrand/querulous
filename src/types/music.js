@@ -60,9 +60,8 @@ export class Interval {
   }
 
   toString() {
-    const names = { 1: 'unison', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th', 6: '6th', 7: '7th', 8: '8ve' };
     const qualAbbr = { perfect: 'P', major: 'M', minor: 'm', augmented: 'A', diminished: 'd' };
-    return `${qualAbbr[this.quality]}${names[this.class]}`;
+    return `${qualAbbr[this.quality]}${this.class}`;
   }
 }
 

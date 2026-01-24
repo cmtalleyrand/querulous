@@ -28,6 +28,7 @@ import {
   parseABC,
   generateAnswerABC,
   formatSubjectABC,
+  validateABCTiming,
   findSimultaneities,
   testHarmonicImplication,
   testRhythmicVariety,
@@ -44,10 +45,11 @@ import {
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
- * Default example subject and countersubject
+ * Default example subject and countersubject (D minor, 4/4 time, L:1/8)
+ * Each measure = 8 eighth notes = 4 beats
  */
-const DEFAULT_SUBJECT = `D2 A2 F E | D C _B, A, | G, A, _B, C | D4`;
-const DEFAULT_CS = `F2 E D | C D E F | G F E D | C4`;
+const DEFAULT_SUBJECT = `D4 A4 | F2 E2 D2 C2 | _B,2 A,2 G,2 A,2 | _B,2 C2 D4 |]`;
+const DEFAULT_CS = `F4 E4 | D2 C2 D2 E2 | F2 G2 F2 E2 | D2 C2 D4 |]`;
 
 /**
  * Main Fugue Analyzer Application
@@ -77,6 +79,7 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [scoreResult, setScoreResult] = useState(null);
   const [error, setError] = useState(null);
+  const [timingWarnings, setTimingWarnings] = useState([]);
 
   /**
    * Run the analysis
@@ -137,10 +140,21 @@ export default function App() {
         return;
       }
 
+      // Validate ABC timing against time signature
+      const subjectWarnings = validateABCTiming(subjectInput, meter, effNL);
+
       const formatter = new BeatFormatter(effNL, meter);
 
       // Parse countersubject if provided (use spelling key for accidentals)
       const cs = csInput.trim() ? parseABC(csInput, tonic, analysisMode, effNL, spellingKeySig).notes : null;
+      const csWarnings = csInput.trim() ? validateABCTiming(csInput, meter, effNL) : [];
+
+      // Combine all timing warnings
+      const allWarnings = [
+        ...subjectWarnings.map(w => ({ ...w, source: 'Subject' })),
+        ...csWarnings.map(w => ({ ...w, source: 'Countersubject' })),
+      ];
+      setTimingWarnings(allWarnings);
 
       // Parse or generate answer (use spelling key for accidentals)
       let answerNotes = answerInput.trim() ? parseABC(answerInput, tonic, analysisMode, effNL, spellingKeySig).notes : null;
@@ -443,6 +457,29 @@ export default function App() {
             }}
           >
             {error}
+          </div>
+        )}
+
+        {/* Timing Warnings */}
+        {timingWarnings.length > 0 && (
+          <div
+            role="alert"
+            style={{
+              marginTop: '12px',
+              padding: '10px 14px',
+              backgroundColor: '#fff8e1',
+              borderLeft: '3px solid #ffc107',
+              borderRadius: '0 4px 4px 0',
+            }}
+          >
+            <div style={{ fontWeight: '600', marginBottom: '6px', color: '#e65100' }}>
+              Time Signature Mismatch
+            </div>
+            {timingWarnings.map((w, i) => (
+              <div key={i} style={{ fontSize: '12px', color: '#bf360c', marginBottom: '2px' }}>
+                {w.source}: {w.message}
+              </div>
+            ))}
           </div>
         )}
 

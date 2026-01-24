@@ -16,7 +16,8 @@ export function InvertibilityViz({
   invertedIssues = [],
 }) {
   const [viewMode, setViewMode] = useState('overlay'); // 'overlay', 'original', 'inverted'
-  const [selectedInterval, setSelectedInterval] = useState(null);
+  const [selectedBeat, setSelectedBeat] = useState(null);
+  const [highlightedBeat, setHighlightedBeat] = useState(null);
 
   // Calculate simultaneities for both configurations
   const analysis = useMemo(() => {
@@ -245,7 +246,71 @@ export function InvertibilityViz({
               );
             })}
 
-            {/* Problem highlights */}
+            {/* Clickable interval regions */}
+            {[...beatMap.entries()].map(([beat, entry], i) => {
+              if (!entry.orig) return null;
+              const x = tToX(entry.orig.onset);
+              const y1 = pToY(entry.orig.voice1Note.pitch);
+              const y2 = pToY(entry.orig.voice2Note.pitch);
+              const isSelected = selectedBeat === beat;
+              const isHighlighted = highlightedBeat === beat;
+              const isProblem = problemOnsets.has(beat);
+
+              // Calculate next beat for width
+              const beatEntries = [...beatMap.entries()];
+              const nextEntry = beatEntries[i + 1];
+              const regionWidth = nextEntry
+                ? Math.max(20, tToX(nextEntry[1].orig.onset) - x - 2)
+                : 30;
+
+              return (
+                <g
+                  key={`int-${i}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setSelectedBeat(isSelected ? null : beat)}
+                  onMouseEnter={() => setHighlightedBeat(beat)}
+                  onMouseLeave={() => setHighlightedBeat(null)}
+                >
+                  {/* Clickable region */}
+                  <rect
+                    x={x - 2}
+                    y={Math.min(y1, y2) - noteHeight/2}
+                    width={regionWidth}
+                    height={Math.abs(y2 - y1) + noteHeight}
+                    fill={isProblem ? 'rgba(220, 38, 38, 0.15)' : 'rgba(99, 102, 241, 0.1)'}
+                    opacity={isSelected || isHighlighted ? 1 : 0}
+                    rx={3}
+                  />
+                  {/* Show interval label on hover/select */}
+                  {(isSelected || isHighlighted) && (
+                    <g>
+                      <rect
+                        x={x + regionWidth/2 - 20}
+                        y={(y1 + y2) / 2 - 10}
+                        width={40}
+                        height={20}
+                        fill={isProblem ? '#fef2f2' : '#f0fdf4'}
+                        stroke={isProblem ? '#dc2626' : '#22c55e'}
+                        strokeWidth={1}
+                        rx={4}
+                      />
+                      <text
+                        x={x + regionWidth/2}
+                        y={(y1 + y2) / 2 + 4}
+                        fontSize="11"
+                        fontWeight="600"
+                        fill={isProblem ? '#dc2626' : '#166534'}
+                        textAnchor="middle"
+                      >
+                        {entry.orig.interval.toString()}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Problem warning icons */}
             {viewMode === 'overlay' && [...problemOnsets].map((beat, i) => {
               const entry = beatMap.get(beat);
               if (!entry) return null;
@@ -256,16 +321,6 @@ export function InvertibilityViz({
 
               return (
                 <g key={`problem-${i}`}>
-                  {/* Highlight box */}
-                  <rect
-                    x={x - 20}
-                    y={Math.min(y1, y2orig, y2inv) - noteHeight}
-                    width={40}
-                    height={Math.abs(Math.max(y1, y2orig, y2inv) - Math.min(y1, y2orig, y2inv)) + noteHeight * 2}
-                    fill={VIZ_COLORS.dissonantProblematic}
-                    opacity={0.15}
-                    rx={4}
-                  />
                   {/* Warning icon */}
                   <circle cx={x} cy={Math.min(y1, y2orig, y2inv) - noteHeight - 8} r={8} fill={VIZ_COLORS.dissonantProblematic} />
                   <text x={x} y={Math.min(y1, y2orig, y2inv) - noteHeight - 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="600">!</text>
@@ -293,6 +348,57 @@ export function InvertibilityViz({
           </svg>
         </div>
       </div>
+
+      {/* Selected interval detail */}
+      {selectedBeat !== null && beatMap.get(selectedBeat) && (
+        <div style={{
+          backgroundColor: '#fff',
+          border: '1px solid #6366f1',
+          borderRadius: '8px',
+          padding: '14px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <span style={{ fontWeight: '600', color: '#1f2937' }}>
+              Beat {selectedBeat + 1}
+            </span>
+            <button
+              onClick={() => setSelectedBeat(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}
+            >×</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            <div style={{ padding: '10px', backgroundColor: '#f0fdf4', borderRadius: '6px' }}>
+              <div style={{ fontSize: '11px', color: '#166534', marginBottom: '4px' }}>Original (CS Above)</div>
+              <div style={{ fontWeight: '600', color: '#166534' }}>
+                {pitchName(beatMap.get(selectedBeat).orig.voice1Note.pitch)} &amp; {pitchName(beatMap.get(selectedBeat).orig.voice2Note.pitch)}
+              </div>
+              <div style={{ fontSize: '13px', color: '#166534' }}>
+                = {beatMap.get(selectedBeat).orig.interval.toString()}
+              </div>
+            </div>
+            {beatMap.get(selectedBeat).inv && (
+              <div style={{
+                padding: '10px',
+                backgroundColor: problemOnsets.has(selectedBeat) ? '#fef2f2' : '#fffbeb',
+                borderRadius: '6px'
+              }}>
+                <div style={{ fontSize: '11px', color: problemOnsets.has(selectedBeat) ? '#991b1b' : '#92400e', marginBottom: '4px' }}>Inverted (CS Below)</div>
+                <div style={{ fontWeight: '600', color: problemOnsets.has(selectedBeat) ? '#991b1b' : '#92400e' }}>
+                  {pitchName(beatMap.get(selectedBeat).inv.voice1Note.pitch)} &amp; {pitchName(beatMap.get(selectedBeat).inv.voice2Note.pitch)}
+                </div>
+                <div style={{ fontSize: '13px', color: problemOnsets.has(selectedBeat) ? '#dc2626' : '#92400e' }}>
+                  = {beatMap.get(selectedBeat).inv.interval.toString()}
+                </div>
+              </div>
+            )}
+          </div>
+          {beatMap.get(selectedBeat).problem && (
+            <div style={{ marginTop: '10px', padding: '8px', backgroundColor: '#fef2f2', borderRadius: '4px', color: '#991b1b', fontSize: '12px' }}>
+              ⚠ {beatMap.get(selectedBeat).problem}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Problem list */}
       {problemOnsets.size > 0 && viewMode === 'overlay' && (

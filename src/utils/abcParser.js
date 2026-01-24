@@ -2,6 +2,88 @@ import { ScaleDegree, NoteEvent } from '../types';
 import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants';
 
 /**
+ * Validate ABC notation against time signature
+ * Returns array of warnings about measure duration mismatches
+ * @param {string} abcText - The ABC notation
+ * @param {number[]} meter - Time signature [numerator, denominator]
+ * @param {number} defaultNoteLength - Default note length as decimal (e.g., 0.125 for 1/8)
+ * @returns {Array<{measure: number, expected: number, actual: number, message: string}>}
+ */
+export function validateABCTiming(abcText, meter, defaultNoteLength = 1/8) {
+  const warnings = [];
+  const measureDuration = (meter[0] * 4) / meter[1]; // Duration in quarter notes
+
+  let noteText = '';
+  for (const line of abcText.split('\n')) {
+    const t = line.trim();
+    if (!t.startsWith('%') && !t.match(/^[A-Z]:/)) {
+      noteText += ' ' + t;
+    }
+  }
+
+  // Clean up
+  noteText = noteText.replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
+
+  // Split by bar lines
+  const measures = noteText.split(/\|+:?|:\|+/).filter(m => m.trim());
+
+  for (let i = 0; i < measures.length; i++) {
+    const measureContent = measures[i].trim();
+    if (!measureContent || measureContent === ']') continue;
+
+    let totalDuration = 0;
+
+    // Parse notes and rests in this measure
+    const pat = /([zx])([\d]*\/?[\d]*)?|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
+    let m;
+
+    while ((m = pat.exec(measureContent)) !== null) {
+      let dur = defaultNoteLength;
+      const durStr = m[2] || m[6]; // rest duration or note duration
+
+      if (durStr) {
+        if (durStr.includes('/')) {
+          const p = durStr.split('/');
+          dur = (defaultNoteLength * (p[0] ? parseInt(p[0]) : 1)) / (p[1] ? parseInt(p[1]) : 2);
+        } else {
+          dur = defaultNoteLength * parseInt(durStr);
+        }
+      }
+
+      totalDuration += dur * 4; // Convert to quarter notes
+    }
+
+    // Check if measure duration matches expected
+    // Allow small tolerance for floating point
+    if (totalDuration > 0 && Math.abs(totalDuration - measureDuration) > 0.01) {
+      // Skip final measure if it's incomplete (pickup/anacrusis or ending)
+      const isFirst = i === 0;
+      const isLast = i === measures.length - 1 || (i === measures.length - 2 && !measures[i+1].trim());
+
+      // Only warn for middle measures with wrong duration
+      if (!isFirst && !isLast) {
+        warnings.push({
+          measure: i + 1,
+          expected: measureDuration,
+          actual: totalDuration,
+          message: `Measure ${i + 1}: expected ${measureDuration} beats, found ${totalDuration.toFixed(2)} beats`,
+        });
+      } else if (isFirst && totalDuration > measureDuration) {
+        // First measure can be a pickup (less than full) but not more
+        warnings.push({
+          measure: 1,
+          expected: measureDuration,
+          actual: totalDuration,
+          message: `Measure 1: ${totalDuration.toFixed(2)} beats exceeds ${measureDuration} (time signature mismatch?)`,
+        });
+      }
+    }
+  }
+
+  return warnings;
+}
+
+/**
  * Extract header information from ABC notation text
  */
 export function extractABCHeaders(abcText) {

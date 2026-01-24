@@ -232,7 +232,7 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               const labelColor = style.color;
 
               const label = pt.isConsonant
-                ? (pt.intervalClass === 1 ? 'U' : pt.intervalClass === 8 ? '8' : pt.intervalClass.toString())
+                ? pt.intervalClass.toString()
                 : (pt.dissonanceLabel || '!');
 
               return (

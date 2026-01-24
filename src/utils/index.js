@@ -12,6 +12,7 @@ export {
   midiToABC,
   generateAnswerABC,
   formatSubjectABC,
+  validateABCTiming,
 } from './abcParser';
 
 // Analysis functions
