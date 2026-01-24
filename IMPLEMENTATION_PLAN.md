@@ -1,158 +1,146 @@
-# Implementation Plan - Visualization Fixes
+# Implementation Plan - Revised
 
-## Phase 1: Fix Critical Bugs
+## What Needs Fixing
 
-### 1.1 Fix Measure Counter
-**Problem**: Measure numbers are wrong and truncate at edges
+### 1. Broken Information (All Visualizations)
+- Measure counter shows wrong numbers and truncates
+- Must work correctly in 4/4, 3/4, 6/8, 9/8, 12/8
 
-**Root cause investigation needed**:
-- Check `getMeter()` function - is it returning correct time signature?
-- Check measure calculation: `i % beatsPerMeasure` logic
-- Check SVG width vs text positioning
+### 2. Voice Crossing Chaos (IntervalAnalysisViz, StrettoViz, InvertibilityViz)
+- When voices cross, connector lines create unreadable mess
+- Replace lines with filled regions between voices
+- Show details on hover/click only, not cluttering default view
 
-**Fix approach**:
-- Ensure meter is correctly passed to all visualization components
-- Calculate measure numbers from beat position, not loop index
-- Add padding to prevent edge truncation
-- Test with 4/4, 3/4, 6/8 time signatures
+### 3. Incoherent Scoring
+- Current scoring feels arbitrary and "silly"
+- Need clear, defensible scoring with transparent calculation
+- Final score must be meaningful and well-explained
 
-**Files**: `IntervalAnalysisViz.jsx`, `PianoRoll.jsx`, `IntervalTimeline.jsx`, `StrettoViz.jsx`
-
-### 1.2 Fix Voice Crossing Visualization
-**Problem**: When voices cross, connector lines create unreadable chaos
-
-**Current approach** (broken): Draw vertical lines between voice pitches with label bubbles
-
-**New approach**:
-- Replace connector lines with **filled regions** between voices
-- Region color indicates interval quality
-- No overlapping elements in default view
-- Details appear on hover/click only
-
-**Implementation**:
-1. Calculate vertical span between voices at each time point
-2. Draw filled rectangles (not lines) spanning that region
-3. Color rectangle by interval quality
-4. Remove inline labels - show on hover only
-5. When voices are within 2 semitones, use side-by-side layout instead of stacked
-
-**Files**: `IntervalAnalysisViz.jsx` (primary), `StrettoViz.jsx`
+### 4. Inconsistent Color Semantics (All Visualizations)
+- Colors don't communicate consistently across components
+- Define once, apply everywhere
 
 ---
 
-## Phase 2: Simplify Visual Hierarchy
+## Rest Handling (Documenting Current Behavior)
 
-### 2.1 Remove Default Clutter
-**Current state**: Every interval has a visible label, score, connector line
+**Parsing**: ABC rests (`z`, `x`) advance time but create no NoteEvent objects.
 
-**Target state**:
-- Default view shows: notes + colored regions + measure grid
-- Hover shows: interval number and quality
-- Click shows: full detail panel
+**Interval Analysis**: When voice A rests while voice B sounds:
+- No Simultaneity is created (you can't have an interval against silence)
+- No dissonance scoring occurs
+- This is correct behavior
 
-**Changes**:
-- Remove inline score numbers from default view
-- Remove interval number labels from default view
-- Keep color-coded regions (these communicate quality visually)
-- Add hover tooltip with interval info
-- Keep existing click-to-detail functionality
+**Rhythmic Complementarity**: Rests DO matter here:
+- Attack point analysis considers when notes start
+- Gaps (rests) contribute to rhythmic independence
+- More rests = lower attack overlap = higher complementarity score
 
-### 2.2 Establish Consistent Color Semantics
-**Define and apply consistently**:
+**Visualization**: Rests appear as gaps in the piano roll (no note rectangle drawn).
+
+---
+
+## Scoring System (Documenting Current + Needed Changes)
+
+### Current Categories (8 total)
+| Category | Weight | What It Measures |
+|----------|--------|------------------|
+| Harmonic Implication | 1.0 | Opening/closing scale degrees, dominant arrival |
+| Rhythmic Variety | 0.8 | Diversity of note values |
+| Stretto Viability | 1.0 | How many overlap distances work |
+| Tonal Answer | 0.9 | Junction quality at mutation point |
+| Double Counterpoint | 1.0 | Invertibility of subject+CS |
+| Rhythmic Complementarity | 0.8 | Attack point independence |
+| Contour Independence | 0.9 | Contrary vs parallel motion |
+| Modulatory Robustness | 1.0 | CS works against answer |
+
+### Score Calculation
+- Each category: base score ± bonuses/penalties → clamped to 0-100
+- Overall: weighted average of applicable categories
+- Without CS: only first 4 categories apply
+- With CS: all 8 categories apply
+
+### What's Wrong With Current Scoring
+*[Need your input here - what specifically feels "silly"?]*
+
+---
+
+## Implementation Tasks (Single Pass)
+
+### Task 1: Fix Measure Counter
+**Files**: All 5 visualization components
+**Problem**: `i % beatsPerMeasure` uses loop index, not actual beat position
+**Fix**: Calculate measure from beat: `Math.floor(beat / beatsPerMeasure) + 1`
+
+### Task 2: Create Shared Visualization Utilities
+**New file**: `src/utils/vizConstants.js`
+```javascript
+// Colors (semantic)
+export const VIZ_COLORS = {
+  consonant: '#22c55e',
+  consonantResolution: '#10b981',
+  dissonantGood: '#8b5cf6',
+  dissonantMarginal: '#f59e0b',
+  dissonantBad: '#ef4444',
+  forbidden: '#dc2626',
+};
+
+// Measure calculation
+export function getMeasureNumber(beat, beatsPerMeasure) {
+  return Math.floor(beat / beatsPerMeasure) + 1;
+}
+
+// Beat-within-measure
+export function getBeatInMeasure(beat, beatsPerMeasure) {
+  return (beat % beatsPerMeasure) + 1;
+}
 ```
-Consonant (good):     #22c55e (green-500)
-Consonant (resolve):  #10b981 (emerald-500)
-Dissonant (good):     #8b5cf6 (violet-500)
-Dissonant (marginal): #f59e0b (amber-500)
-Dissonant (bad):      #ef4444 (red-500)
-Forbidden parallel:   #dc2626 (red-600)
-```
 
-**Files**: All visualization components, create shared `colors.js` constant
+### Task 3: Fix Voice Crossing Visualization
+**Files**: `IntervalAnalysisViz.jsx`, `StrettoViz.jsx`, `InvertibilityViz.jsx`
+**Approach**:
+- Replace connector LINES with filled REGIONS between voices
+- Region color = interval quality
+- Remove inline labels from default view
+- Add hover tooltip for interval details
+- Click for full detail panel (already exists)
 
----
+### Task 4: Unify All Visualizations
+**Files**: All 5 visualization components
+**Apply consistently**:
+- Same color semantics
+- Same measure calculation
+- Same hover/click behavior
+- Same layout principles
 
-## Phase 3: Improve Layout Adaptability
-
-### 3.1 Dynamic Width (Already Partially Done)
-**Verify working correctly**:
-- Minimum 40px per beat
-- Maximum 800px with scroll
-- Test with 2-bar, 4-bar, 8-bar, 12-bar subjects
-
-### 3.2 Vertical Spacing for Voice Crossing
-**When voices are close or crossing**:
-- Increase note height slightly to prevent overlap
-- Offset interval regions horizontally if needed
-- Never let note rectangles overlap each other
-
-### 3.3 Measure Label Positioning
-- Calculate available width before placing labels
-- Use abbreviated format if space tight ("1" instead of "m.1")
-- Never truncate - omit beat subdivisions before omitting measure numbers
+### Task 5: Review and Fix Scoring
+**Files**: `scoring.js`, `analysis.js`
+**Actions**:
+- Document each score calculation clearly
+- Ensure penalties/bonuses are proportionate
+- Make final score meaningful (not just "weighted average")
+- Add summary that explains what the score means
 
 ---
 
-## Phase 4: Component Consolidation
+## Testing Checklist (Apply to ALL visualizations)
 
-### 4.1 Audit Visualization Components
-Current components:
-- `PianoRoll.jsx` - Basic note display
-- `IntervalTimeline.jsx` - Simple interval strip
-- `IntervalAnalysisViz.jsx` - Full interval analysis
-- `StrettoViz.jsx` - Stretto-specific view
-- `InvertibilityViz.jsx` - Double counterpoint view
-
-**Question**: Do we need all 5? Or can some be consolidated?
-
-**Recommendation**:
-- Keep `PianoRoll` for simple single-voice display
-- Merge `IntervalTimeline` into `IntervalAnalysisViz` as a sub-component
-- Keep `StrettoViz` separate (specialized for stretto)
-- Keep `InvertibilityViz` separate (specialized for double counterpoint)
-
-### 4.2 Extract Shared Logic
-Create shared utilities:
-- `vizColors.js` - Color constants and quality-to-color mapping
-- `vizLayout.js` - Width calculation, measure positioning
-- `vizMeter.js` - Meter-aware grid drawing
-
----
-
-## Implementation Order
-
-1. **Fix measure counter** (1.1) - Most obviously broken
-2. **Fix voice crossing** (1.2) - Biggest visual problem
-3. **Apply color semantics** (2.2) - Foundation for hierarchy
-4. **Remove default clutter** (2.1) - Depends on color semantics
-5. **Vertical spacing** (3.2) - Polish
-6. **Component consolidation** (4.x) - Cleanup, can be deferred
-
----
-
-## Testing Checklist
-
-For each fix, test with:
-- [ ] Short subject (2 bars, 4/4)
-- [ ] Medium subject (4 bars, 4/4)
-- [ ] Long subject (8+ bars, 4/4)
-- [ ] Compound meter (6/8)
+- [ ] 2-bar subject, 4/4
+- [ ] 4-bar subject, 4/4
+- [ ] 8-bar subject, 4/4
+- [ ] Subject in 6/8
+- [ ] Subject in 9/8
 - [ ] Subject with voice crossing
-- [ ] Subject with rapid note values (16ths)
-- [ ] Subject with long notes (whole notes)
+- [ ] Subject with rests
+- [ ] Long notes (whole notes)
+- [ ] Short notes (16ths)
+- [ ] Measure numbers correct at start, middle, end
+- [ ] No truncated labels
 
 ---
 
-## Files to Modify
+## Questions for You
 
-**Primary targets**:
-1. `src/components/visualizations/IntervalAnalysisViz.jsx` - Main interval view
-2. `src/components/visualizations/StrettoViz.jsx` - Stretto view
-3. `src/utils/dissonanceScoring.js` - Verify meter handling
-
-**Secondary**:
-4. `src/components/visualizations/PianoRoll.jsx` - Measure counter fix
-5. `src/components/visualizations/IntervalTimeline.jsx` - Measure counter fix
-
-**New files**:
-6. `src/utils/vizConstants.js` - Shared colors and layout constants
+1. What specifically about the current scoring feels "silly" or wrong?
+2. For voice crossing: should the filled regions be solid or semi-transparent?
+3. Are there specific fugue examples I should test against?
