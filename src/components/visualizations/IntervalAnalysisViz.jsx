@@ -280,18 +280,8 @@ export function IntervalAnalysisViz({
               );
             })}
 
-            {/* Interval connectors - adaptive density */}
+            {/* Interval regions - semi-transparent filled areas between voices */}
             {(() => {
-              // Calculate density to determine visualization mode
-              const avgGap = intervalPoints.length > 1
-                ? (intervalPoints[intervalPoints.length - 1].onset - intervalPoints[0].onset) / (intervalPoints.length - 1)
-                : 1;
-              const pixelGap = avgGap * tScale;
-              // Dense mode if less than 40px between intervals on average
-              const isDense = pixelGap < 40;
-              // Very dense if less than 25px
-              const isVeryDense = pixelGap < 25;
-
               return intervalPoints.map((pt, i) => {
                 const x = tToX(pt.onset);
                 const y1 = pToY(pt.v1Pitch);
@@ -301,77 +291,97 @@ export function IntervalAnalysisViz({
                 const isSelected = selectedInterval?.onset === pt.onset;
                 const style = getScoreStyle(pt);
 
+                // Calculate region width (to next interval or end)
+                const nextPt = intervalPoints[i + 1];
+                const regionEnd = nextPt ? tToX(nextPt.onset) : x + 15;
+                const regionWidth = Math.max(4, regionEnd - x - 1);
+
+                // Region height - span between voices, minimum 6px
+                const regionTop = Math.min(y1, y2);
+                const regionHeight = Math.max(6, Math.abs(y2 - y1));
+
                 const label = pt.isConsonant
                   ? (pt.intervalClass === 1 ? 'U' : pt.intervalClass === 8 ? '8' : pt.intervalClass.toString())
                   : (pt.dissonanceLabel || '!');
 
-                // Line style varies by category
-                const lineColor = style.lineColor || style.color;
-                const baseLineWidth = isVeryDense ? 4 : (isDense ? 3 : 2);
-                const lineWidth = isSelected ? baseLineWidth + 2 : (isHighlighted ? baseLineWidth + 1 : baseLineWidth);
-                const lineDash = pt.isConsonant ? 'none' : (isVeryDense ? '3,2' : '5,3');
-
-                // In very dense mode, use colored regions instead of labels
-                if (isVeryDense && !isHighlighted && !isSelected) {
-                  // Find the duration to next interval for colored region width
-                  const nextPt = intervalPoints[i + 1];
-                  const regionEnd = nextPt ? tToX(nextPt.onset) : x + 10;
-                  const regionWidth = Math.max(3, regionEnd - x - 1);
-
-                  return (
-                    <g key={`int-${i}`} style={{ cursor: 'pointer' }} onClick={() => handleIntervalClick(pt)}>
-                      {/* Colored region instead of line+bubble */}
-                      <rect
-                        x={x}
-                        y={Math.min(y1, y2)}
-                        width={regionWidth}
-                        height={Math.abs(y2 - y1) || 4}
-                        fill={style.bg}
-                        stroke={lineColor}
-                        strokeWidth={1}
-                        opacity={0.7}
-                      />
-                      {/* Small indicator dot for dissonances */}
-                      {!pt.isConsonant && (
-                        <circle cx={x + regionWidth/2} cy={midY} r={3} fill={style.color} />
-                      )}
-                    </g>
-                  );
-                }
-
-                // Dense mode: smaller labels, no scores shown inline
-                const bubbleWidth = isDense ? 22 : 32;
-                const bubbleHeight = isDense ? 16 : 24;
-                const fontSize = isDense ? 9 : 12;
-
                 return (
-                  <g key={`int-${i}`} style={{ cursor: 'pointer' }} onClick={() => handleIntervalClick(pt)}>
-                    {/* Highlight */}
+                  <g key={`int-${i}`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleIntervalClick(pt)}
+                    onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
+                    onMouseLeave={() => setHighlightedOnset(null)}
+                  >
+                    {/* Semi-transparent region between voices */}
+                    <rect
+                      x={x}
+                      y={regionTop}
+                      width={regionWidth}
+                      height={regionHeight}
+                      fill={style.bg}
+                      opacity={isHighlighted || isSelected ? 0.85 : 0.5}
+                      rx={2}
+                    />
+
+                    {/* Border line on left edge for clarity */}
+                    <line
+                      x1={x}
+                      y1={regionTop}
+                      x2={x}
+                      y2={regionTop + regionHeight}
+                      stroke={style.color}
+                      strokeWidth={isHighlighted || isSelected ? 2.5 : 1.5}
+                      opacity={0.8}
+                    />
+
+                    {/* Show label only on hover/select */}
                     {(isHighlighted || isSelected) && (
-                      <rect x={x - bubbleWidth/2 - 6} y={Math.min(y1, y2) - noteHeight/2}
-                        width={bubbleWidth + 12} height={Math.abs(y2 - y1) + noteHeight}
-                        fill="#fbbf24" opacity={0.25} rx={4} />
+                      <g>
+                        {/* Label background */}
+                        <rect
+                          x={x + 2}
+                          y={midY - 10}
+                          width={28}
+                          height={20}
+                          fill={style.bg}
+                          stroke={style.color}
+                          strokeWidth={1.5}
+                          rx={3}
+                        />
+                        {/* Label text */}
+                        <text
+                          x={x + 16}
+                          y={midY + 4}
+                          fontSize="11"
+                          fontWeight="600"
+                          fill={style.color}
+                          textAnchor="middle"
+                        >
+                          {label}
+                        </text>
+                        {/* Score if non-zero */}
+                        {(pt.score !== 0 || !pt.isConsonant) && (
+                          <text
+                            x={x + 16}
+                            y={midY + 18}
+                            fontSize="9"
+                            fill={style.color}
+                            textAnchor="middle"
+                          >
+                            {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(1)}
+                          </text>
+                        )}
+                      </g>
                     )}
 
-                    {/* Connecting line */}
-                    <line x1={x} y1={y1} x2={x} y2={y2}
-                      stroke={lineColor} strokeWidth={lineWidth}
-                      strokeDasharray={lineDash} />
-
-                    {/* Label bubble */}
-                    <rect x={x - bubbleWidth/2} y={midY - bubbleHeight/2} width={bubbleWidth} height={bubbleHeight}
-                      fill={style.bg} stroke={style.color} strokeWidth={isDense ? 1 : 1.5} rx={3} />
-                    <text x={x} y={midY + (isDense ? 3 : 4)} fontSize={fontSize} fontWeight="600" fill={style.color} textAnchor="middle">
-                      {label}
-                    </text>
-
-                    {/* Score badge - only show in non-dense mode or when selected/highlighted */}
-                    {!isDense && (pt.score !== 0 || !pt.isConsonant) && (
-                      <g transform={`translate(${x}, ${midY + bubbleHeight/2 + 6})`}>
-                        <text fontSize="10" fill={style.color} textAnchor="middle" fontWeight="500">
-                          {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(1)}
-                        </text>
-                      </g>
+                    {/* Small dot indicator for dissonances when not hovered */}
+                    {!pt.isConsonant && !isHighlighted && !isSelected && (
+                      <circle
+                        cx={x + regionWidth / 2}
+                        cy={midY}
+                        r={4}
+                        fill={style.color}
+                        opacity={0.9}
+                      />
                     )}
                   </g>
                 );

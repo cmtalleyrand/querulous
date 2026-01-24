@@ -1,5 +1,5 @@
 import { getMeter } from '../../utils/dissonanceScoring';
-import { generateGridLines } from '../../utils/vizConstants';
+import { generateGridLines, VIZ_COLORS } from '../../utils/vizConstants';
 
 /**
  * Interval Timeline visualization component
@@ -23,9 +23,11 @@ export function IntervalTimeline({ sims, title, maxTime }) {
 
   // Color code: green = consonant, red = dissonant, darker on strong beats
   const getColor = (sim) => {
-    const base = sim.interval.isConsonant() ? [100, 180, 100] : [200, 80, 80];
-    const factor = sim.metricWeight >= 0.75 ? 1 : 0.6;
-    return `rgb(${base.map((c) => Math.round(c * factor)).join(',')})`;
+    const isConsonant = sim.interval.isConsonant();
+    const baseColor = isConsonant ? VIZ_COLORS.consonant : VIZ_COLORS.dissonantProblematic;
+    // Reduce opacity on weak beats
+    const opacity = sim.metricWeight >= 0.75 ? 1 : 0.7;
+    return { color: baseColor, opacity };
   };
 
   return (
@@ -72,9 +74,10 @@ export function IntervalTimeline({ sims, title, maxTime }) {
           const x = tToX(s.onset);
           const nextOnset = i < sims.length - 1 ? sims[i + 1].onset : maxTime;
           const width = Math.max(4, (nextOnset - s.onset) * tScale - 1);
+          const style = getColor(s);
           return (
             <g key={i}>
-              <rect x={x} y={10} width={width} height={30} fill={getColor(s)} rx={2} opacity={0.8} />
+              <rect x={x} y={10} width={width} height={30} fill={style.color} rx={2} opacity={style.opacity * 0.8} />
               <text x={x + width / 2} y={29} fontSize="9" fill="white" textAnchor="middle" fontWeight="500">
                 {s.interval.class === 1 ? 'U' : s.interval.class === 8 ? '8' : s.interval.class}
               </text>
@@ -83,11 +86,11 @@ export function IntervalTimeline({ sims, title, maxTime }) {
         })}
 
         {/* Legend */}
-        <rect x={scrollWidth - 80} y={5} width={12} height={12} fill="rgb(100,180,100)" rx={2} />
+        <rect x={scrollWidth - 80} y={5} width={12} height={12} fill={VIZ_COLORS.consonant} rx={2} />
         <text x={scrollWidth - 65} y={14} fontSize="8" fill="#546e7a">
           cons.
         </text>
-        <rect x={scrollWidth - 80} y={20} width={12} height={12} fill="rgb(200,80,80)" rx={2} />
+        <rect x={scrollWidth - 80} y={20} width={12} height={12} fill={VIZ_COLORS.dissonantProblematic} rx={2} />
         <text x={scrollWidth - 65} y={29} fontSize="8" fill="#546e7a">
           diss.
         </text>

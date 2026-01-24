@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { getMeter } from '../../utils/dissonanceScoring';
-import { generateGridLines } from '../../utils/vizConstants';
+import { generateGridLines, VIZ_COLORS } from '../../utils/vizConstants';
 
 /**
  * Invertibility Visualization
@@ -203,7 +203,7 @@ export function InvertibilityViz({
               return (
                 <g key={`subj-${i}`}>
                   <rect x={x} y={y - noteHeight/2 + 1} width={width} height={noteHeight - 2}
-                    fill="#6366f1" rx={3} />
+                    fill={VIZ_COLORS.voiceDux} rx={3} />
                   <text x={x + width/2} y={y + 3} fontSize="9" fill="white" textAnchor="middle">
                     {pitchName(n.pitch).replace(/\d/, '')}
                   </text>
@@ -219,7 +219,7 @@ export function InvertibilityViz({
               return (
                 <g key={`cs-orig-${i}`}>
                   <rect x={x} y={y - noteHeight/2 + 1} width={width} height={noteHeight - 2}
-                    fill="#22c55e" rx={3} opacity={viewMode === 'overlay' ? 0.7 : 1} />
+                    fill={VIZ_COLORS.voiceCSAbove} rx={3} opacity={viewMode === 'overlay' ? 0.7 : 1} />
                   <text x={x + width/2} y={y + 3} fontSize="9" fill="white" textAnchor="middle">
                     {pitchName(n.pitch).replace(/\d/, '')}
                   </text>
@@ -235,9 +235,9 @@ export function InvertibilityViz({
               return (
                 <g key={`cs-inv-${i}`}>
                   <rect x={x} y={y - noteHeight/2 + 1} width={width} height={noteHeight - 2}
-                    fill="#f59e0b" rx={3} opacity={viewMode === 'overlay' ? 0.7 : 1}
+                    fill={VIZ_COLORS.voiceCSBelow} rx={3} opacity={viewMode === 'overlay' ? 0.7 : 1}
                     strokeDasharray={viewMode === 'overlay' ? '3,2' : 'none'}
-                    stroke={viewMode === 'overlay' ? '#f59e0b' : 'none'} />
+                    stroke={viewMode === 'overlay' ? VIZ_COLORS.voiceCSBelow : 'none'} />
                   <text x={x + width/2} y={y + 3} fontSize="9" fill={viewMode === 'overlay' ? '#92400e' : 'white'} textAnchor="middle">
                     {pitchName(n.pitch).replace(/\d/, '')}
                   </text>
@@ -262,12 +262,12 @@ export function InvertibilityViz({
                     y={Math.min(y1, y2orig, y2inv) - noteHeight}
                     width={40}
                     height={Math.abs(Math.max(y1, y2orig, y2inv) - Math.min(y1, y2orig, y2inv)) + noteHeight * 2}
-                    fill="#dc2626"
+                    fill={VIZ_COLORS.dissonantProblematic}
                     opacity={0.15}
                     rx={4}
                   />
                   {/* Warning icon */}
-                  <circle cx={x} cy={Math.min(y1, y2orig, y2inv) - noteHeight - 8} r={8} fill="#dc2626" />
+                  <circle cx={x} cy={Math.min(y1, y2orig, y2inv) - noteHeight - 8} r={8} fill={VIZ_COLORS.dissonantProblematic} />
                   <text x={x} y={Math.min(y1, y2orig, y2inv) - noteHeight - 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="600">!</text>
                 </g>
               );
@@ -275,17 +275,17 @@ export function InvertibilityViz({
 
             {/* Legend */}
             <g transform={`translate(${w - 180}, 8)`}>
-              <rect x={0} y={0} width={8} height={8} fill="#6366f1" rx={2} />
+              <rect x={0} y={0} width={8} height={8} fill={VIZ_COLORS.voiceDux} rx={2} />
               <text x={12} y={7} fontSize="10" fill="#4b5563">Subject</text>
               {showOriginal && (
                 <>
-                  <rect x={60} y={0} width={8} height={8} fill="#22c55e" rx={2} />
+                  <rect x={60} y={0} width={8} height={8} fill={VIZ_COLORS.voiceCSAbove} rx={2} />
                   <text x={72} y={7} fontSize="10" fill="#4b5563">CS above</text>
                 </>
               )}
               {showInverted && (
                 <>
-                  <rect x={120} y={0} width={8} height={8} fill="#f59e0b" rx={2} />
+                  <rect x={120} y={0} width={8} height={8} fill={VIZ_COLORS.voiceCSBelow} rx={2} />
                   <text x={132} y={7} fontSize="10" fill="#4b5563">CS below</text>
                 </>
               )}
@@ -298,17 +298,17 @@ export function InvertibilityViz({
       {problemOnsets.size > 0 && viewMode === 'overlay' && (
         <div style={{
           backgroundColor: '#fff',
-          border: '1px solid #fca5a5',
+          border: `1px solid ${VIZ_COLORS.issueBorder}`,
           borderRadius: '8px',
           overflow: 'hidden',
         }}>
           <div style={{
             padding: '10px 14px',
-            backgroundColor: '#fef2f2',
-            borderBottom: '1px solid #fca5a5',
+            backgroundColor: VIZ_COLORS.issueBackground,
+            borderBottom: `1px solid ${VIZ_COLORS.issueBorder}`,
             fontWeight: '600',
             fontSize: '13px',
-            color: '#991b1b',
+            color: VIZ_COLORS.issueText,
           }}>
             Intervals that become problematic when inverted
           </div>
@@ -317,10 +317,10 @@ export function InvertibilityViz({
             .map(([beat, entry], i) => (
               <div key={i} style={{
                 padding: '10px 14px',
-                borderBottom: i < problemOnsets.size - 1 ? '1px solid #fee2e2' : 'none',
+                borderBottom: i < problemOnsets.size - 1 ? `1px solid ${VIZ_COLORS.issueBackground}` : 'none',
                 fontSize: '13px',
               }}>
-                <span style={{ color: '#dc2626', fontWeight: '600' }}>Beat {beat + 1}:</span>
+                <span style={{ color: VIZ_COLORS.dissonantProblematic, fontWeight: '600' }}>Beat {beat + 1}:</span>
                 <span style={{ marginLeft: '8px' }}>
                   {entry.orig.interval.toString()} → {entry.inv?.interval.toString() || '?'}
                 </span>
@@ -342,23 +342,23 @@ export function InvertibilityViz({
       }}>
         <div style={{
           padding: '12px 16px',
-          backgroundColor: '#ecfdf5',
-          border: '1px solid #a7f3d0',
+          backgroundColor: VIZ_COLORS.cleanBackground,
+          border: `1px solid ${VIZ_COLORS.cleanBorder}`,
           borderRadius: '8px',
         }}>
-          <div style={{ fontSize: '11px', color: '#065f46', marginBottom: '4px' }}>CS Above (Original)</div>
+          <div style={{ fontSize: '11px', color: VIZ_COLORS.cleanText, marginBottom: '4px' }}>CS Above (Original)</div>
           <div style={{ fontSize: '13px', color: '#047857' }}>
             {originalIssues.length === 0 ? 'No issues' : `${originalIssues.length} issue${originalIssues.length !== 1 ? 's' : ''}`}
           </div>
         </div>
         <div style={{
           padding: '12px 16px',
-          backgroundColor: problemOnsets.size > 0 ? '#fef2f2' : '#ecfdf5',
-          border: `1px solid ${problemOnsets.size > 0 ? '#fca5a5' : '#a7f3d0'}`,
+          backgroundColor: problemOnsets.size > 0 ? VIZ_COLORS.issueBackground : VIZ_COLORS.cleanBackground,
+          border: `1px solid ${problemOnsets.size > 0 ? VIZ_COLORS.issueBorder : VIZ_COLORS.cleanBorder}`,
           borderRadius: '8px',
         }}>
-          <div style={{ fontSize: '11px', color: problemOnsets.size > 0 ? '#991b1b' : '#065f46', marginBottom: '4px' }}>CS Below (Inverted)</div>
-          <div style={{ fontSize: '13px', color: problemOnsets.size > 0 ? '#dc2626' : '#047857' }}>
+          <div style={{ fontSize: '11px', color: problemOnsets.size > 0 ? VIZ_COLORS.issueText : VIZ_COLORS.cleanText, marginBottom: '4px' }}>CS Below (Inverted)</div>
+          <div style={{ fontSize: '13px', color: problemOnsets.size > 0 ? VIZ_COLORS.dissonantProblematic : '#047857' }}>
             {invertedIssues.length === 0 && problemOnsets.size === 0
               ? 'No issues'
               : `${invertedIssues.length + problemOnsets.size} issue${invertedIssues.length + problemOnsets.size !== 1 ? 's' : ''}`}

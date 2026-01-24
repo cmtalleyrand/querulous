@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { pitchName } from '../../utils/formatter';
 import { getMeter } from '../../utils/dissonanceScoring';
-import { generateGridLines } from '../../utils/vizConstants';
+import { generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
 
 /**
  * Stretto Visualization component
@@ -43,13 +43,13 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
   const hasIssues = issues.length > 0;
   const hasWarnings = warnings.length > 0;
 
-  // Colors
+  // Colors - using unified semantics
   const colors = {
-    bg: hasIssues ? '#fef2f2' : hasWarnings ? '#fffbeb' : '#f0fdf4',
-    border: hasIssues ? '#fca5a5' : hasWarnings ? '#fcd34d' : '#86efac',
-    dux: '#4f46e5',
-    comes: '#dc2626',
-    highlight: '#fbbf24',
+    bg: hasIssues ? VIZ_COLORS.issueBackground : hasWarnings ? VIZ_COLORS.warningBackground : VIZ_COLORS.cleanBackground,
+    border: hasIssues ? VIZ_COLORS.issueBorder : hasWarnings ? VIZ_COLORS.warningBorder : VIZ_COLORS.cleanBorder,
+    dux: VIZ_COLORS.voiceDux,
+    comes: VIZ_COLORS.voiceComes,
+    highlight: VIZ_COLORS.highlight,
   };
 
   // Build onset lookup for highlighting
@@ -201,7 +201,7 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               );
             })}
 
-            {/* Interval connectors - vertical lines connecting simultaneous notes */}
+            {/* Interval regions - semi-transparent filled areas between voices */}
             {intervalPoints.map((pt, i) => {
               const x = tToX(pt.onset);
               const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
@@ -210,27 +210,26 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               // Use pitches from the interval point data (which correctly captures held notes)
               const y1 = pToY(pt.duxPitch);
               const y2 = pToY(pt.comesPitch);
+              const regionTop = Math.min(y1, y2) - noteHeight / 2;
+              const regionHeight = Math.abs(y2 - y1) + noteHeight;
               const midY = (y1 + y2) / 2;
 
-              // Determine color based on consonance/score
-              let lineColor = '#16a34a'; // green for consonant
-              let labelBg = '#dcfce7';
-              let labelColor = '#166534';
+              // Calculate region width (extend to next interval or use default)
+              const nextPt = intervalPoints[i + 1];
+              const regionWidth = nextPt
+                ? Math.max(4, (nextPt.onset - pt.onset) * tScale - 2)
+                : Math.max(20, tScale * 0.5);
 
-              if (!pt.isConsonant) {
-                const score = pt.score || 0;
-                if (score < -1) {
-                  lineColor = '#dc2626'; labelBg = '#fee2e2'; labelColor = '#991b1b';
-                } else if (score < 0) {
-                  lineColor = '#ea580c'; labelBg = '#ffedd5'; labelColor = '#9a3412';
-                } else if (score < 1) {
-                  lineColor = '#ca8a04'; labelBg = '#fef9c3'; labelColor = '#854d0e';
-                } else {
-                  lineColor = '#16a34a'; labelBg = '#dcfce7'; labelColor = '#166534';
-                }
-              } else if ([1, 5, 8].includes(pt.intervalClass)) {
-                lineColor = '#2563eb'; labelBg = '#dbeafe'; labelColor = '#1e40af';
-              }
+              // Determine fill color based on consonance/score using unified style
+              const isPerfect = [1, 5, 8].includes(pt.intervalClass);
+              const style = getIntervalStyle({
+                isConsonant: pt.isConsonant,
+                isPerfect,
+                score: pt.score || 0,
+              });
+              const fillColor = style.fill;
+              const labelBg = style.bg;
+              const labelColor = style.color;
 
               const label = pt.isConsonant
                 ? (pt.intervalClass === 1 ? 'U' : pt.intervalClass === 8 ? '8' : pt.intervalClass.toString())
@@ -241,44 +240,59 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                   key={`int-${i}`}
                   style={{ cursor: 'pointer' }}
                   onClick={() => handleIntervalClick(pt)}
+                  onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
+                  onMouseLeave={() => !isSelected && setHighlightedOnset(null)}
                 >
-                  {/* Highlight background */}
-                  {(isHighlighted || isSelected) && (
-                    <rect
-                      x={x - 20} y={Math.min(y1, y2) - noteHeight/2}
-                      width={40} height={Math.abs(y2 - y1) + noteHeight}
-                      fill={colors.highlight} opacity={0.3} rx={4}
-                    />
-                  )}
-
-                  {/* Connecting line */}
-                  <line
-                    x1={x} y1={y1} x2={x} y2={y2}
-                    stroke={lineColor} strokeWidth={isSelected ? 3 : 2}
-                    strokeDasharray={pt.isConsonant ? 'none' : '4,2'}
-                  />
-
-                  {/* Interval label bubble */}
+                  {/* Semi-transparent region between voices */}
                   <rect
-                    x={x - 14} y={midY - 10}
-                    width={28} height={20}
-                    fill={labelBg} stroke={lineColor} strokeWidth={1} rx={4}
+                    x={x}
+                    y={regionTop}
+                    width={regionWidth}
+                    height={regionHeight}
+                    fill={fillColor}
+                    opacity={isHighlighted || isSelected ? 0.9 : 0.5}
+                    rx={3}
                   />
-                  <text
-                    x={x} y={midY + 4}
-                    fontSize="11" fontWeight="600" fill={labelColor} textAnchor="middle"
-                  >
-                    {label}
-                  </text>
 
-                  {/* Score indicator for dissonances */}
-                  {!pt.isConsonant && (
-                    <text
-                      x={x} y={midY + 18}
-                      fontSize="9" fill={labelColor} textAnchor="middle"
-                    >
-                      {(pt.score || 0) >= 0 ? '+' : ''}{(pt.score || 0).toFixed(1)}
-                    </text>
+                  {/* Show label only on hover/select */}
+                  {(isHighlighted || isSelected) && (
+                    <g>
+                      {/* Label background */}
+                      <rect
+                        x={x + regionWidth / 2 - 16}
+                        y={midY - 12}
+                        width={32}
+                        height={24}
+                        fill={labelBg}
+                        stroke={labelColor}
+                        strokeWidth={1}
+                        rx={4}
+                        opacity={0.95}
+                      />
+                      {/* Interval label */}
+                      <text
+                        x={x + regionWidth / 2}
+                        y={midY + 4}
+                        fontSize="12"
+                        fontWeight="600"
+                        fill={labelColor}
+                        textAnchor="middle"
+                      >
+                        {label}
+                      </text>
+                      {/* Score indicator for dissonances */}
+                      {!pt.isConsonant && (
+                        <text
+                          x={x + regionWidth / 2}
+                          y={midY + 20}
+                          fontSize="9"
+                          fill={labelColor}
+                          textAnchor="middle"
+                        >
+                          {(pt.score || 0) >= 0 ? '+' : ''}{(pt.score || 0).toFixed(1)}
+                        </text>
+                      )}
+                    </g>
                   )}
                 </g>
               );
