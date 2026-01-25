@@ -2,32 +2,31 @@
  * Scoring utilities for fugue analysis
  *
  * BASE-ZERO SCORING SYSTEM:
- * All scores start at 0 (neutral baseline). Positive points for strengths,
- * negative for weaknesses. Internal scores roughly range -30 to +30.
- * These are mapped to 0-100 for display (0 → 50, ±30 → 0/100).
+ * All scores are displayed as-is (base zero). Positive scores indicate
+ * strengths, negative indicate weaknesses, zero is the neutral baseline.
+ * Anything over zero is fair/acceptable.
  *
  * This approach ensures:
  * - Meaningful baselines (0 = acceptable but unremarkable)
  * - Scores are comparable across categories
  * - Easy to understand what contributes to the score
+ * - Direct relationship between displayed values and scoring factors
  */
 
 /**
- * Convert internal base-zero score to display scale (0-100)
- * Internal range: roughly -30 to +30
- * Display: 0 maps to 50, +30 to 100, -30 to 0
+ * For backward compatibility - now just returns the internal score directly
+ * @deprecated Use internal scores directly
  */
 export function toDisplayScore(internalScore) {
-  // Map -30..+30 to 0..100
-  const normalized = (internalScore + 30) / 60;
-  return Math.round(Math.max(0, Math.min(100, normalized * 100)));
+  return internalScore;
 }
 
 /**
- * Convert display score back to internal base-zero
+ * For backward compatibility - now just returns the score directly
+ * @deprecated Use internal scores directly
  */
 export function toInternalScore(displayScore) {
-  return (displayScore / 100) * 60 - 30;
+  return displayScore;
 }
 
 /**
@@ -41,13 +40,14 @@ export function toInternalScore(displayScore) {
  */
 export const SCORE_CATEGORIES = {
   // === MELODIC GROUP: Subject line quality ===
-  tonalDefinition: {
-    name: 'Tonal Definition',
-    description: 'Clarity of tonal center and harmonic direction',
+  tonalClarity: {
+    name: 'Tonal Clarity',
+    description: 'Basic tonal orientation (opening/ending notes, answer junction)',
     group: 'melodic',
-    weight: 1.0,
-    baseline: 'Ambiguous tonal center',
-    factors: ['+10 tonic opening', '+15 strong terminal', '+5 dominant arrival', '-10 weak terminal'],
+    weight: 0.5,  // Reduced weight - basic indicator
+    baseline: 'Clear enough tonal center',
+    factors: ['Opening note', 'Terminal quality', 'Answer junction'],
+    isBasicIndicator: true,  // Flag for UI to de-emphasize
   },
   rhythmicCharacter: {
     name: 'Rhythmic Character',
@@ -67,13 +67,20 @@ export const SCORE_CATEGORIES = {
     baseline: 'Average counterpoint at overlap',
     factors: ['Based on dissonance scores at each distance', '+bonus for multiple good distances'],
   },
+  // Legacy entries kept for backward compatibility but no longer used in scoring
+  tonalDefinition: {
+    name: 'Tonal Definition',
+    description: 'Legacy - now part of Tonal Clarity',
+    group: 'melodic',
+    weight: 0,
+    deprecated: true,
+  },
   answerCompatibility: {
     name: 'Answer Compatibility',
-    description: 'Quality of the tonic-dominant junction for the answer',
+    description: 'Legacy - now part of Tonal Clarity',
     group: 'fugal',
-    weight: 0.9,
-    baseline: 'Acceptable junction',
-    factors: ['+15 strong junction', '+5 good junction', '-10 static', '-15 unusual'],
+    weight: 0,
+    deprecated: true,
   },
 
   // === COMBINATION GROUP: Voice interaction (with CS) ===
@@ -124,43 +131,43 @@ export const LEGACY_KEY_MAP = {
 };
 
 /**
- * Score thresholds for rating (on display scale 0-100)
- * These map to internal scores: excellent=+15, good=+5, fair=-5
+ * Score thresholds for rating (base-zero scale)
+ * 0 is the baseline - anything over zero is fair/acceptable
  */
 export const SCORE_THRESHOLDS = {
-  excellent: 75, // internal +15
-  good: 58,      // internal +5
-  fair: 42,      // internal -5
-  poor: 0,
+  strong: 15,    // Notably strong
+  good: 5,       // Good
+  fair: 0,       // Baseline - acceptable
+  weak: -10,     // Below baseline
 };
 
 /**
- * Get a rating label for a display score (0-100)
+ * Get a rating label for a base-zero score
  */
 export function getScoreRating(score) {
-  if (score >= SCORE_THRESHOLDS.excellent) return 'Excellent';
+  if (score >= SCORE_THRESHOLDS.strong) return 'Strong';
   if (score >= SCORE_THRESHOLDS.good) return 'Good';
   if (score >= SCORE_THRESHOLDS.fair) return 'Fair';
-  return 'Needs Work';
+  return 'Weak';
 }
 
 /**
- * Get a color for a display score
+ * Get a color for a base-zero score
  */
 export function getScoreColor(score) {
-  if (score >= SCORE_THRESHOLDS.excellent) return '#2e7d32'; // Dark green
+  if (score >= SCORE_THRESHOLDS.strong) return '#2e7d32'; // Dark green
   if (score >= SCORE_THRESHOLDS.good) return '#558b2f'; // Light green
-  if (score >= SCORE_THRESHOLDS.fair) return '#f57c00'; // Orange
+  if (score >= SCORE_THRESHOLDS.fair) return '#78909c'; // Gray-blue (neutral)
   return '#c62828'; // Red
 }
 
 /**
- * Get a background color for a display score
+ * Get a background color for a base-zero score
  */
 export function getScoreBgColor(score) {
-  if (score >= SCORE_THRESHOLDS.excellent) return '#e8f5e9';
+  if (score >= SCORE_THRESHOLDS.strong) return '#e8f5e9';
   if (score >= SCORE_THRESHOLDS.good) return '#f1f8e9';
-  if (score >= SCORE_THRESHOLDS.fair) return '#fff3e0';
+  if (score >= SCORE_THRESHOLDS.fair) return '#fafafa';
   return '#ffebee';
 }
 
@@ -170,7 +177,7 @@ export function getScoreBgColor(score) {
  * Factors: opening note, terminal quality, dominant arrival
  */
 export function calculateTonalDefinitionScore(result) {
-  if (!result || result.error) return { score: 50, internal: 0, details: [] };
+  if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0; // Base-zero score
   const details = [];
@@ -224,7 +231,7 @@ export const calculateHarmonicImplicationScore = calculateTonalDefinitionScore;
  * Factors: unique durations, rhythmic contrast
  */
 export function calculateRhythmicCharacterScore(result) {
-  if (!result || result.error) return { score: 50, internal: 0, details: [] };
+  if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0; // Base-zero score
   const details = [];
@@ -233,7 +240,7 @@ export function calculateRhythmicCharacterScore(result) {
   const uniqueCount = result.uniqueDurations || 1;
   if (uniqueCount >= 5) {
     internal += 15;
-    details.push({ factor: `${uniqueCount} different note values (excellent variety)`, impact: +15 });
+    details.push({ factor: `${uniqueCount} different note values (strong variety)`, impact: +15 });
   } else if (uniqueCount >= 4) {
     internal += 10;
     details.push({ factor: `${uniqueCount} different note values (good variety)`, impact: +10 });
@@ -284,7 +291,7 @@ export const calculateRhythmicVarietyScore = calculateRhythmicCharacterScore;
  * Negative = poor counterpoint quality at most distances
  */
 export function calculateStrettoPotentialScore(result, subjectLength = null) {
-  if (!result || result.error) return { score: 50, internal: 0, details: [], context: {} };
+  if (!result || result.error) return { score: 0, internal: 0, details: [], context: {} };
 
   const details = [];
   const allResults = result.allResults || [];
@@ -392,7 +399,7 @@ export const calculateStrettoViabilityScore = calculateStrettoPotentialScore;
  * Factors: junction quality, answer type clarity
  */
 export function calculateAnswerCompatibilityScore(result) {
-  if (!result || result.error) return { score: 50, internal: 0, details: [] };
+  if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0; // Base-zero score
   const details = [];
@@ -436,6 +443,59 @@ export function calculateAnswerCompatibilityScore(result) {
 export const calculateTonalAnswerScore = calculateAnswerCompatibilityScore;
 
 /**
+ * Calculate Tonal Clarity score (base-zero)
+ * Combines former tonal definition + answer compatibility into one basic indicator.
+ * This is deliberately simple - tonal analysis is quite primitive at this stage.
+ *
+ * Baseline 0 = acceptable tonal orientation
+ * Positive = clear tonal structure
+ * Negative = unclear or problematic
+ */
+export function calculateTonalClarityScore(harmonicResult, answerResult) {
+  const details = [];
+  let internal = 0;
+
+  // --- From Tonal Definition ---
+  if (harmonicResult && !harmonicResult.error) {
+    // Opening on tonic chord tone
+    if (harmonicResult.opening?.isTonicChordTone) {
+      internal += 3;
+      details.push({ factor: 'Opens on tonic chord tone', impact: +3 });
+    }
+
+    // Terminal quality (simplified)
+    const terminalQ = harmonicResult.terminal?.q;
+    if (terminalQ === 'strong' || terminalQ === 'good') {
+      internal += 3;
+      details.push({ factor: `Terminal: ${terminalQ}`, impact: +3 });
+    } else if (terminalQ === 'ambiguous' || terminalQ === 'unusual') {
+      internal -= 3;
+      details.push({ factor: `Terminal: ${terminalQ}`, impact: -3 });
+    }
+  }
+
+  // --- From Answer Compatibility ---
+  if (answerResult && !answerResult.error) {
+    // Junction quality (simplified)
+    const junctionQ = answerResult.junction?.q;
+    if (junctionQ === 'strong' || junctionQ === 'good') {
+      internal += 3;
+      details.push({ factor: `Answer junction: ${junctionQ}`, impact: +3 });
+    } else if (junctionQ === 'static' || junctionQ === 'unusual') {
+      internal -= 3;
+      details.push({ factor: `Answer junction: ${junctionQ}`, impact: -3 });
+    }
+  }
+
+  return {
+    score: internal,
+    internal,
+    details,
+    isBasicIndicator: true,
+  };
+}
+
+/**
  * Calculate Invertibility score (base-zero)
  * KEY CHANGE: Score based on comparison of inverted to uninverted quality.
  *
@@ -446,7 +506,7 @@ export const calculateTonalAnswerScore = calculateAnswerCompatibilityScore;
  * The fundamental question: "Does inversion work as well as the original?"
  */
 export function calculateInvertibilityScore(result) {
-  if (!result || result.error) return { score: 50, internal: 0, details: [], context: {} };
+  if (!result || result.error) return { score: 0, internal: 0, details: [], context: {} };
 
   const details = [];
 
@@ -566,21 +626,21 @@ export const calculateDoubleCounterpointScore = calculateInvertibilityScore;
  * Negative = homorhythmic (high overlap)
  */
 export function calculateRhythmicInterplayScore(result) {
-  if (!result || result.error) return { score: 50, internal: 0, details: [] };
+  if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0;
   const details = [];
   const overlapRatio = result.overlapRatio || 0.5;
 
   // Score based on distance from 50% (neutral)
-  // 0-30% overlap = excellent complementarity (+15)
+  // 0-30% overlap = strong complementarity (+15)
   // 30-50% = good (+5 to 0)
   // 50-70% = fair (0 to -5)
   // 70-100% = homorhythmic (-5 to -15)
 
   if (overlapRatio <= 0.3) {
     internal = 15;
-    details.push({ factor: `Excellent rhythmic independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: +15 });
+    details.push({ factor: `Strong rhythmic independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: +15 });
   } else if (overlapRatio <= 0.5) {
     // Linear interpolation from +8 at 30% to 0 at 50%
     internal = Math.round(8 * (0.5 - overlapRatio) / 0.2);
@@ -622,7 +682,7 @@ export const calculateRhythmicComplementarityScore = calculateRhythmicInterplayS
  * Negative = excessive parallel motion
  */
 export function calculateVoiceIndependenceScore(result) {
-  if (!result || result.error) return { score: 50, internal: 0, details: [] };
+  if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0;
   const details = [];
@@ -634,7 +694,7 @@ export function calculateVoiceIndependenceScore(result) {
   // Contrary motion: ideal is 30-50%, score relative to that
   if (contraryRatio >= 0.5) {
     internal += 12;
-    details.push({ factor: `Excellent contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: +12 });
+    details.push({ factor: `Strong contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: +12 });
   } else if (contraryRatio >= 0.35) {
     internal += 8;
     details.push({ factor: `Good contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: +8 });
@@ -683,7 +743,7 @@ export const calculateContourIndependenceScore = calculateVoiceIndependenceScore
  * Based on dissonance analysis when CS sounds against the dominant-level answer
  */
 export function calculateTranspositionStabilityScore(result) {
-  if (!result || result.error) return { score: 50, internal: 0, details: [] };
+  if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0;
   const details = [];
@@ -714,7 +774,7 @@ export function calculateTranspositionStabilityScore(result) {
       // Baseline expectation: ~70% consonant
       if (consPercent >= 85) {
         internal += 8;
-        details.push({ factor: `${consPercent}% consonant on strong beats (excellent)`, impact: +8 });
+        details.push({ factor: `${consPercent}% consonant on strong beats (strong)`, impact: +8 });
       } else if (consPercent >= 70) {
         internal += 3;
         details.push({ factor: `${consPercent}% consonant on strong beats (good)`, impact: +3 });
@@ -749,8 +809,8 @@ export const calculateModulatoryRobustnessScore = calculateTranspositionStabilit
 /**
  * Calculate overall fugue viability score (base-zero aggregation)
  *
- * The overall score is the weighted average of internal scores,
- * then converted to display scale.
+ * The overall score is the weighted average of internal scores.
+ * Scores are displayed as-is (base zero) - anything over zero is fair.
  */
 export function calculateOverallScore(results, hasCountersubject, subjectInfo = null) {
   // Extract subject metrics if available
@@ -758,57 +818,61 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
   const subjectDuration = subjectInfo?.duration || results.subjectDuration;
   const noteCount = subjectInfo?.noteCount || results.noteCount;
 
-  // Use new function names, store under both new and legacy keys for compatibility
   const scores = {};
 
-  // Melodic group
+  // === Melodic group ===
+  // Combined tonal clarity (replaces separate tonalDefinition and answerCompatibility)
+  const tonalClarity = calculateTonalClarityScore(results.harmonicImplication, results.tonalAnswer);
+  scores.tonalClarity = tonalClarity;
+
+  // Keep legacy scores for backward compatibility (but they don't contribute to overall)
   const tonalDef = calculateTonalDefinitionScore(results.harmonicImplication);
   scores.tonalDefinition = tonalDef;
-  scores.harmonicImplication = tonalDef; // Legacy
-
-  const rhythmChar = calculateRhythmicCharacterScore(results.rhythmicVariety);
-  scores.rhythmicCharacter = rhythmChar;
-  scores.rhythmicVariety = rhythmChar; // Legacy
-
-  // Fugal group
-  const strettoPot = calculateStrettoPotentialScore(results.stretto, subjectDuration);
-  scores.strettoPotential = strettoPot;
-  scores.strettoViability = strettoPot; // Legacy
+  scores.harmonicImplication = tonalDef;
 
   const answerComp = calculateAnswerCompatibilityScore(results.tonalAnswer);
   scores.answerCompatibility = answerComp;
-  scores.tonalAnswer = answerComp; // Legacy
+  scores.tonalAnswer = answerComp;
+
+  const rhythmChar = calculateRhythmicCharacterScore(results.rhythmicVariety);
+  scores.rhythmicCharacter = rhythmChar;
+  scores.rhythmicVariety = rhythmChar;
+
+  // === Fugal group ===
+  const strettoPot = calculateStrettoPotentialScore(results.stretto, subjectDuration);
+  scores.strettoPotential = strettoPot;
+  scores.strettoViability = strettoPot;
 
   if (hasCountersubject) {
-    // Combination group
+    // === Combination group ===
     const invert = calculateInvertibilityScore(results.doubleCounterpoint);
     scores.invertibility = invert;
-    scores.doubleCounterpoint = invert; // Legacy
+    scores.doubleCounterpoint = invert;
 
     const rhythmInt = calculateRhythmicInterplayScore(results.rhythmicComplementarity);
     scores.rhythmicInterplay = rhythmInt;
-    scores.rhythmicComplementarity = rhythmInt; // Legacy
+    scores.rhythmicComplementarity = rhythmInt;
 
     const voiceInd = calculateVoiceIndependenceScore(results.contourIndependence);
     scores.voiceIndependence = voiceInd;
-    scores.contourIndependence = voiceInd; // Legacy
+    scores.contourIndependence = voiceInd;
 
     const transpStab = calculateTranspositionStabilityScore(results.modulatoryRobustness);
     scores.transpositionStability = transpStab;
-    scores.modulatoryRobustness = transpStab; // Legacy
+    scores.modulatoryRobustness = transpStab;
   }
 
-  // Calculate weighted average of INTERNAL scores, then convert to display
+  // Calculate weighted average of INTERNAL scores
   let totalWeight = 0;
   let weightedInternalSum = 0;
 
-  // Use new category keys for weighting
-  const newKeys = ['tonalDefinition', 'rhythmicCharacter', 'strettoPotential', 'answerCompatibility'];
+  // Categories used for scoring (note: tonalClarity replaces tonalDefinition + answerCompatibility)
+  const scoringKeys = ['tonalClarity', 'rhythmicCharacter', 'strettoPotential'];
   if (hasCountersubject) {
-    newKeys.push('invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability');
+    scoringKeys.push('invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability');
   }
 
-  for (const key of newKeys) {
+  for (const key of scoringKeys) {
     const scoreData = scores[key];
     if (!scoreData) continue;
 
@@ -818,13 +882,14 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
   }
 
   const avgInternal = weightedInternalSum / (totalWeight || 1);
-  const overallScore = toDisplayScore(avgInternal);
+  // Round to one decimal place for display
+  const overallScore = Math.round(avgInternal * 10) / 10;
 
   // Build context summary
   const context = {
     subjectNotes: noteCount,
     subjectBeats: subjectDuration,
-    categoriesAnalyzed: newKeys.length,
+    categoriesAnalyzed: scoringKeys.length,
     averageInternalScore: avgInternal,
   };
 
@@ -846,34 +911,35 @@ export function getScoreSummary(scoreResult) {
   const strengths = [];
   const improvements = [];
 
-  // Use new category keys, skip legacy duplicates
-  const newKeys = [
-    'tonalDefinition', 'rhythmicCharacter', 'strettoPotential', 'answerCompatibility',
+  // Active category keys (skip deprecated ones)
+  const activeKeys = [
+    'tonalClarity', 'rhythmicCharacter', 'strettoPotential',
     'invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability'
   ];
 
-  for (const key of newKeys) {
+  for (const key of activeKeys) {
     const data = scoreResult.categories[key];
     if (!data) continue;
 
     const category = SCORE_CATEGORIES[key];
-    if (!category) continue;
+    if (!category || category.deprecated) continue;
 
-    if (data.score >= SCORE_THRESHOLDS.good) {
+    // Use internal score for comparisons since we're now base-zero
+    if (data.internal >= SCORE_THRESHOLDS.good) {
       strengths.push({
         category: category.name,
         key,
-        score: data.score,
+        score: data.internal,
         internal: data.internal,
-        rating: getScoreRating(data.score),
+        rating: getScoreRating(data.internal),
       });
-    } else if (data.score < SCORE_THRESHOLDS.fair) {
+    } else if (data.internal < SCORE_THRESHOLDS.fair) {
       improvements.push({
         category: category.name,
         key,
-        score: data.score,
+        score: data.internal,
         internal: data.internal,
-        rating: getScoreRating(data.score),
+        rating: getScoreRating(data.internal),
         suggestion: getSuggestion(key, data),
       });
     }
@@ -887,16 +953,17 @@ export function getScoreSummary(scoreResult) {
  */
 function getSuggestion(category, data) {
   const suggestions = {
-    // New keys
-    tonalDefinition: 'Consider starting on a tonic chord tone and ending on a degree that creates clear harmonic motion.',
+    // Active keys
+    tonalClarity: 'Consider the opening/ending notes and harmonic motion at the answer junction.',
     rhythmicCharacter: 'Try incorporating more diverse note values and rhythmic contrasts.',
     strettoPotential: 'Adjust melodic intervals to improve counterpoint quality when overlapping.',
-    answerCompatibility: 'Consider the harmonic junction at the end of the subject.',
     invertibility: 'Use more thirds and sixths to maintain quality when inverted.',
     rhythmicInterplay: 'Offset attack points between voices for better independence.',
     voiceIndependence: 'Add more contrary motion to differentiate voice contours.',
     transpositionStability: 'Ensure the countersubject works smoothly against the dominant-level answer.',
-    // Legacy keys (map to new)
+    // Legacy keys
+    tonalDefinition: 'Consider starting on a tonic chord tone and ending on a degree that creates clear harmonic motion.',
+    answerCompatibility: 'Consider the harmonic junction at the end of the subject.',
     harmonicImplication: 'Consider starting on a tonic chord tone and ending on a degree that creates clear harmonic motion.',
     rhythmicVariety: 'Try incorporating more diverse note values and rhythmic contrasts.',
     strettoViability: 'Adjust melodic intervals to improve counterpoint quality when overlapping.',

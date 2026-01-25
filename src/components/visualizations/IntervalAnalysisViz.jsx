@@ -210,7 +210,7 @@ export function IntervalAnalysisViz({
     switch (category) {
       case 'dissonant_good':
         // Bright purple for well-handled dissonances - brighter the better
-        if (score >= 2.0) return { color: '#7c3aed', bg: '#ddd6fe', label: 'Excellent', lineColor: '#8b5cf6' };
+        if (score >= 2.0) return { color: '#7c3aed', bg: '#ddd6fe', label: 'Strong', lineColor: '#8b5cf6' };
         if (score >= 1.0) return { color: '#8b5cf6', bg: '#ede9fe', label: 'Good', lineColor: '#a78bfa' };
         return { color: '#a78bfa', bg: '#f3f0ff', label: 'Acceptable', lineColor: '#c4b5fd' };
 

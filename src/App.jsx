@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   PianoRoll,
   IntervalTimeline,
@@ -80,6 +80,68 @@ export default function App() {
   const [scoreResult, setScoreResult] = useState(null);
   const [error, setError] = useState(null);
   const [timingWarnings, setTimingWarnings] = useState([]);
+
+  // Saved presets state
+  const [savedPresets, setSavedPresets] = useState([]);
+  const [saveName, setSaveName] = useState('');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+
+  // Load saved presets from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('fugueAnalyzerPresets');
+      if (saved) {
+        setSavedPresets(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load saved presets:', e);
+    }
+  }, []);
+
+  // Save preset
+  const savePreset = () => {
+    if (!saveName.trim()) return;
+
+    const preset = {
+      name: saveName.trim(),
+      subject: subjectInput,
+      countersubject: csInput,
+      answer: answerInput,
+      settings: {
+        key: selKey,
+        mode: selMode,
+        noteLength: selNoteLen,
+        timeSig: selTimeSig,
+      },
+      savedAt: new Date().toISOString(),
+    };
+
+    const newPresets = [...savedPresets.filter(p => p.name !== preset.name), preset];
+    setSavedPresets(newPresets);
+    localStorage.setItem('fugueAnalyzerPresets', JSON.stringify(newPresets));
+    setSaveName('');
+    setShowSaveDialog(false);
+  };
+
+  // Load preset
+  const loadPreset = (preset) => {
+    setSubjectInput(preset.subject || '');
+    setCsInput(preset.countersubject || '');
+    setAnswerInput(preset.answer || '');
+    if (preset.settings) {
+      if (preset.settings.key) setSelKey(preset.settings.key);
+      if (preset.settings.mode) setSelMode(preset.settings.mode);
+      if (preset.settings.noteLength) setSelNoteLen(preset.settings.noteLength);
+      if (preset.settings.timeSig) setSelTimeSig(preset.settings.timeSig);
+    }
+  };
+
+  // Delete preset
+  const deletePreset = (presetName) => {
+    const newPresets = savedPresets.filter(p => p.name !== presetName);
+    setSavedPresets(newPresets);
+    localStorage.setItem('fugueAnalyzerPresets', JSON.stringify(newPresets));
+  };
 
   /**
    * Run the analysis
@@ -323,6 +385,146 @@ export default function App() {
           <p style={{ fontSize: '10px', color: '#888', margin: '10px 0 0' }}>
             K:, M:, and L: in ABC notation override these settings
           </p>
+        </div>
+
+        {/* Save/Load Presets Panel */}
+        <div
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: '6px',
+            border: '1px solid #e0e0e0',
+            padding: '12px 16px',
+            marginBottom: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: '12px', fontWeight: '600', color: '#546e7a' }}>Presets:</span>
+
+          {/* Load preset dropdown */}
+          {savedPresets.length > 0 && (
+            <select
+              onChange={(e) => {
+                const preset = savedPresets.find(p => p.name === e.target.value);
+                if (preset) loadPreset(preset);
+                e.target.value = '';
+              }}
+              style={{
+                padding: '6px 10px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                fontSize: '12px',
+                color: '#37474f',
+                minWidth: '140px',
+              }}
+              defaultValue=""
+            >
+              <option value="" disabled>Load saved...</option>
+              {savedPresets.map((p) => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Save button */}
+          {!showSaveDialog ? (
+            <button
+              onClick={() => setShowSaveDialog(true)}
+              style={{
+                padding: '6px 12px',
+                backgroundColor: '#5c6bc0',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              Save Current
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Preset name..."
+                style={{
+                  padding: '6px 10px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  width: '140px',
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') savePreset();
+                  if (e.key === 'Escape') setShowSaveDialog(false);
+                }}
+                autoFocus
+              />
+              <button
+                onClick={savePreset}
+                disabled={!saveName.trim()}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: saveName.trim() ? '#2e7d32' : '#ccc',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  cursor: saveName.trim() ? 'pointer' : 'default',
+                }}
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setShowSaveDialog(false)}
+                style={{
+                  padding: '6px 10px',
+                  backgroundColor: '#757575',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {/* Delete preset (only show if there are presets) */}
+          {savedPresets.length > 0 && (
+            <select
+              onChange={(e) => {
+                if (e.target.value && confirm(`Delete preset "${e.target.value}"?`)) {
+                  deletePreset(e.target.value);
+                }
+                e.target.value = '';
+              }}
+              style={{
+                padding: '6px 10px',
+                border: '1px solid #ffcdd2',
+                borderRadius: '4px',
+                fontSize: '11px',
+                color: '#c62828',
+                backgroundColor: '#fff',
+              }}
+              defaultValue=""
+            >
+              <option value="" disabled>Delete...</option>
+              {savedPresets.map((p) => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+          )}
+
+          {savedPresets.length === 0 && !showSaveDialog && (
+            <span style={{ fontSize: '11px', color: '#90a4ae' }}>No saved presets yet</span>
+          )}
         </div>
 
         {/* Input Panel */}

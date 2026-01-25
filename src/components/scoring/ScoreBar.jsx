@@ -2,25 +2,33 @@ import { getScoreColor, getScoreBgColor, getScoreRating, SCORE_CATEGORIES, LEGAC
 
 /**
  * Horizontal score bar component with clear +/- signposting
- * Now supports base-zero internal scores with display mapping
+ * Displays base-zero scores (positive = good, negative = bad, 0 = baseline)
  */
-export function ScoreBar({ categoryKey, score, internalScore, showDetails = false, details = [] }) {
+export function ScoreBar({ categoryKey, score, internalScore, showDetails = false, details = [], compact = false }) {
   // Support both new and legacy category keys
   const resolvedKey = LEGACY_KEY_MAP[categoryKey] || categoryKey;
   const category = SCORE_CATEGORIES[resolvedKey] || SCORE_CATEGORIES[categoryKey];
-  const color = getScoreColor(score);
-  const bgColor = getScoreBgColor(score);
-  const rating = getScoreRating(score);
+  // Use internal score for colors since we're now base-zero
+  const displayScore = typeof internalScore === 'number' ? internalScore : score;
+  const color = getScoreColor(displayScore);
+  const bgColor = getScoreBgColor(displayScore);
+  const rating = getScoreRating(displayScore);
 
   // Summarize positives and negatives
   const positives = details.filter(d => d.impact > 0);
   const negatives = details.filter(d => d.impact < 0);
   const neutrals = details.filter(d => d.impact === 0);
 
+  // Format score with sign
+  const formatScore = (s) => {
+    const rounded = Math.round(s * 10) / 10;
+    return rounded >= 0 ? `+${rounded}` : `${rounded}`;
+  };
+
   return (
     <div
       style={{
-        padding: '12px 14px',
+        padding: compact ? '8px 12px' : '12px 14px',
         backgroundColor: bgColor,
         borderRadius: '8px',
         marginBottom: '8px',
@@ -37,16 +45,16 @@ export function ScoreBar({ categoryKey, score, internalScore, showDetails = fals
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: compact ? '4px' : '8px' }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '13px', fontWeight: '600', color: '#37474f', marginBottom: '2px' }}>
+          <div style={{ fontSize: compact ? '12px' : '13px', fontWeight: '600', color: '#37474f', marginBottom: '2px' }}>
             {category?.name || categoryKey}
           </div>
-          <div style={{ fontSize: '11px', color: '#757575' }}>{category?.description}</div>
+          {!compact && <div style={{ fontSize: '11px', color: '#757575' }}>{category?.description}</div>}
 
           {/* Quick +/- summary when collapsed */}
           {!showDetails && details.length > 0 && (
-            <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '11px' }}>
+            <div style={{ display: 'flex', gap: '12px', marginTop: compact ? '4px' : '6px', fontSize: '11px' }}>
               {positives.length > 0 && (
                 <span style={{ color: '#16a34a', fontWeight: '500' }}>
                   +{positives.length} strength{positives.length !== 1 ? 's' : ''}
@@ -64,18 +72,18 @@ export function ScoreBar({ categoryKey, score, internalScore, showDetails = fals
           )}
         </div>
 
-        {/* Score display */}
+        {/* Score display - base-zero with +/- */}
         <div style={{ textAlign: 'right', marginLeft: '12px' }}>
           <div style={{
-            fontSize: '22px',
+            fontSize: compact ? '18px' : '22px',
             fontWeight: '700',
             color: color,
             lineHeight: 1,
           }}>
-            {score}
+            {formatScore(displayScore)}
           </div>
           <div style={{
-            fontSize: '10px',
+            fontSize: compact ? '9px' : '10px',
             color: color,
             fontWeight: '600',
             textTransform: 'uppercase',
@@ -83,37 +91,7 @@ export function ScoreBar({ categoryKey, score, internalScore, showDetails = fals
           }}>
             {rating}
           </div>
-          {/* Show internal score if available */}
-          {typeof internalScore === 'number' && (
-            <div style={{
-              fontSize: '9px',
-              color: '#78909c',
-              marginTop: '2px',
-            }}>
-              ({internalScore >= 0 ? '+' : ''}{internalScore.toFixed(1)})
-            </div>
-          )}
         </div>
-      </div>
-
-      {/* Progress bar */}
-      <div
-        style={{
-          height: '6px',
-          backgroundColor: '#e0e0e0',
-          borderRadius: '3px',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${score}%`,
-            backgroundColor: color,
-            borderRadius: '3px',
-            transition: 'width 0.5s ease-in-out',
-          }}
-        />
       </div>
 
       {/* Details breakdown with clear +/- indicators */}

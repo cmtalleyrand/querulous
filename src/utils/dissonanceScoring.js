@@ -2,7 +2,7 @@
  * Dissonance Scoring System
  * Implements a zero-centered scoring norm for counterpoint dissonance analysis.
  *
- * Scores: +1.0 to +2.0 = Excellent (Suspensions, Passing Tones)
+ * Scores: +1.0 to +2.0 = Strong handling (Suspensions, Passing Tones)
  *         0.0 = Neutral/Acceptable
  *         Negative = Weak or Error-prone
  *

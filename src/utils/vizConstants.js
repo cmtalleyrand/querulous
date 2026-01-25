@@ -7,7 +7,7 @@ export const VIZ_COLORS = {
   // Interval quality colors (solid fills)
   consonant: '#22c55e',           // Green-500 - imperfect consonances (3rds, 6ths)
   perfectConsonant: '#3b82f6',    // Blue-500 - perfect consonances (unison, 5th, 8ve)
-  dissonantExcellent: '#7c3aed',  // Violet-600 - well-handled dissonance (score >= 2)
+  dissonantStrong: '#7c3aed',     // Violet-600 - well-handled dissonance (score >= 2)
   dissonantGood: '#8b5cf6',       // Violet-500 - good dissonance handling (score >= 1)
   dissonantAcceptable: '#a78bfa', // Violet-400 - acceptable (score >= 0)
   dissonantMarginal: '#c026d3',   // Fuchsia-600 - marginal (score >= -1)
@@ -74,7 +74,7 @@ export function getIntervalStyle({ isConsonant, isPerfect, score = 0 }) {
 
   // Dissonant - grade by score
   if (score >= 2.0) {
-    return { color: VIZ_COLORS.dissonantExcellent, bg: '#ddd6fe', fill: VIZ_COLORS.dissonantGoodFill, label: 'Excellent' };
+    return { color: VIZ_COLORS.dissonantStrong, bg: '#ddd6fe', fill: VIZ_COLORS.dissonantGoodFill, label: 'Strong' };
   }
   if (score >= 1.0) {
     return { color: VIZ_COLORS.dissonantGood, bg: '#ede9fe', fill: VIZ_COLORS.dissonantGoodFill, label: 'Good' };

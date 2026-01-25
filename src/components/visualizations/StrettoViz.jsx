@@ -485,7 +485,7 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                   {(selectedInterval.score || 0) >= 0 ? '+' : ''}{(selectedInterval.score || 0).toFixed(1)}
                 </span>
                 <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {(selectedInterval.score || 0) >= 1.5 ? '(Excellent handling)' :
+                  {(selectedInterval.score || 0) >= 1.5 ? '(Strong handling)' :
                    (selectedInterval.score || 0) >= 0.5 ? '(Good)' :
                    (selectedInterval.score || 0) >= 0 ? '(Acceptable)' :
                    (selectedInterval.score || 0) >= -1 ? '(Marginal)' : '(Problematic)'}

@@ -407,13 +407,13 @@ VOICE COMBINATION (with countersubject):
 • Transposition Stability (1.0) - CS against dominant-level answer
   Baseline: acceptable counterpoint. Based on dissonance analysis vs the answer.
 
-DISPLAY THRESHOLDS:
-• 75-100: Excellent (internal +15 or better)
-• 58-74: Good (internal +5 to +15)
-• 42-57: Fair (internal -5 to +5)
-• Below 42: Needs Work (internal below -5)
+SCORE INTERPRETATION (base-zero):
+• +15 or higher: Strong
+• +5 to +15: Good
+• 0 to +5: Fair (baseline - acceptable)
+• Below 0: Weak
 
-The small number in parentheses (e.g., "+8.5") shows the actual base-zero internal score.`,
+Scores are displayed directly as base-zero values. Zero is the neutral baseline - anything above zero is fair/acceptable.`,
   },
 };
 

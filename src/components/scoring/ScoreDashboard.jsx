@@ -20,19 +20,19 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
 
   const { strengths, improvements } = getScoreSummary(scoreResult);
 
-  // Organize categories by conceptual group (not by availability)
+  // Organize categories by conceptual group
   const categoryGroups = {
     melodic: {
       title: 'Melodic Quality',
       subtitle: 'Properties of the subject line',
       color: '#5c6bc0',
-      categories: ['tonalDefinition', 'rhythmicCharacter'],
+      categories: ['rhythmicCharacter'],
     },
     fugal: {
       title: 'Fugal Potential',
       subtitle: 'How well it works as fugue material',
       color: '#7e57c2',
-      categories: ['strettoPotential', 'answerCompatibility'],
+      categories: ['strettoPotential'],
     },
     combination: {
       title: 'Voice Combination',
@@ -41,6 +41,14 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
       categories: hasCountersubject
         ? ['invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability']
         : [],
+    },
+    // Basic indicators - shown separately with reduced prominence
+    basicIndicators: {
+      title: 'Basic Indicators',
+      subtitle: 'Simple tonal orientation checks',
+      color: '#90a4ae',
+      categories: ['tonalClarity'],
+      isBasic: true,
     },
   };
 
@@ -90,7 +98,10 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
             {scoreResult.rating}
           </span>
           <span style={{ marginLeft: '8px', fontSize: '13px', color: '#546e7a' }}>
-            ({scoreResult.overall}/100)
+            ({scoreResult.overall >= 0 ? '+' : ''}{scoreResult.overall})
+          </span>
+          <span style={{ marginLeft: '8px', fontSize: '11px', color: '#90a4ae' }}>
+            0 = baseline
           </span>
         </div>
         <button
@@ -172,6 +183,45 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
           // Skip empty groups
           if (group.categories.length === 0) return null;
 
+          // Basic indicators get reduced prominence
+          if (group.isBasic) {
+            return (
+              <div key={groupKey} style={{ marginBottom: '16px', opacity: 0.8 }}>
+                <h3
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: '500',
+                    color: '#78909c',
+                    marginBottom: '4px',
+                    paddingBottom: '4px',
+                    borderBottom: `1px solid ${group.color}`,
+                  }}
+                >
+                  {group.title}
+                </h3>
+                <p style={{ fontSize: '10px', color: '#90a4ae', margin: '0 0 8px 0' }}>
+                  {group.subtitle}
+                </p>
+                {group.categories.map((key) => {
+                  const data = scoreResult.categories[key];
+                  if (!data) return null;
+                  return (
+                    <div key={key} onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}>
+                      <ScoreBar
+                        categoryKey={key}
+                        score={data.internal}
+                        internalScore={data.internal}
+                        showDetails={showDetails || expandedCategory === key}
+                        details={data.details}
+                        compact={true}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+
           return (
             <div key={groupKey} style={{ marginBottom: '16px' }}>
               <h3
@@ -196,7 +246,7 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
                   <div key={key} onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}>
                     <ScoreBar
                       categoryKey={key}
-                      score={data.score}
+                      score={data.internal}
                       internalScore={data.internal}
                       showDetails={showDetails || expandedCategory === key}
                       details={data.details}
