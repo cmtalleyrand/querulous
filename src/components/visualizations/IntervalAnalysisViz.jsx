@@ -28,11 +28,27 @@ const DISSONANCE_DEFINITIONS = {
   },
   cambiata: {
     name: 'Cambiata (Cam)',
-    definition: 'Note of Cambiata figure: step down to dissonance, skip down a third, then resolves.',
+    definition: 'Traditional nota cambiata: step down to dissonance, skip down a third, step up to fill in.',
+  },
+  cambiata_proper: {
+    name: 'Cambiata (Cam)',
+    definition: 'Traditional nota cambiata on weak beat: step down to dissonance, skip down a third.',
+  },
+  cambiata_inverted: {
+    name: 'Inverted Cambiata (Cam↑)',
+    definition: 'Ascending form: step up to dissonance, skip up a third.',
+  },
+  cambiata_strong: {
+    name: 'Cambiata-like (Cam?)',
+    definition: 'Cambiata figure occurring on a strong beat—non-traditional placement.',
+  },
+  cambiata_inverted_strong: {
+    name: 'Inverted Cambiata (Cam↑?)',
+    definition: 'Ascending cambiata on strong beat—non-traditional.',
   },
   escape_tone: {
     name: 'Escape Tone (Esc)',
-    definition: 'Approached by step, left by leap in opposite direction. Less common than passing tones.',
+    definition: 'Approached by step, left by leap in opposite direction. Creates a "leaving" gesture.',
   },
   unprepared: {
     name: 'Unprepared Dissonance',
@@ -480,6 +496,109 @@ export function IntervalAnalysisViz({
           })}
         </div>
       )}
+
+      {/* Pattern Summary - actively display all detected patterns */}
+      {(() => {
+        const patternsWithOnsets = intervalPoints
+          .filter(pt => pt.patterns && pt.patterns.length > 0)
+          .map(pt => ({
+            onset: pt.onset,
+            patterns: pt.patterns,
+            label: pt.dissonanceLabel,
+            interval: pt.intervalName,
+          }));
+
+        if (patternsWithOnsets.length === 0) return null;
+
+        // Count pattern types
+        const patternCounts = {};
+        patternsWithOnsets.forEach(p => {
+          p.patterns.forEach(pat => {
+            const type = pat.type;
+            patternCounts[type] = (patternCounts[type] || 0) + 1;
+          });
+        });
+
+        return (
+          <div style={{
+            backgroundColor: '#fff',
+            border: '1px solid #c4b5fd',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            marginTop: '12px',
+          }}>
+            <div style={{
+              padding: '10px 14px',
+              backgroundColor: '#f5f3ff',
+              borderBottom: '1px solid #e9d5ff',
+              fontWeight: '600',
+              fontSize: '13px',
+              color: '#6b21a8',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span>Detected Patterns ({patternsWithOnsets.length})</span>
+              <span style={{ fontSize: '11px', fontWeight: '400', color: '#7c3aed' }}>
+                {Object.entries(patternCounts).map(([type, count]) => {
+                  const label = type === 'passing' ? 'PT' :
+                               type === 'neighbor' ? 'N' :
+                               type === 'suspension' ? 'Sus' :
+                               type === 'appoggiatura' ? 'App' :
+                               type === 'anticipation' ? 'Ant' :
+                               type === 'escape_tone' ? 'Esc' :
+                               type.startsWith('cambiata') ? 'Cam' : type;
+                  return `${count} ${label}`;
+                }).join(' | ')}
+              </span>
+            </div>
+            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+              {patternsWithOnsets.map((item, i) => {
+                const isActive = highlightedOnset === getOnsetKey(item.onset);
+                return (
+                  <div
+                    key={`pattern-${i}`}
+                    onClick={() => {
+                      setHighlightedOnset(getOnsetKey(item.onset));
+                      const pt = intervalPoints.find(p => getOnsetKey(p.onset) === getOnsetKey(item.onset));
+                      if (pt) setSelectedInterval(pt);
+                    }}
+                    style={{
+                      padding: '8px 14px',
+                      borderBottom: i < patternsWithOnsets.length - 1 ? '1px solid #f3f4f6' : 'none',
+                      cursor: 'pointer',
+                      backgroundColor: isActive ? '#f5f3ff' : 'white',
+                      borderLeft: isActive ? '4px solid #8b5cf6' : '4px solid transparent',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span style={{ fontSize: '13px', color: '#374151' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        backgroundColor: '#ddd6fe',
+                        color: '#6b21a8',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontWeight: '600',
+                        fontSize: '11px',
+                        marginRight: '8px',
+                      }}>
+                        {item.label}
+                      </span>
+                      {item.patterns[0].description}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                      {formatter?.formatBeat(item.onset) || `Beat ${item.onset + 1}`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Selected interval detail panel */}
       {selectedInterval && (

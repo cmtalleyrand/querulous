@@ -57,8 +57,8 @@ This preserves the tonic-dominant relationship. The "mutation point" is where re
 
   // Analysis sections
   harmonicImplication: {
-    title: 'Harmonic Implication',
-    brief: 'How the subject establishes and implies tonal function.',
+    title: 'Tonal Definition',
+    brief: 'How clearly the subject establishes tonal center and direction.',
     detailed: `This analysis examines the subject's scale degrees:
 
 Opening degree: Starting on ^1, ^3, or ^5 (tonic triad) clearly establishes the key. Other degrees create ambiguity.
@@ -75,8 +75,8 @@ The score reflects how clearly the subject defines tonal function.`,
   },
 
   rhythmicVariety: {
-    title: 'Rhythmic Variety',
-    brief: 'Diversity of note values in the subject.',
+    title: 'Rhythmic Character',
+    brief: 'Distinctiveness of the subject\'s rhythmic profile.',
     detailed: `This counts distinct note durations and checks for rhythmic contrast.
 
 Why it matters: In multi-voice texture, the subject must be identifiable. Uniform rhythm (all quarter notes, for example) makes entries harder to perceive. Varied rhythm creates a distinctive profile.
@@ -90,8 +90,8 @@ A subject with one note value scores poorly. Three or more values with contrast 
   },
 
   strettoViability: {
-    title: 'Stretto Viability',
-    brief: 'Whether the subject can overlap with itself.',
+    title: 'Stretto Potential',
+    brief: 'Capacity for canonic overlap at various entry distances.',
     detailed: `Stretto occurs when a new entry begins before the previous one finishes. This analysis tests each possible entry distance:
 
 For each distance, the algorithm:
@@ -111,8 +111,8 @@ More viable distances = more compositional flexibility. Close strettos (high ove
   },
 
   tonalAnswer: {
-    title: 'Tonal Answer',
-    brief: 'Whether the answer requires tonal modification.',
+    title: 'Answer Compatibility',
+    brief: 'Quality of the tonic-dominant junction.',
     detailed: `This determines if your subject needs a tonal (modified) or real (exact) answer.
 
 Detection logic:
@@ -131,8 +131,8 @@ The generated answer ABC shows the computed transposition with any tonal modific
   },
 
   doubleCounterpoint: {
-    title: 'Double Counterpoint',
-    brief: 'Invertibility of the subject-countersubject combination.',
+    title: 'Invertibility',
+    brief: 'Quality of double counterpoint at the octave.',
     detailed: `Double counterpoint at the octave means the two voices can exchange positions—the upper voice becomes the lower and vice versa.
 
 The analysis tests both configurations:
@@ -182,6 +182,25 @@ NEIGHBOR TONES (N)
 • Step away from a consonance and return to the same note
 • Usually on weak beats
 
+CAMBIATA (Cam) — Nota Cambiata
+The cambiata is a 5-note melodic figure with a characteristic "skip past" the resolution:
+1. Consonance (preparation)
+2. Step down to dissonance (the nota cambiata itself)
+3. Skip down a third (skipping past the expected resolution)
+4. Step up (filling in the skip)
+5. Resolution
+The dissonance (note 2) typically falls on a weak beat. The "signature" is the downward step followed by a downward third—the line seems to overshoot, then recovers.
+
+Variants detected:
+• Cam: Traditional descending cambiata on weak beat
+• Cam↑: Inverted (ascending) cambiata
+• Cam?: Cambiata figure on strong beat (non-traditional)
+
+ESCAPE TONE (Esc)
+• Also called échappée
+• Approached by step, left by leap in opposite direction
+• Creates a "leaving" gesture—steps toward a note but leaps away
+
 ANTICIPATIONS (Ant)
 • Arrive early—the note of the next consonance sounds before its time
 • Usually short and on weak beats
@@ -193,12 +212,20 @@ APPOGGIATURAS (App)
 
 UNPREPARED DISSONANCES
 • Strong-beat dissonances not fitting the above categories
-• Generally avoided in strict style; may be acceptable in freer styles`,
+• Generally avoided in strict style; may be acceptable in freer styles
+
+CONSECUTIVE DISSONANCES (D → D → D)
+When a dissonance resolves to another dissonance instead of a consonance:
+• Each D → D transition receives a -1.5 penalty (instead of the +0.5 to +1.0 resolution bonus)
+• Multiple consecutive dissonances compound penalties
+• Example: D → D → D = two -1.5 penalties applied
+• The pattern summary tracks these groups for review
+• Generally avoided in strict counterpoint; acceptable in certain sequential contexts`,
   },
 
   rhythmicComplementarity: {
-    title: 'Rhythmic Complementarity',
-    brief: 'How attack points relate between subject and countersubject.',
+    title: 'Rhythmic Interplay',
+    brief: 'Degree of rhythmic independence between voices.',
     detailed: `This measures rhythmic independence between the voices.
 
 Attack overlap: Percentage of note onsets that coincide between subject and countersubject.
@@ -212,8 +239,8 @@ Low overlap is generally better—it creates continuous motion where one voice f
   },
 
   contourIndependence: {
-    title: 'Contour Independence',
-    brief: 'How melodic motion relates between voices.',
+    title: 'Voice Independence',
+    brief: 'Differentiation of melodic contours between voices.',
     detailed: `This analyzes the directional relationship when both voices move simultaneously:
 
 Contrary motion: One voice ascends, the other descends. Most independent.
@@ -227,8 +254,8 @@ High contrary motion (over 35%) indicates good voice independence. High parallel
   },
 
   modulatoryRobustness: {
-    title: 'Modulatory Robustness',
-    brief: 'How the countersubject works against the answer.',
+    title: 'Transposition Stability',
+    brief: 'How well the countersubject functions against the answer.',
     detailed: `The countersubject first appears against the subject in the tonic. But it also accompanies the answer, which is in the dominant.
 
 This analysis transposes the subject up a fifth (simulating the answer) and tests the countersubject against it:
@@ -330,16 +357,16 @@ Bar lines: | separates measures, |] ends the piece`,
     detailed: `The overall score (0-100) combines individual category scores with these weights:
 
 Subject-only categories:
-• Harmonic Implication (1.0) - tonal clarity
-• Rhythmic Variety (0.8) - distinctive rhythm
-• Stretto Viability (1.0) - overlapping potential
-• Tonal Answer (0.9) - junction quality
+• Tonal Definition (1.0) - clarity of tonal center
+• Rhythmic Character (0.8) - distinctive rhythm
+• Stretto Potential (1.0) - canonic overlap capacity
+• Answer Compatibility (0.9) - tonic-dominant junction
 
 With countersubject:
-• Double Counterpoint (1.0) - invertibility
-• Rhythmic Complementarity (0.8) - attack point offset
-• Contour Independence (0.9) - voice differentiation
-• Modulatory Robustness (1.0) - works against answer
+• Invertibility (1.0) - double counterpoint quality
+• Rhythmic Interplay (0.8) - attack point independence
+• Voice Independence (0.9) - contour differentiation
+• Transposition Stability (1.0) - works against answer
 
 Score = weighted average of applicable categories.
 

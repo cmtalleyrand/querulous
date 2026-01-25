@@ -8,46 +8,47 @@
 
 /**
  * Score categories and their descriptions
+ * Uses traditional contrapuntal terminology
  */
 export const SCORE_CATEGORIES = {
   harmonicImplication: {
-    name: 'Harmonic Implication',
-    description: 'How well the subject establishes and implies harmonic motion',
+    name: 'Tonal Definition',
+    description: 'How clearly the subject establishes and projects tonal center and harmonic direction',
     weight: 1.0,
   },
   rhythmicVariety: {
-    name: 'Rhythmic Variety',
-    description: 'Diversity and contrast in rhythmic values',
+    name: 'Rhythmic Character',
+    description: 'Distinctiveness and variety of rhythmic profile',
     weight: 0.8,
   },
   strettoViability: {
-    name: 'Stretto Viability',
-    description: 'How well the subject works in overlapping entries',
+    name: 'Stretto Potential',
+    description: 'Capacity for canonic overlap at various distances',
     weight: 1.0,
   },
   tonalAnswer: {
-    name: 'Tonal Answer',
-    description: 'Clarity and quality of the tonal answer junction',
+    name: 'Answer Compatibility',
+    description: 'Quality of the tonic-dominant junction for the answer',
     weight: 0.9,
   },
   doubleCounterpoint: {
-    name: 'Double Counterpoint',
-    description: 'Invertibility of subject-countersubject combination',
+    name: 'Invertibility',
+    description: 'Quality of double counterpoint at the octave',
     weight: 1.0,
   },
   rhythmicComplementarity: {
-    name: 'Rhythmic Complementarity',
-    description: 'How well the countersubject complements the subject rhythmically',
+    name: 'Rhythmic Interplay',
+    description: 'Degree of rhythmic independence and complementary motion',
     weight: 0.8,
   },
   contourIndependence: {
-    name: 'Contour Independence',
-    description: 'Independence of melodic contours between voices',
+    name: 'Voice Independence',
+    description: 'Differentiation of melodic contours between voices',
     weight: 0.9,
   },
   modulatoryRobustness: {
-    name: 'Modulatory Robustness',
-    description: 'How well the countersubject works against the answer',
+    name: 'Transposition Stability',
+    description: 'How well the countersubject functions against the dominant-level answer',
     weight: 1.0,
   },
 };

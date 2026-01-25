@@ -212,40 +212,64 @@ function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, 
 
 /**
  * Determine motion type between two simultaneities
- * Returns: 'oblique', 'contrary', 'similar', 'parallel'
+ * Returns: 'oblique', 'contrary', 'similar', 'similar_step', 'similar_same_type', 'parallel'
+ *
+ * Similar motion subtypes:
+ * - similar_step: One or both voices move by step (most acceptable)
+ * - similar_same_type: Both move by same interval type but different size (less acceptable)
+ * - similar: Different interval types (acceptable)
+ * - parallel: Same interval size (least acceptable - parallel 5ths/8ves forbidden)
  */
 function getMotionType(prevSim, currSim) {
-  if (!prevSim) return { type: 'unknown', v1Moved: true, v2Moved: true };
+  if (!prevSim) return { type: 'unknown', v1Moved: true, v2Moved: true, v1Interval: 0, v2Interval: 0 };
 
   const v1Moved = currSim.voice1Note !== prevSim.voice1Note &&
                   currSim.voice1Note.pitch !== prevSim.voice1Note.pitch;
   const v2Moved = currSim.voice2Note !== prevSim.voice2Note &&
                   currSim.voice2Note.pitch !== prevSim.voice2Note.pitch;
 
+  const v1Interval = v1Moved ? Math.abs(currSim.voice1Note.pitch - prevSim.voice1Note.pitch) : 0;
+  const v2Interval = v2Moved ? Math.abs(currSim.voice2Note.pitch - prevSim.voice2Note.pitch) : 0;
+
   if (!v1Moved && !v2Moved) {
-    return { type: 'static', v1Moved: false, v2Moved: false };
+    return { type: 'static', v1Moved: false, v2Moved: false, v1Interval: 0, v2Interval: 0 };
   }
 
   if (!v1Moved || !v2Moved) {
-    return { type: 'oblique', v1Moved, v2Moved };
+    return { type: 'oblique', v1Moved, v2Moved, v1Interval, v2Interval };
   }
 
   const v1Dir = Math.sign(currSim.voice1Note.pitch - prevSim.voice1Note.pitch);
   const v2Dir = Math.sign(currSim.voice2Note.pitch - prevSim.voice2Note.pitch);
 
   if (v1Dir === -v2Dir) {
-    return { type: 'contrary', v1Moved: true, v2Moved: true };
+    return { type: 'contrary', v1Moved: true, v2Moved: true, v1Interval, v2Interval };
   }
 
-  // Similar motion - check if parallel (same interval size)
-  const v1Interval = Math.abs(currSim.voice1Note.pitch - prevSim.voice1Note.pitch);
-  const v2Interval = Math.abs(currSim.voice2Note.pitch - prevSim.voice2Note.pitch);
-
+  // Similar motion - determine subtype based on interval characteristics
+  // Parallel: same interval size
   if (v1Interval === v2Interval) {
-    return { type: 'parallel', v1Moved: true, v2Moved: true };
+    return { type: 'parallel', v1Moved: true, v2Moved: true, v1Interval, v2Interval };
   }
 
-  return { type: 'similar', v1Moved: true, v2Moved: true };
+  // Check if either voice moves by step (1-2 semitones)
+  const v1IsStep = v1Interval <= 2;
+  const v2IsStep = v2Interval <= 2;
+
+  if (v1IsStep || v2IsStep) {
+    return { type: 'similar_step', v1Moved: true, v2Moved: true, v1Interval, v2Interval };
+  }
+
+  // Check if both voices move by same interval type (skip, perfect_leap, large_leap)
+  const v1Mag = getIntervalMagnitude(v1Interval);
+  const v2Mag = getIntervalMagnitude(v2Interval);
+
+  if (v1Mag.type === v2Mag.type) {
+    return { type: 'similar_same_type', v1Moved: true, v2Moved: true, v1Interval, v2Interval, intervalType: v1Mag.type };
+  }
+
+  // Different interval types
+  return { type: 'similar', v1Moved: true, v2Moved: true, v1Interval, v2Interval };
 }
 
 /**
@@ -358,6 +382,10 @@ function scoreEntry(prevSim, currSim, restContext = null) {
   const restNote = restModifier < 1.0 ? ' (reduced: entry from rest)' : '';
 
   // Motion modifier - apply rest modifier
+  // Penalties for similar motion based on subtype:
+  // - similar_step or similar (different interval types): -0.5
+  // - similar_same_type (same interval type, different size): -1.0
+  // - parallel (same interval size): -1.5
   if (motion.type === 'oblique') {
     const adj = 0.5 * restModifier;
     score += adj;
@@ -366,10 +394,18 @@ function scoreEntry(prevSim, currSim, restContext = null) {
     const adj = 0.5 * restModifier;
     score += adj;
     details.push(`Contrary motion: +${adj.toFixed(2)}${restNote}`);
-  } else if (motion.type === 'similar' || motion.type === 'parallel') {
+  } else if (motion.type === 'parallel') {
     const adj = -1.5 * restModifier;
     score += adj;
-    details.push(`Similar/parallel motion: ${adj.toFixed(2)}${restNote}`);
+    details.push(`Parallel motion: ${adj.toFixed(2)}${restNote}`);
+  } else if (motion.type === 'similar_same_type') {
+    const adj = -1.0 * restModifier;
+    score += adj;
+    details.push(`Similar motion (same interval type): ${adj.toFixed(2)}${restNote}`);
+  } else if (motion.type === 'similar_step' || motion.type === 'similar') {
+    const adj = -0.5 * restModifier;
+    score += adj;
+    details.push(`Similar motion (step/different types): ${adj.toFixed(2)}${restNote}`);
   }
 
   // Record entry intervals for resolution penalty calculation (penalties applied in scoreExit)
@@ -418,13 +454,34 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
   }
 
   // Check if this is actually a resolution (D → C) or just movement (D → D)
-  const isProperResolution = nextSim.interval.isConsonant() ||
+  const isConsonant = nextSim.interval.isConsonant() ||
     (nextSim.interval.class === 4 && !treatP4AsDissonant); // P4 can be consonant
 
-  let score = isProperResolution ? 1.0 : -0.5;
-  const details = isProperResolution
-    ? ['Resolves to consonance: +1.0']
-    : ['Leads to another dissonance (no resolution): -0.5'];
+  // Differentiate between perfect and imperfect consonance resolution
+  // Perfect consonances: unison (1), P5 (5), P8 (8)
+  // Imperfect consonances: 3rd (3), 6th (6)
+  const nextIntervalClass = nextSim.interval.class;
+  const isPerfectConsonance = isConsonant && (nextIntervalClass === 1 || nextIntervalClass === 5 || nextIntervalClass === 8);
+  const isImperfectConsonance = isConsonant && (nextIntervalClass === 3 || nextIntervalClass === 6);
+
+  let score;
+  const details = [];
+
+  if (isImperfectConsonance) {
+    score = 1.0;
+    details.push('Resolves to imperfect consonance: +1.0');
+  } else if (isPerfectConsonance) {
+    score = 0.5;
+    details.push('Resolves to perfect consonance: +0.5');
+  } else if (isConsonant) {
+    // Other consonances (P4 treated as consonant in some contexts)
+    score = 0.5;
+    details.push('Resolves to consonance: +0.5');
+  } else {
+    // Resolution to another dissonance
+    score = -1.5;
+    details.push('Leads to another dissonance (no resolution): -1.5');
+  }
 
   // Check for resolution by abandonment (one voice drops out)
   if (restContext && restContext.resolvedByAbandonment) {
@@ -470,6 +527,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
     // Calculate proportional penalty based on how entry leap is resolved
     if (entryInfo && entryInfo.v1MelodicInterval !== 0) {
       const entryDir = Math.sign(entryInfo.v1MelodicInterval);
+      const entryMag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
       const penaltyInfo = calculateResolutionPenalty(
         Math.abs(entryInfo.v1MelodicInterval),
         Math.abs(exitInterval),
@@ -480,6 +538,14 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
       if (penaltyInfo.penalty !== 0) {
         score += penaltyInfo.penalty;
         details.push(`V1 ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
+      }
+
+      // Leap continuation penalty: large leaps (but not skips) should be followed by opposite direction
+      // Applies to perfect_leap (P4/P5) and large_leap (6th+), not skip (3rd)
+      if ((entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap' || entryMag.type === 'octave') &&
+          v1Resolution.direction !== 0 && v1Resolution.direction === entryDir) {
+        score -= 0.25;
+        details.push('V1 leap not followed by opposite motion: -0.25');
       }
     } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
       // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
@@ -518,6 +584,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
     // Calculate proportional penalty based on how entry leap is resolved
     if (entryInfo && entryInfo.v2MelodicInterval !== 0) {
       const entryDir = Math.sign(entryInfo.v2MelodicInterval);
+      const entryMag = getIntervalMagnitude(entryInfo.v2MelodicInterval);
       const penaltyInfo = calculateResolutionPenalty(
         Math.abs(entryInfo.v2MelodicInterval),
         Math.abs(exitInterval),
@@ -528,6 +595,13 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
       if (penaltyInfo.penalty !== 0) {
         score += penaltyInfo.penalty;
         details.push(`V2 ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
+      }
+
+      // Leap continuation penalty: large leaps (but not skips) should be followed by opposite direction
+      if ((entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap' || entryMag.type === 'octave') &&
+          v2Resolution.direction !== 0 && v2Resolution.direction === entryDir) {
+        score -= 0.25;
+        details.push('V2 leap not followed by opposite motion: -0.25');
       }
     } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
       // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
@@ -616,21 +690,84 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
     }
   }
 
-  // CAMBIATA: Entry=Step Down, Exit=Skip Down (3rd)
-  // Check V1
-  if (entryInfo.v1MelodicInterval < 0 && Math.abs(entryInfo.v1MelodicInterval) <= 2) {
-    if (exitInfo.v1Resolution && exitInfo.v1Resolution.direction < 0 &&
-        exitInfo.v1Resolution.interval >= 3 && exitInfo.v1Resolution.interval <= 4) {
-      bonus += 1.5;
-      patterns.push({ type: 'cambiata', bonus: 1.5, voice: 1, description: 'Cambiata (step down entry, skip down exit)' });
+  // CAMBIATA (NOTA CAMBIATA) DETECTION
+  // Traditional cambiata: 5-note figure where the 2nd note is dissonant
+  // Pattern: consonance → step down to dissonance → skip down 3rd → step up → resolution
+  // We detect at the dissonance point (note 2 of 5):
+  //   - Entry: step down from consonance
+  //   - Exit: skip down a third (m3 or M3, 3-4 semitones)
+  //   - Typically on weak beat
+  //
+  // Variants:
+  //   - cambiata_proper: Traditional form (step down, skip down 3rd) on weak beat
+  //   - cambiata_inverted: Inverted form (step up, skip up 3rd)
+  //   - cambiata_simple: Core pattern on strong beat (less traditional)
+
+  // Helper to check cambiata for a voice
+  const checkCambiataForVoice = (voice, melodicInterval, resolution) => {
+    if (!resolution) return null;
+
+    const entryIsStep = Math.abs(melodicInterval) > 0 && Math.abs(melodicInterval) <= 2;
+    const exitIsSkip = resolution.interval >= 3 && resolution.interval <= 4;
+    const sameDirection = Math.sign(melodicInterval) === resolution.direction;
+
+    if (!entryIsStep || !exitIsSkip || !sameDirection) return null;
+
+    const isDescending = melodicInterval < 0;
+    const isWeakBeat = !isStrongBeat(currSim.onset);
+
+    if (isDescending && isWeakBeat) {
+      // Traditional cambiata: step down, skip down, weak beat
+      return {
+        type: 'cambiata_proper',
+        bonus: 1.5,
+        voice,
+        label: 'Cam',
+        description: 'Cambiata (step down → skip down 3rd, weak beat)',
+      };
+    } else if (!isDescending && isWeakBeat) {
+      // Inverted cambiata: step up, skip up, weak beat
+      return {
+        type: 'cambiata_inverted',
+        bonus: 1.0,
+        voice,
+        label: 'Cam↑',
+        description: 'Inverted cambiata (step up → skip up 3rd)',
+      };
+    } else if (isDescending) {
+      // Cambiata-like on strong beat (less idiomatic)
+      return {
+        type: 'cambiata_strong',
+        bonus: 0.5,
+        voice,
+        label: 'Cam?',
+        description: 'Cambiata figure on strong beat (non-traditional)',
+      };
+    } else {
+      // Inverted on strong beat
+      return {
+        type: 'cambiata_inverted_strong',
+        bonus: 0.5,
+        voice,
+        label: 'Cam↑?',
+        description: 'Inverted cambiata on strong beat (non-traditional)',
+      };
     }
+  };
+
+  // Check V1 for cambiata
+  const v1Cambiata = checkCambiataForVoice(1, entryInfo.v1MelodicInterval, exitInfo.v1Resolution);
+  if (v1Cambiata) {
+    bonus += v1Cambiata.bonus;
+    patterns.push(v1Cambiata);
   }
-  // Check V2
-  if (!patterns.some(p => p.type === 'cambiata') && entryInfo.v2MelodicInterval < 0 && Math.abs(entryInfo.v2MelodicInterval) <= 2) {
-    if (exitInfo.v2Resolution && exitInfo.v2Resolution.direction < 0 &&
-        exitInfo.v2Resolution.interval >= 3 && exitInfo.v2Resolution.interval <= 4) {
-      bonus += 1.5;
-      patterns.push({ type: 'cambiata', bonus: 1.5, voice: 2, description: 'Cambiata (step down entry, skip down exit)' });
+
+  // Check V2 for cambiata (only if V1 didn't match)
+  if (!v1Cambiata) {
+    const v2Cambiata = checkCambiataForVoice(2, entryInfo.v2MelodicInterval, exitInfo.v2Resolution);
+    if (v2Cambiata) {
+      bonus += v2Cambiata.bonus;
+      patterns.push(v2Cambiata);
     }
   }
 
@@ -904,14 +1041,24 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
   if (patternInfo.patterns.length > 0) {
     const mainPattern = patternInfo.patterns[0];
     type = mainPattern.type;
-    switch (type) {
-      case 'suspension': label = 'Sus'; break;
-      case 'appoggiatura': label = 'App'; break;
-      case 'passing': label = 'PT'; break;
-      case 'neighbor': label = 'N'; break;
-      case 'cambiata': label = 'Cam'; break;
-      case 'escape_tone': label = 'Esc'; break;
-      case 'anticipation': label = 'Ant'; break;
+
+    // Use pattern's label if provided, otherwise fall back to defaults
+    if (mainPattern.label) {
+      label = mainPattern.label;
+    } else {
+      switch (type) {
+        case 'suspension': label = 'Sus'; break;
+        case 'appoggiatura': label = 'App'; break;
+        case 'passing': label = 'PT'; break;
+        case 'neighbor': label = 'N'; break;
+        case 'cambiata': label = 'Cam'; break;
+        case 'cambiata_proper': label = 'Cam'; break;
+        case 'cambiata_inverted': label = 'Cam↑'; break;
+        case 'cambiata_strong': label = 'Cam?'; break;
+        case 'cambiata_inverted_strong': label = 'Cam↑?'; break;
+        case 'escape_tone': label = 'Esc'; break;
+        case 'anticipation': label = 'Ant'; break;
+      }
     }
   }
 
@@ -951,6 +1098,11 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
 
 /**
  * Analyze all intervals in a passage with context tracking
+ *
+ * Consecutive dissonance handling:
+ * - Each dissonance that resolves to another dissonance receives a -1.5 penalty (in scoreExit)
+ * - Consecutive dissonances compound: 2 in a row = both penalized, 3 in a row = all penalized
+ * - This is tracked in the summary as consecutiveDissonanceGroups
  */
 export function analyzeAllDissonances(sims) {
   const results = [];
@@ -975,9 +1127,38 @@ export function analyzeAllDissonances(sims) {
   const badDissonances = dissonances.filter(r => r.score < 0);
   const repetitiveConsonances = consonances.filter(r => r.category === 'consonant_repetitive');
 
+  // Track pattern types
   const typeCounts = {};
+  const allPatterns = []; // Collect all detected patterns for display
   for (const d of dissonances) {
     typeCounts[d.type] = (typeCounts[d.type] || 0) + 1;
+    if (d.patterns && d.patterns.length > 0) {
+      for (const p of d.patterns) {
+        allPatterns.push({
+          ...p,
+          onset: d.onset,
+          interval: d.interval,
+        });
+      }
+    }
+  }
+
+  // Track consecutive dissonance groups (D → D → D sequences)
+  const consecutiveGroups = [];
+  let currentGroup = [];
+  for (let i = 0; i < results.length; i++) {
+    if (!results[i].isConsonant) {
+      currentGroup.push({ index: i, onset: results[i].onset, type: results[i].type });
+    } else {
+      if (currentGroup.length >= 2) {
+        consecutiveGroups.push([...currentGroup]);
+      }
+      currentGroup = [];
+    }
+  }
+  // Don't forget trailing group
+  if (currentGroup.length >= 2) {
+    consecutiveGroups.push([...currentGroup]);
   }
 
   return {
@@ -995,6 +1176,8 @@ export function analyzeAllDissonances(sims) {
         ? dissonances.reduce((sum, d) => sum + d.score, 0) / dissonances.length
         : 0,
       typeCounts,
+      allPatterns, // All recognized ornamental patterns
+      consecutiveDissonanceGroups: consecutiveGroups, // Groups of 2+ adjacent dissonances
     },
   };
 }
