@@ -91,23 +91,34 @@ A subject with one note value scores poorly. Three or more values with contrast 
 
   strettoViability: {
     title: 'Stretto Potential',
-    brief: 'Capacity for canonic overlap at various entry distances.',
-    detailed: `Stretto occurs when a new entry begins before the previous one finishes. This analysis tests each possible entry distance:
+    brief: 'Counterpoint quality when overlapping at various entry distances.',
+    detailed: `Stretto occurs when a new entry begins before the previous one finishes. This analysis tests each possible entry distance as FULL COUNTERPOINT.
 
 For each distance, the algorithm:
-1. Creates a second voice with the subject offset by that distance (and optionally displaced by octave)
-2. Finds all vertical simultaneities between the voices
-3. Checks for forbidden parallels (5ths and 8ves moving in the same direction)
-4. Checks for dissonances on strong beats (beats 1 and 3 in 4/4)
+1. Creates a second voice with the subject offset by that distance (octave displaced)
+2. Runs the complete dissonance scoring analysis on this two-voice texture
+3. Evaluates every interval: entry/exit motion, pattern recognition, metric placement
+4. Produces an average counterpoint quality score for that distance
 
-Green = no violations detected
-Orange = issues found (hover or click for details)
+SCORING (base-zero):
+The stretto score is based on the AVERAGE counterpoint quality across all distances—not just counting "viable" vs "not viable". This gives a much more nuanced picture:
 
-Violations listed:
-• "Parallel 5ths/8ves" - consecutive perfect intervals in parallel motion
-• Interval + beat position - dissonance occurring on a strong beat
+• Distances with well-handled dissonances contribute positively
+• Distances with poorly resolved dissonances contribute negatively
+• The overall score reflects typical counterpoint quality in stretto
 
-More viable distances = more compositional flexibility. Close strettos (high overlap percentage) are particularly valuable for climactic passages.`,
+Bonuses:
+• Multiple distances with good counterpoint (avgScore ≥ 0)
+• Close stretto with good counterpoint (high overlap + good score)
+
+Penalties:
+• Parallel perfects (critical voice-leading errors)
+• Consistently poor dissonance handling
+
+Green = good counterpoint (average score ≥ 0)
+Orange = marginal or problematic counterpoint
+
+More "good" distances = more compositional flexibility. Close strettos with clean counterpoint are particularly valuable.`,
   },
 
   tonalAnswer: {
@@ -135,14 +146,21 @@ The generated answer ABC shows the computed transposition with any tonal modific
     brief: 'Quality of double counterpoint at the octave.',
     detailed: `Double counterpoint at the octave means the two voices can exchange positions—the upper voice becomes the lower and vice versa.
 
+SCORING (base-zero, comparison-based):
+The key question is: "Does the inverted position work as well as the original?"
+
+The score is based primarily on the INVERTED POSITION QUALITY—this is what matters for practical use. Both positions receive full dissonance analysis:
+
+• Inverted quality score × 5 = primary factor
+• If inverted is significantly WORSE than original: additional penalty
+• If inverted is BETTER than original: small bonus (rare but valuable)
+• Parallel perfects in inverted position: substantial penalty
+
+This approach recognizes that you can always use the original—the question is whether inversion is viable.
+
 The analysis tests both configurations:
 • Original: countersubject above the subject
 • Inverted: countersubject below the subject (transposed down an octave)
-
-For each configuration, it counts:
-• 3rds and 6ths (ideal—they invert to each other)
-• Perfect consonances (5ths become 4ths when inverted)
-• Dissonances on strong beats
 
 Dissonance classification (per species counterpoint practice):
 • sus: Suspension—prepared consonance held over to become dissonant, resolves down by step
@@ -354,29 +372,48 @@ Bar lines: | separates measures, |] ends the piece`,
   scoring: {
     title: 'Viability Score',
     brief: 'Aggregate assessment of fugal potential.',
-    detailed: `The overall score (0-100) combines individual category scores with these weights:
+    detailed: `BASE-ZERO SCORING SYSTEM
 
-Subject-only categories:
-• Tonal Definition (1.0) - clarity of tonal center
-• Rhythmic Character (0.8) - distinctive rhythm
-• Stretto Potential (1.0) - canonic overlap capacity
-• Answer Compatibility (0.9) - tonic-dominant junction
+Each category starts at 0 (neutral baseline). Positive points for strengths, negative for weaknesses. The display maps these to 0-100 (where 0 = 50).
 
-With countersubject:
+CATEGORY GROUPS:
+
+MELODIC QUALITY (subject line properties):
+• Tonal Definition (1.0) - how clearly the subject establishes tonal center
+  Baseline: ambiguous tonal center. +10 tonic opening, +15 strong terminal, -10 weak terminal.
+
+• Rhythmic Character (0.8) - distinctiveness of rhythmic profile
+  Baseline: 2 note values (minimal). +5 per additional value, +10 contrast, -15 uniform.
+
+FUGAL POTENTIAL (contrapuntal material):
+• Stretto Potential (1.0) - counterpoint quality at canonic overlaps
+  Baseline: average dissonance handling. Each distance scored as full counterpoint.
+  The score reflects average quality across ALL tested distances, not just viable count.
+
+• Answer Compatibility (0.9) - tonic-dominant junction quality
+  Baseline: acceptable junction. +15 strong, +5 good, -10 static, -12 unusual.
+
+VOICE COMBINATION (with countersubject):
 • Invertibility (1.0) - double counterpoint quality
-• Rhythmic Interplay (0.8) - attack point independence
+  Baseline: inverted = original quality. Score based on inverted position quality,
+  penalty if significantly worse than original. Not just counting issues.
+
+• Rhythmic Interplay (0.8) - rhythmic independence
+  Baseline: 50% attack overlap. +15 complementary, -15 homorhythmic.
+
 • Voice Independence (0.9) - contour differentiation
-• Transposition Stability (1.0) - works against answer
+  Baseline: average motion variety. +12 high contrary, -12 high parallel.
 
-Score = weighted average of applicable categories.
+• Transposition Stability (1.0) - CS against dominant-level answer
+  Baseline: acceptable counterpoint. Based on dissonance analysis vs the answer.
 
-Thresholds:
-• 85-100: Excellent - strong fugal material
-• 70-84: Good - solid with minor issues
-• 50-69: Fair - workable but has weaknesses
-• Below 50: Needs Work - significant issues
+DISPLAY THRESHOLDS:
+• 75-100: Excellent (internal +15 or better)
+• 58-74: Good (internal +5 to +15)
+• 42-57: Fair (internal -5 to +5)
+• Below 42: Needs Work (internal below -5)
 
-The score indicates potential, not quality. Unconventional subjects may score lower but still make effective fugues.`,
+The small number in parentheses (e.g., "+8.5") shows the actual base-zero internal score.`,
   },
 };
 

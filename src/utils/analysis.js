@@ -770,6 +770,12 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       viable: issues.length === 0,
       clean: issues.length === 0 && warnings.length === 0,
       qualityRating,
+      // Include full dissonance analysis for base-zero scoring
+      dissonanceAnalysis: {
+        summary: dissonanceAnalysis.summary,
+        // avgDissonanceScore: this is the key metric for stretto scoring
+        // It represents the average counterpoint quality at this distance
+      },
     });
   }
 

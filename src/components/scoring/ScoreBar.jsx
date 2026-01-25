@@ -1,10 +1,13 @@
-import { getScoreColor, getScoreBgColor, getScoreRating, SCORE_CATEGORIES } from '../../utils/scoring';
+import { getScoreColor, getScoreBgColor, getScoreRating, SCORE_CATEGORIES, LEGACY_KEY_MAP } from '../../utils/scoring';
 
 /**
  * Horizontal score bar component with clear +/- signposting
+ * Now supports base-zero internal scores with display mapping
  */
-export function ScoreBar({ categoryKey, score, showDetails = false, details = [] }) {
-  const category = SCORE_CATEGORIES[categoryKey];
+export function ScoreBar({ categoryKey, score, internalScore, showDetails = false, details = [] }) {
+  // Support both new and legacy category keys
+  const resolvedKey = LEGACY_KEY_MAP[categoryKey] || categoryKey;
+  const category = SCORE_CATEGORIES[resolvedKey] || SCORE_CATEGORIES[categoryKey];
   const color = getScoreColor(score);
   const bgColor = getScoreBgColor(score);
   const rating = getScoreRating(score);
@@ -80,6 +83,16 @@ export function ScoreBar({ categoryKey, score, showDetails = false, details = []
           }}>
             {rating}
           </div>
+          {/* Show internal score if available */}
+          {typeof internalScore === 'number' && (
+            <div style={{
+              fontSize: '9px',
+              color: '#78909c',
+              marginTop: '2px',
+            }}>
+              ({internalScore >= 0 ? '+' : ''}{internalScore.toFixed(1)})
+            </div>
+          )}
         </div>
       </div>
 

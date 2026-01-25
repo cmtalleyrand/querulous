@@ -6,6 +6,11 @@ import { SCORE_CATEGORIES, getScoreSummary } from '../../utils/scoring';
 /**
  * Main scoring dashboard component
  * Displays overall score and breakdown by category
+ *
+ * Categories are now organized by conceptual groups:
+ * - MELODIC: Properties of the subject line itself
+ * - FUGAL: How well it works as fugue material
+ * - COMBINATION: How voices work together (with CS)
  */
 export function ScoreDashboard({ scoreResult, hasCountersubject }) {
   const [showDetails, setShowDetails] = useState(false);
@@ -15,9 +20,29 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
 
   const { strengths, improvements } = getScoreSummary(scoreResult);
 
-  // Separate subject-only scores from countersubject scores
-  const subjectCategories = ['harmonicImplication', 'rhythmicVariety', 'strettoViability', 'tonalAnswer'];
-  const csCategories = ['doubleCounterpoint', 'rhythmicComplementarity', 'contourIndependence', 'modulatoryRobustness'];
+  // Organize categories by conceptual group (not by availability)
+  const categoryGroups = {
+    melodic: {
+      title: 'Melodic Quality',
+      subtitle: 'Properties of the subject line',
+      color: '#5c6bc0',
+      categories: ['tonalDefinition', 'rhythmicCharacter'],
+    },
+    fugal: {
+      title: 'Fugal Potential',
+      subtitle: 'How well it works as fugue material',
+      color: '#7e57c2',
+      categories: ['strettoPotential', 'answerCompatibility'],
+    },
+    combination: {
+      title: 'Voice Combination',
+      subtitle: 'How voices work together',
+      color: '#81c784',
+      categories: hasCountersubject
+        ? ['invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability']
+        : [],
+    },
+  };
 
   return (
     <div
@@ -142,67 +167,46 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
           </div>
         </div>
 
-        {/* Subject Analysis Scores */}
-        <div style={{ marginBottom: '16px' }}>
-          <h3
-            style={{
-              fontSize: '13px',
-              fontWeight: '600',
-              color: '#37474f',
-              marginBottom: '10px',
-              paddingBottom: '6px',
-              borderBottom: '2px solid #5c6bc0',
-            }}
-          >
-            Subject Analysis
-          </h3>
-          {subjectCategories.map((key) => {
-            const data = scoreResult.categories[key];
-            if (!data) return null;
-            return (
-              <div key={key} onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}>
-                <ScoreBar
-                  categoryKey={key}
-                  score={data.score}
-                  showDetails={showDetails || expandedCategory === key}
-                  details={data.details}
-                />
-              </div>
-            );
-          })}
-        </div>
+        {/* Category Groups */}
+        {Object.entries(categoryGroups).map(([groupKey, group]) => {
+          // Skip empty groups
+          if (group.categories.length === 0) return null;
 
-        {/* Countersubject Analysis Scores */}
-        {hasCountersubject && (
-          <div>
-            <h3
-              style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#37474f',
-                marginBottom: '10px',
-                paddingBottom: '6px',
-                borderBottom: '2px solid #81c784',
-              }}
-            >
-              Countersubject Analysis
-            </h3>
-            {csCategories.map((key) => {
-              const data = scoreResult.categories[key];
-              if (!data) return null;
-              return (
-                <div key={key} onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}>
-                  <ScoreBar
-                    categoryKey={key}
-                    score={data.score}
-                    showDetails={showDetails || expandedCategory === key}
-                    details={data.details}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
+          return (
+            <div key={groupKey} style={{ marginBottom: '16px' }}>
+              <h3
+                style={{
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  color: '#37474f',
+                  marginBottom: '4px',
+                  paddingBottom: '6px',
+                  borderBottom: `2px solid ${group.color}`,
+                }}
+              >
+                {group.title}
+              </h3>
+              <p style={{ fontSize: '11px', color: '#78909c', margin: '0 0 10px 0' }}>
+                {group.subtitle}
+              </p>
+              {group.categories.map((key) => {
+                const data = scoreResult.categories[key];
+                if (!data) return null;
+                return (
+                  <div key={key} onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}>
+                    <ScoreBar
+                      categoryKey={key}
+                      score={data.score}
+                      internalScore={data.internal}
+                      showDetails={showDetails || expandedCategory === key}
+                      details={data.details}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
 
         {/* Improvement suggestions */}
         {improvements.length > 0 && (
