@@ -1117,9 +1117,60 @@ export function testModulatoryRobustness(subject, cs, formatter) {
 }
 
 /**
+ * Convert semitone interval to sequence class for pattern matching.
+ * - 2nds (1-2 st), 3rds (3-4 st), 6ths (8-9 st), 7ths (10-11 st): same class regardless of M/m
+ * - Unison (0) and Octave (±12): same class
+ * - P4 up (+5) ≡ P5 down (-7); P5 up (+7) ≡ P4 down (-5) — inversions match
+ * - But P4 up ≠ P5 up; P4 down ≠ P5 down (same direction = different class)
+ */
+function toSequenceClass(semitones) {
+  const abs = Math.abs(semitones);
+  const sign = Math.sign(semitones);
+
+  // Unison and octave are same class
+  if (abs === 0 || abs === 12) return { class: 1, dir: sign || 1 };
+
+  // 2nds (1-2 semitones)
+  if (abs === 1 || abs === 2) return { class: 2, dir: sign };
+
+  // 3rds (3-4 semitones)
+  if (abs === 3 || abs === 4) return { class: 3, dir: sign };
+
+  // P4 and P5 with inversion equivalence:
+  // P4 up (+5) ≡ P5 down (-7): both are "4th-class ascending"
+  // P5 up (+7) ≡ P4 down (-5): both are "5th-class ascending"
+  if (semitones === 5 || semitones === -7) return { class: 4, dir: 1 };
+  if (semitones === 7 || semitones === -5) return { class: 5, dir: 1 };
+
+  // Tritone
+  if (abs === 6) return { class: 'TT', dir: sign };
+
+  // 6ths (8-9 semitones)
+  if (abs === 8 || abs === 9) return { class: 6, dir: sign };
+
+  // 7ths (10-11 semitones)
+  if (abs === 10 || abs === 11) return { class: 7, dir: sign };
+
+  // Larger intervals: use semitones directly
+  return { class: abs, dir: sign };
+}
+
+function sequenceClassesEqual(a, b) {
+  return a.class === b.class && a.dir === b.dir;
+}
+
+function intervalClassPatternsMatch(pattern1, pattern2) {
+  if (pattern1.length !== pattern2.length) return false;
+  for (let i = 0; i < pattern1.length; i++) {
+    if (!sequenceClassesEqual(pattern1[i], pattern2[i])) return false;
+  }
+  return true;
+}
+
+/**
  * Detect melodic sequences in a voice
- * A sequence is a melodic pattern that repeats (NOT requiring transposition)
- * This includes exact repetitions and transposed repetitions
+ * A sequence is a melodic pattern that repeats (with or without transposition)
+ * Uses interval CLASSES not exact semitones (M3 and m3 are both "3rd")
  * @param {NoteEvent[]} notes - Array of notes to analyze
  * @param {number} minLength - Minimum number of notes in a sequence unit (default 3)
  * @returns {Object} - Detected sequences with their patterns
@@ -1129,10 +1180,13 @@ export function detectSequences(notes, minLength = 3) {
     return { sequences: [], hasSequences: false, noteRanges: [] };
   }
 
-  // Build interval pattern from the melody (for melodic shape matching)
-  const intervals = [];
+  // Build interval pattern using sequence classes (not raw semitones)
+  const intervalClasses = [];
+  const rawIntervals = [];
   for (let i = 1; i < notes.length; i++) {
-    intervals.push(notes[i].pitch - notes[i - 1].pitch);
+    const semitones = notes[i].pitch - notes[i - 1].pitch;
+    intervalClasses.push(toSequenceClass(semitones));
+    rawIntervals.push(semitones);
   }
 
   // Build rhythm pattern (relative durations)
@@ -1144,7 +1198,8 @@ export function detectSequences(notes, minLength = 3) {
   for (let unitLen = minLength; unitLen <= Math.floor(notes.length / 2); unitLen++) {
     // Try each starting position
     for (let start = 0; start <= notes.length - unitLen * 2; start++) {
-      const intervalPattern = intervals.slice(start, start + unitLen - 1); // unitLen-1 intervals for unitLen notes
+      const intervalPattern = intervalClasses.slice(start, start + unitLen - 1);
+      const rawIntervalPattern = rawIntervals.slice(start, start + unitLen - 1);
       const rhythmPattern = rhythms.slice(start, start + unitLen);
 
       // Look for repetitions of this pattern
@@ -1153,19 +1208,18 @@ export function detectSequences(notes, minLength = 3) {
       let lastMatchEnd = start + unitLen;
 
       for (let pos = start + unitLen; pos <= notes.length - unitLen; pos++) {
-        const candidateIntervals = intervals.slice(pos, pos + unitLen - 1);
+        const candidateIntervals = intervalClasses.slice(pos, pos + unitLen - 1);
         const candidateRhythms = rhythms.slice(pos, pos + unitLen);
 
-        // Check if intervals AND rhythms match (pattern repetition)
-        // Intervals define melodic shape, rhythms define rhythmic pattern
-        const intervalsMatch = arraysEqual(intervalPattern, candidateIntervals);
+        // Check if interval CLASSES AND rhythms match
+        const intervalsMatch = intervalClassPatternsMatch(intervalPattern, candidateIntervals);
         const rhythmsMatch = rhythmsSimilar(rhythmPattern, candidateRhythms);
 
         if (intervalsMatch && rhythmsMatch) {
           repetitions++;
           matches.push({ startNote: pos, endNote: pos + unitLen - 1 });
           lastMatchEnd = pos + unitLen;
-          pos = lastMatchEnd - 1; // Continue from end of this match
+          pos = lastMatchEnd - 1;
         }
       }
 
@@ -1187,7 +1241,8 @@ export function detectSequences(notes, minLength = 3) {
             endNoteIndex: lastMatchEnd - 1,
             unitLength: unitLen,
             repetitions,
-            intervalPattern,
+            intervalPattern: rawIntervalPattern, // Store raw semitones for display
+            intervalClassPattern: intervalPattern, // Store classes for reference
             rhythmPattern,
             matches,
             transpositions,

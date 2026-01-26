@@ -267,14 +267,15 @@ export default function App() {
       res.harmonicImplication = testHarmonicImplication(subject, tonic, analysisMode, formatter);
       res.rhythmicVariety = testRhythmicVariety(subject, formatter);
 
-      // Analyze sequences in the subject (for development potential and motion penalty mitigation)
-      res.sequentialPotential = testSequentialPotential(subject, formatter);
+      // Analyze sequences in all voices
+      res.sequences = {
+        subject: testSequentialPotential(subject, formatter),
+      };
 
-      // Set sequence ranges for motion penalty mitigation in dissonance scoring
-      if (res.sequentialPotential.noteRanges?.length > 0) {
-        setSequenceRanges(res.sequentialPotential.noteRanges);
-        // Also set beat ranges for onset-based checking
-        const beatRanges = res.sequentialPotential.sequences?.map(seq => ({
+      // Set sequence ranges for motion penalty mitigation (subject only for now)
+      if (res.sequences.subject.noteRanges?.length > 0) {
+        setSequenceRanges(res.sequences.subject.noteRanges);
+        const beatRanges = res.sequences.subject.sequences?.map(seq => ({
           startBeat: seq.startBeat,
           endBeat: seq.endBeat,
         })) || [];
@@ -304,8 +305,14 @@ export default function App() {
       }
       res.answerNotes = answerNotes;
 
+      // Analyze sequences in the answer
+      res.sequences.answer = testSequentialPotential(answerNotes, formatter);
+
       // Run countersubject analyses if CS provided
       if (shiftedCs?.length) {
+        // Analyze sequences in the countersubject
+        res.sequences.countersubject = testSequentialPotential(shiftedCs, formatter);
+
         // Run analysis with shifted CS (already computed above)
         res.doubleCounterpoint = testDoubleCounterpoint(subject, shiftedCs, formatter);
         res.rhythmicComplementarity = testRhythmicComplementarity(subject, shiftedCs);
@@ -762,7 +769,7 @@ export default function App() {
             <Section title="Subject" helpKey="subject" defaultCollapsed={true}>
               <PianoRoll
                 voices={[{ notes: results.subject, color: '#5c6bc0', label: 'Subject' }]}
-                sequenceRanges={results.sequentialPotential?.noteRanges || []}
+                sequenceRanges={results.sequences?.subject?.noteRanges || []}
               />
             </Section>
 
@@ -923,35 +930,64 @@ export default function App() {
             </Section>
 
             {/* Sequences */}
-            {results.sequentialPotential?.detailedSequences?.length > 0 && (
-              <Section title="Sequences" defaultCollapsed={true}>
-                {results.sequentialPotential.detailedSequences.map((seq, seqIdx) => (
-                  <div key={seqIdx} style={{
-                    padding: '12px',
-                    marginBottom: seqIdx < results.sequentialPotential.detailedSequences.length - 1 ? '12px' : 0,
-                    backgroundColor: '#fffbeb',
-                    border: '1px solid #fcd34d',
-                    borderRadius: '6px',
-                  }}>
-                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#92400e', marginBottom: '8px' }}>
-                      Notes {seq.startNote}–{seq.endNote}: {seq.repetitions}× repetition{seq.repetitions > 2 ? 's' : ''}
-                      {seq.transposition && ` (${seq.transposition} each)`}
-                      {seq.isExact && ' (exact)'}
-                    </div>
-                    <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#78350f' }}>
-                      <strong>Pattern:</strong>
-                      <div style={{ marginTop: '4px', paddingLeft: '8px' }}>
-                        {seq.pattern.map((step, i) => (
-                          <div key={i}>
-                            {step.step}. {step.duration}{step.interval ? ` (${step.interval})` : ''}
-                          </div>
-                        ))}
+            {(() => {
+              const allSequences = [];
+              if (results.sequences?.subject?.detailedSequences?.length > 0) {
+                allSequences.push({ voice: 'Subject', color: '#5c6bc0', data: results.sequences.subject.detailedSequences });
+              }
+              if (results.sequences?.answer?.detailedSequences?.length > 0) {
+                allSequences.push({ voice: 'Answer', color: '#26a69a', data: results.sequences.answer.detailedSequences });
+              }
+              if (results.sequences?.countersubject?.detailedSequences?.length > 0) {
+                allSequences.push({ voice: 'Countersubject', color: '#ef6c00', data: results.sequences.countersubject.detailedSequences });
+              }
+
+              if (allSequences.length === 0) return null;
+
+              return (
+                <Section title="Sequences" defaultCollapsed={true}>
+                  {allSequences.map((voiceSeqs, voiceIdx) => (
+                    <div key={voiceIdx} style={{ marginBottom: voiceIdx < allSequences.length - 1 ? '16px' : 0 }}>
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        color: voiceSeqs.color,
+                        marginBottom: '8px',
+                        paddingBottom: '4px',
+                        borderBottom: `2px solid ${voiceSeqs.color}`,
+                      }}>
+                        {voiceSeqs.voice}
                       </div>
+                      {voiceSeqs.data.map((seq, seqIdx) => (
+                        <div key={seqIdx} style={{
+                          padding: '12px',
+                          marginBottom: seqIdx < voiceSeqs.data.length - 1 ? '8px' : 0,
+                          backgroundColor: '#fffbeb',
+                          border: '1px solid #fcd34d',
+                          borderRadius: '6px',
+                        }}>
+                          <div style={{ fontSize: '13px', fontWeight: '600', color: '#92400e', marginBottom: '8px' }}>
+                            Notes {seq.startNote}–{seq.endNote}: {seq.repetitions}× repetition{seq.repetitions > 2 ? 's' : ''}
+                            {seq.transposition && ` (${seq.transposition} each)`}
+                            {seq.isExact && ' (exact)'}
+                          </div>
+                          <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#78350f' }}>
+                            <strong>Pattern:</strong>
+                            <div style={{ marginTop: '4px', paddingLeft: '8px' }}>
+                              {seq.pattern.map((step, i) => (
+                                <div key={i}>
+                                  {step.step}. {step.duration}{step.interval ? ` (${step.interval})` : ''}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </Section>
-            )}
+                  ))}
+                </Section>
+              );
+            })()}
 
             {/* Tonal Answer */}
             <Section title="Tonal Answer" helpKey="tonalAnswer">

@@ -185,6 +185,28 @@ export function IntervalAnalysisViz({
     if (pt) setSelectedInterval(pt);
   };
 
+  // Handle note click - find interval that overlaps with this note's duration
+  const handleNoteClick = (note) => {
+    // Find interval points where this note is sounding
+    const matchingPts = intervalPoints.filter(pt =>
+      note.onset <= pt.onset && pt.onset < note.onset + note.duration
+    );
+
+    if (matchingPts.length > 0) {
+      // If clicking on an already-selected note's interval, deselect
+      const exactMatch = matchingPts.find(pt => pt.onset === selectedInterval?.onset);
+      if (exactMatch) {
+        setSelectedInterval(null);
+        setHighlightedOnset(null);
+      } else {
+        // Select the first matching interval (earliest during the note)
+        const pt = matchingPts[0];
+        setSelectedInterval(pt);
+        setHighlightedOnset(getOnsetKey(pt.onset));
+      }
+    }
+  };
+
   // Semantic color scheme based on interval context
   // Preparation: blue-green (consonance preparing dissonance)
   // Dissonance: purple spectrum (handled), red (bad)
@@ -300,14 +322,25 @@ export function IntervalAnalysisViz({
                 intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset && isNoteSoundingAt(n, pt.onset));
 
               return (
-                <g key={`v1-${i}`}>
+                <g key={`v1-${i}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => handleNoteClick(n)}
+                  onMouseEnter={() => {
+                    const pts = intervalPoints.filter(pt =>
+                      n.onset <= pt.onset && pt.onset < n.onset + n.duration
+                    );
+                    if (pts.length > 0) setHighlightedOnset(getOnsetKey(pts[0].onset));
+                  }}
+                  onMouseLeave={() => setHighlightedOnset(null)}
+                >
                   {isHighlighted && (
                     <rect x={x - 3} y={y - noteHeight/2 - 2} width={width + 6} height={noteHeight + 4}
                       fill="#fbbf24" rx={5} opacity={0.5} />
                   )}
                   <rect x={x} y={y - noteHeight/2 + 2} width={width} height={noteHeight - 4}
                     fill={voice1.color} rx={4} />
-                  <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
+                  <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500"
+                    style={{ pointerEvents: 'none' }}>
                     {pitchName(n.pitch).replace(/\d/, '')}
                   </text>
                 </g>
@@ -323,14 +356,25 @@ export function IntervalAnalysisViz({
                 intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset && isNoteSoundingAt(n, pt.onset));
 
               return (
-                <g key={`v2-${i}`}>
+                <g key={`v2-${i}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => handleNoteClick(n)}
+                  onMouseEnter={() => {
+                    const pts = intervalPoints.filter(pt =>
+                      n.onset <= pt.onset && pt.onset < n.onset + n.duration
+                    );
+                    if (pts.length > 0) setHighlightedOnset(getOnsetKey(pts[0].onset));
+                  }}
+                  onMouseLeave={() => setHighlightedOnset(null)}
+                >
                   {isHighlighted && (
                     <rect x={x - 3} y={y - noteHeight/2 - 2} width={width + 6} height={noteHeight + 4}
                       fill="#fbbf24" rx={5} opacity={0.5} />
                   )}
                   <rect x={x} y={y - noteHeight/2 + 2} width={width} height={noteHeight - 4}
                     fill={voice2.color} rx={4} opacity={0.9} />
-                  <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
+                  <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500"
+                    style={{ pointerEvents: 'none' }}>
                     {pitchName(n.pitch).replace(/\d/, '')}
                   </text>
                 </g>
