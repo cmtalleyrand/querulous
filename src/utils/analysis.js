@@ -1255,63 +1255,86 @@ function rhythmsSimilar(a, b) {
 }
 
 /**
- * Analyze sequences in subject for fugal development potential
+ * Format interval as readable string (e.g., "+P5", "-3rd")
  */
-export function testSequentialPotential(subject, formatter) {
-  const sequenceAnalysis = detectSequences(subject, 3);
-  const observations = [];
+function formatIntervalName(semitones) {
+  const abs = Math.abs(semitones);
+  const sign = semitones > 0 ? '+' : '-';
 
-  if (sequenceAnalysis.hasSequences) {
-    const longest = sequenceAnalysis.longestSequence;
+  const intervalNames = {
+    0: 'unison', 1: 'm2', 2: 'M2', 3: 'm3', 4: 'M3', 5: 'P4',
+    6: 'TT', 7: 'P5', 8: 'm6', 9: 'M6', 10: 'm7', 11: 'M7', 12: 'P8',
+  };
 
-    // Describe the sequence
-    if (longest.isExactRepetition) {
-      observations.push({
-        type: 'strength',
-        description: `Contains ${longest.repetitions}-fold exact repetition (${longest.unitLength} notes each)`,
-      });
-    } else {
-      // Analyze transposition pattern
-      const avgTransposition = longest.transpositions.reduce((a, b) => a + b, 0) / longest.transpositions.length;
-      const direction = avgTransposition < 0 ? 'descending' : avgTransposition > 0 ? 'ascending' : 'static';
-      const transpositionDesc = `by ~${Math.abs(Math.round(avgTransposition))} semitones ${direction}`;
+  const name = intervalNames[abs] || `${abs}st`;
+  return semitones === 0 ? 'unison' : `${sign}${name}`;
+}
 
-      observations.push({
-        type: 'strength',
-        description: `Contains ${longest.repetitions}-fold sequence (${longest.unitLength} notes each, ${transpositionDesc})`,
-      });
+/**
+ * Format duration as readable string
+ */
+function formatSeqDuration(beats) {
+  if (beats === 4) return 'whole';
+  if (beats === 2) return 'half';
+  if (beats === 1) return 'quarter';
+  if (beats === 0.5) return '8th';
+  if (beats === 0.25) return '16th';
+  if (beats === 3) return 'dotted half';
+  if (beats === 1.5) return 'dotted quarter';
+  if (beats === 0.75) return 'dotted 8th';
+  return `${beats}`;
+}
 
-      // Check for common sequence types
-      const absTransp = Math.abs(Math.round(avgTransposition));
-      if (absTransp === 2 || absTransp === 1) {
-        observations.push({
-          type: 'info',
-          description: 'Sequence by step—typical for circle-of-fifths progressions',
-        });
-      } else if (absTransp === 5 || absTransp === 7) {
-        observations.push({
-          type: 'info',
-          description: 'Sequence by fourth/fifth—strong harmonic motion',
-        });
+/**
+ * Analyze sequences in a voice - returns factual description only
+ * No interpretive commentary, just the pattern itself
+ */
+export function testSequentialPotential(notes, formatter) {
+  const sequenceAnalysis = detectSequences(notes, 3);
+  const detailedSequences = [];
+
+  for (const seq of sequenceAnalysis.sequences) {
+    // Build factual pattern description: duration and interval from previous
+    const patternNotes = notes.slice(seq.startNoteIndex, seq.startNoteIndex + seq.unitLength);
+    const patternSteps = [];
+
+    for (let i = 0; i < patternNotes.length; i++) {
+      const note = patternNotes[i];
+      const dur = formatSeqDuration(note.duration);
+
+      if (i === 0) {
+        patternSteps.push({ step: i + 1, duration: dur, interval: null });
+      } else {
+        const interval = note.pitch - patternNotes[i - 1].pitch;
+        patternSteps.push({ step: i + 1, duration: dur, interval: formatIntervalName(interval) });
       }
     }
 
-    if (sequenceAnalysis.sequenceRatio > 0.5) {
-      observations.push({
-        type: 'info',
-        description: `${Math.round(sequenceAnalysis.sequenceRatio * 100)}% of subject is sequential—good for development`,
-      });
+    // Transposition between repetitions (factual)
+    let transposition = null;
+    if (!seq.isExactRepetition && seq.transpositions.length > 0) {
+      const avgTransp = seq.transpositions.reduce((a, b) => a + b, 0) / seq.transpositions.length;
+      const rounded = Math.round(avgTransp);
+      if (rounded !== 0) {
+        transposition = `${rounded > 0 ? '+' : ''}${rounded} semitones`;
+      }
     }
-  } else {
-    observations.push({
-      type: 'info',
-      description: 'No clear melodic sequences detected',
+
+    detailedSequences.push({
+      startNote: seq.startNoteIndex + 1,
+      endNote: seq.endNoteIndex + 1,
+      unitLength: seq.unitLength,
+      repetitions: seq.repetitions,
+      isExact: seq.isExactRepetition,
+      transposition,
+      pattern: patternSteps,
+      noteRanges: seq.matches.map(m => ({ start: m.startNote, end: m.endNote })),
     });
   }
 
   return {
     ...sequenceAnalysis,
-    observations,
+    detailedSequences,
   };
 }
 

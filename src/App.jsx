@@ -922,34 +922,34 @@ export default function App() {
               <ObservationList observations={results.harmonicImplication.observations} />
             </Section>
 
-            {/* Sequential Potential */}
-            {results.sequentialPotential && (
-              <Section title="Sequential Potential" defaultCollapsed={true}>
-                <DataRow
-                  data={{
-                    'Has Sequences': results.sequentialPotential.hasSequences ? 'Yes' : 'No',
-                    'Sequential Notes': results.sequentialPotential.hasSequences
-                      ? `${results.sequentialPotential.totalSequentialNotes} (${Math.round(results.sequentialPotential.sequenceRatio * 100)}%)`
-                      : 'N/A',
-                    'Longest Sequence': results.sequentialPotential.longestSequence
-                      ? `${results.sequentialPotential.longestSequence.repetitions}× ${results.sequentialPotential.longestSequence.unitLength} notes`
-                      : 'None',
-                  }}
-                />
-                <ObservationList observations={results.sequentialPotential.observations} />
-                {results.sequentialPotential.hasSequences && (
-                  <div style={{
-                    marginTop: '8px',
-                    padding: '8px 12px',
-                    backgroundColor: '#f0f9ff',
-                    border: '1px solid #bae6fd',
+            {/* Sequences */}
+            {results.sequentialPotential?.detailedSequences?.length > 0 && (
+              <Section title="Sequences" defaultCollapsed={true}>
+                {results.sequentialPotential.detailedSequences.map((seq, seqIdx) => (
+                  <div key={seqIdx} style={{
+                    padding: '12px',
+                    marginBottom: seqIdx < results.sequentialPotential.detailedSequences.length - 1 ? '12px' : 0,
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fcd34d',
                     borderRadius: '6px',
-                    fontSize: '12px',
-                    color: '#0369a1',
                   }}>
-                    Sequences detected: Motions within sequential passages receive reduced penalties.
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#92400e', marginBottom: '8px' }}>
+                      Notes {seq.startNote}–{seq.endNote}: {seq.repetitions}× repetition{seq.repetitions > 2 ? 's' : ''}
+                      {seq.transposition && ` (${seq.transposition} each)`}
+                      {seq.isExact && ' (exact)'}
+                    </div>
+                    <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#78350f' }}>
+                      <strong>Pattern:</strong>
+                      <div style={{ marginTop: '4px', paddingLeft: '8px' }}>
+                        {seq.pattern.map((step, i) => (
+                          <div key={i}>
+                            {step.step}. {step.duration}{step.interval ? ` (${step.interval})` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                )}
+                ))}
               </Section>
             )}
 
