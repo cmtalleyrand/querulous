@@ -226,6 +226,7 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                 isConsonant: pt.isConsonant,
                 isPerfect,
                 score: pt.score || 0,
+                category: pt.category,
               });
               const fillColor = style.fill;
               const labelBg = style.bg;

@@ -186,15 +186,19 @@ export function IntervalAnalysisViz({
   };
 
   // Semantic color scheme based on interval context
-  // Good: bright green (good resolution), bright purple (good dissonance handling)
-  // Meh: pale green (normal consonance), yellowish (repetitive)
-  // Bad: orange (bad resolution), red-purple/red (bad dissonance)
+  // Preparation: blue-green (consonance preparing dissonance)
+  // Dissonance: purple spectrum (handled), red (bad)
+  // Resolution: bright green (good), orange (poor)
+  // Normal: pale green
   const getScoreStyle = (pt) => {
     const { category, score, isConsonant } = pt;
 
     // Consonances
     if (isConsonant) {
       switch (category) {
+        case 'consonant_preparation':
+          // Blue-green for preparation - distinct from normal consonance
+          return { color: '#0891b2', bg: '#cffafe', label: 'Preparation', lineColor: '#06b6d4' };
         case 'consonant_good_resolution':
           return { color: '#059669', bg: '#a7f3d0', label: 'Good resolution', lineColor: '#10b981' };
         case 'consonant_bad_resolution':

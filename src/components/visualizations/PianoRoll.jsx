@@ -6,8 +6,11 @@ import { generateGridLines } from '../../utils/vizConstants';
  * Piano Roll visualization component
  * Displays notes as colored rectangles on a pitch/time grid
  * Interactive: hover for tooltips, click for detailed info
+ * @param {Array} voices - Array of voice objects with notes, color, label
+ * @param {string} title - Optional title for the visualization
+ * @param {Array} sequenceRanges - Optional array of {start, end} note index ranges that are part of sequences
  */
-export function PianoRoll({ voices, title }) {
+export function PianoRoll({ voices, title, sequenceRanges = [] }) {
   const [hoveredNote, setHoveredNote] = useState(null);
   const [selectedNote, setSelectedNote] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -48,6 +51,18 @@ export function PianoRoll({ voices, title }) {
     if (dur === 1.5) return 'dotted quarter';
     if (dur === 0.75) return 'dotted 8th';
     return `${dur} beats`;
+  };
+
+  // Check if a note index is part of a sequence
+  const isNoteInSequence = (voiceIndex, noteIndex) => {
+    // Only check for first voice (subject) if sequenceRanges provided
+    if (voiceIndex !== 0 || !sequenceRanges || sequenceRanges.length === 0) return false;
+    for (const range of sequenceRanges) {
+      if (noteIndex >= range.start && noteIndex <= range.end) {
+        return true;
+      }
+    }
+    return false;
   };
 
   const labels = [];
@@ -125,20 +140,38 @@ export function PianoRoll({ voices, title }) {
           v.notes.map((n, ni) => {
             const isHovered = hoveredNote && hoveredNote.voiceIndex === vi && hoveredNote.noteIndex === ni;
             const isSelected = selectedNote && selectedNote.voiceIndex === vi && selectedNote.noteIndex === ni;
-            const noteData = { ...n, voiceIndex: vi, noteIndex: ni, voiceLabel: v.label, voiceColor: v.color };
+            const inSequence = isNoteInSequence(vi, ni);
+            const noteData = { ...n, voiceIndex: vi, noteIndex: ni, voiceLabel: v.label, voiceColor: v.color, inSequence };
+
+            const noteX = tToX(n.onset);
+            const noteY = pToY(n.pitch) - nH / 2 + 1;
+            const noteWidth = Math.max(2, n.duration * tScale - 1);
+            const noteHeight = nH - 2;
 
             return (
               <g key={`${vi}-${ni}`}>
+                {/* Sequence highlight glow - golden background for notes in sequences */}
+                {inSequence && (
+                  <rect
+                    x={noteX - 2}
+                    y={noteY - 2}
+                    width={noteWidth + 4}
+                    height={noteHeight + 4}
+                    fill="#fbbf24"
+                    rx={4}
+                    opacity={0.4}
+                  />
+                )}
                 <rect
-                  x={tToX(n.onset)}
-                  y={pToY(n.pitch) - nH / 2 + 1}
-                  width={Math.max(2, n.duration * tScale - 1)}
-                  height={nH - 2}
+                  x={noteX}
+                  y={noteY}
+                  width={noteWidth}
+                  height={noteHeight}
                   fill={v.color}
                   rx={2}
                   opacity={v.opacity || 1}
-                  stroke={isSelected ? '#000' : isHovered ? '#666' : 'none'}
-                  strokeWidth={isSelected ? 2 : isHovered ? 1 : 0}
+                  stroke={isSelected ? '#000' : isHovered ? '#666' : inSequence ? '#d97706' : 'none'}
+                  strokeWidth={isSelected ? 2 : isHovered ? 1 : inSequence ? 1.5 : 0}
                   style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
                   onMouseEnter={(e) => handleMouseEnter(noteData, e)}
                   onMouseLeave={handleMouseLeave}
@@ -159,6 +192,15 @@ export function PianoRoll({ voices, title }) {
               </text>
             </g>
           ))}
+          {/* Sequence legend if sequences present */}
+          {sequenceRanges && sequenceRanges.length > 0 && (
+            <g transform={`translate(0, ${voices.length * 14})`}>
+              <rect x={0} y={0} width={10} height={10} fill="#fbbf24" rx={2} stroke="#d97706" strokeWidth={1} />
+              <text x={14} y={8} fontSize="9" fill="#d97706">
+                Sequence
+              </text>
+            </g>
+          )}
         </g>
 
         {/* Hover tooltip inside SVG */}
@@ -232,6 +274,28 @@ export function PianoRoll({ voices, title }) {
               <div style={{ fontWeight: '500' }}>Beat {selectedNote.onset + 1}</div>
             </div>
           </div>
+          {selectedNote.inSequence && (
+            <div style={{
+              marginTop: '8px',
+              paddingTop: '8px',
+              borderTop: '1px solid #eee',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}>
+              <span style={{
+                display: 'inline-block',
+                width: '12px',
+                height: '12px',
+                backgroundColor: '#fbbf24',
+                borderRadius: '2px',
+                border: '1px solid #d97706',
+              }} />
+              <span style={{ fontSize: '11px', color: '#d97706', fontWeight: '500' }}>
+                Part of melodic sequence (reduced motion penalties)
+              </span>
+            </div>
+          )}
           {selectedNote.abcNote && (
             <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee' }}>
               <span style={{ fontSize: '10px', color: '#9e9e9e' }}>ABC: </span>

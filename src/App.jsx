@@ -38,9 +38,12 @@ import {
   testDoubleCounterpoint,
   testContourIndependence,
   testModulatoryRobustness,
+  testSequentialPotential,
   calculateOverallScore,
   setP4Treatment,
   setMeter,
+  setSequenceRanges,
+  setSequenceBeatRanges,
 } from './utils';
 import { NoteEvent, ScaleDegree } from './types';
 
@@ -97,6 +100,16 @@ export default function App() {
       console.error('Failed to load saved presets:', e);
     }
   }, []);
+
+  // Re-run analysis when octave shift settings change (if CS exists)
+  // This ensures analysis reflects the actual octave placement
+  useEffect(() => {
+    if (results?.countersubject) {
+      // Trigger re-analysis with new octave settings
+      analyze();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [csPos, csShift]);
 
   // Save preset
   const savePreset = () => {
@@ -221,12 +234,21 @@ export default function App() {
       // Parse or generate answer (use spelling key for accidentals)
       let answerNotes = answerInput.trim() ? parseABC(answerInput, tonic, analysisMode, effNL, spellingKeySig).notes : null;
 
+      // Calculate octave shift for countersubject
+      // This shift affects both analysis and visualization
+      const csOctaveShiftVal = (csPos === 'below' ? -12 : 0) + parseInt(csShift);
+      const shiftedCs = cs?.length
+        ? cs.map(n => ({ ...n, pitch: n.pitch + csOctaveShiftVal }))
+        : null;
+
       // Build results object
       const res = {
         keyInfo,
         formatter,
         subject,
-        countersubject: cs,
+        countersubject: shiftedCs, // Store shifted CS - analysis and visualization use the same data
+        countersubjectOriginal: cs, // Keep original for reference
+        countersubjectShift: csOctaveShiftVal, // Store shift value for display
         defaultNoteLength: effNL,
         meter,
         parsedInfo: {
@@ -237,12 +259,31 @@ export default function App() {
           defaultNoteLength: effNL,
           subjectNotes: subject.length,
           csNotes: cs?.length || 0,
+          csOctaveShift: csOctaveShiftVal, // Include shift info in parsed info
         },
       };
 
       // Run subject analyses
       res.harmonicImplication = testHarmonicImplication(subject, tonic, analysisMode, formatter);
       res.rhythmicVariety = testRhythmicVariety(subject, formatter);
+
+      // Analyze sequences in the subject (for development potential and motion penalty mitigation)
+      res.sequentialPotential = testSequentialPotential(subject, formatter);
+
+      // Set sequence ranges for motion penalty mitigation in dissonance scoring
+      if (res.sequentialPotential.noteRanges?.length > 0) {
+        setSequenceRanges(res.sequentialPotential.noteRanges);
+        // Also set beat ranges for onset-based checking
+        const beatRanges = res.sequentialPotential.sequences?.map(seq => ({
+          startBeat: seq.startBeat,
+          endBeat: seq.endBeat,
+        })) || [];
+        setSequenceBeatRanges(beatRanges);
+      } else {
+        setSequenceRanges([]);
+        setSequenceBeatRanges([]);
+      }
+
       res.stretto = testStrettoViability(subject, formatter, 0.5, parseFloat(strettoStep), parseInt(strettoOctave));
       res.tonalAnswer = testTonalAnswer(subject, analysisMode, keyInfo, formatter);
       res.answerABC = generateAnswerABC(subject, keyInfo, res.tonalAnswer, effNL, meter);
@@ -264,13 +305,14 @@ export default function App() {
       res.answerNotes = answerNotes;
 
       // Run countersubject analyses if CS provided
-      if (cs?.length) {
-        res.doubleCounterpoint = testDoubleCounterpoint(subject, cs, formatter);
-        res.rhythmicComplementarity = testRhythmicComplementarity(subject, cs);
-        res.contourIndependence = testContourIndependence(subject, cs, formatter);
-        res.modulatoryRobustness = testModulatoryRobustness(subject, cs, formatter);
-        res.subjectCsSims = findSimultaneities(subject, cs);
-        res.answerCsSims = findSimultaneities(answerNotes, cs);
+      if (shiftedCs?.length) {
+        // Run analysis with shifted CS (already computed above)
+        res.doubleCounterpoint = testDoubleCounterpoint(subject, shiftedCs, formatter);
+        res.rhythmicComplementarity = testRhythmicComplementarity(subject, shiftedCs);
+        res.contourIndependence = testContourIndependence(subject, shiftedCs, formatter);
+        res.modulatoryRobustness = testModulatoryRobustness(subject, shiftedCs, formatter);
+        res.subjectCsSims = findSimultaneities(subject, shiftedCs);
+        res.answerCsSims = findSimultaneities(answerNotes, shiftedCs);
       }
 
       // Calculate scores
@@ -283,7 +325,6 @@ export default function App() {
     }
   };
 
-  const csOctaveShift = (csPos === 'below' ? -12 : 0) + parseInt(csShift);
   const strettoOctaveVal = parseInt(strettoOctave);
 
   return (
@@ -719,7 +760,10 @@ export default function App() {
 
             {/* Subject Visualization */}
             <Section title="Subject" helpKey="subject" defaultCollapsed={true}>
-              <PianoRoll voices={[{ notes: results.subject, color: '#5c6bc0', label: 'Subject' }]} />
+              <PianoRoll
+                voices={[{ notes: results.subject, color: '#5c6bc0', label: 'Subject' }]}
+                sequenceRanges={results.sequentialPotential?.noteRanges || []}
+              />
             </Section>
 
             {/* Countersubject Sections */}
@@ -758,7 +802,7 @@ export default function App() {
                   </div>
                   <IntervalAnalysisViz
                     voice1={{ notes: results.answerNotes, color: '#f59e0b', label: 'Answer' }}
-                    voice2={{ notes: results.countersubject.map((n) => ({ ...n, pitch: n.pitch + csOctaveShift })), color: '#22c55e', label: 'CS' }}
+                    voice2={{ notes: results.countersubject, color: '#22c55e', label: 'CS' }}
                     title="Answer + Countersubject"
                     formatter={results.formatter}
                   />
@@ -767,11 +811,100 @@ export default function App() {
                 <Section title="Subject + Countersubject">
                   <IntervalAnalysisViz
                     voice1={{ notes: results.subject, color: '#6366f1', label: 'Subject' }}
-                    voice2={{ notes: results.countersubject.map((n) => ({ ...n, pitch: n.pitch + csOctaveShift })), color: '#22c55e', label: 'CS' }}
+                    voice2={{ notes: results.countersubject, color: '#22c55e', label: 'CS' }}
                     title="Subject + Countersubject"
                     formatter={results.formatter}
                   />
                 </Section>
+
+                {/* Aggregate Counterpoint Score */}
+                {results.doubleCounterpoint && results.modulatoryRobustness && (
+                  <div style={{
+                    margin: '16px 0',
+                    padding: '16px',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                  }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                      Aggregate Counterpoint Quality
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                      {/* S+CS Score */}
+                      {(() => {
+                        const scsScore = results.doubleCounterpoint.original?.detailedScoring?.summary?.averageScore || 0;
+                        return (
+                          <div style={{
+                            padding: '12px',
+                            backgroundColor: scsScore >= 0.5 ? '#dcfce7' : scsScore >= 0 ? '#fef9c3' : '#fee2e2',
+                            borderRadius: '6px',
+                            textAlign: 'center',
+                          }}>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Subject + CS</div>
+                            <div style={{
+                              fontSize: '20px',
+                              fontWeight: '700',
+                              color: scsScore >= 0.5 ? '#16a34a' : scsScore >= 0 ? '#ca8a04' : '#dc2626',
+                            }}>
+                              {scsScore >= 0 ? '+' : ''}{scsScore.toFixed(2)}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {/* A+CS Score */}
+                      {(() => {
+                        const acsScore = results.modulatoryRobustness.detailedScoring?.summary?.averageScore || 0;
+                        return (
+                          <div style={{
+                            padding: '12px',
+                            backgroundColor: acsScore >= 0.5 ? '#dcfce7' : acsScore >= 0 ? '#fef9c3' : '#fee2e2',
+                            borderRadius: '6px',
+                            textAlign: 'center',
+                          }}>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Answer + CS</div>
+                            <div style={{
+                              fontSize: '20px',
+                              fontWeight: '700',
+                              color: acsScore >= 0.5 ? '#16a34a' : acsScore >= 0 ? '#ca8a04' : '#dc2626',
+                            }}>
+                              {acsScore >= 0 ? '+' : ''}{acsScore.toFixed(2)}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {/* Combined Aggregate */}
+                      {(() => {
+                        const scsScore = results.doubleCounterpoint.original?.detailedScoring?.summary?.averageScore || 0;
+                        const acsScore = results.modulatoryRobustness.detailedScoring?.summary?.averageScore || 0;
+                        const aggregate = (scsScore + acsScore) / 2;
+                        return (
+                          <div style={{
+                            padding: '12px',
+                            backgroundColor: aggregate >= 0.5 ? '#dcfce7' : aggregate >= 0 ? '#fef9c3' : '#fee2e2',
+                            borderRadius: '6px',
+                            textAlign: 'center',
+                            border: '2px solid',
+                            borderColor: aggregate >= 0.5 ? '#16a34a' : aggregate >= 0 ? '#ca8a04' : '#dc2626',
+                          }}>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px', fontWeight: '600' }}>
+                              AGGREGATE
+                            </div>
+                            <div style={{
+                              fontSize: '24px',
+                              fontWeight: '700',
+                              color: aggregate >= 0.5 ? '#16a34a' : aggregate >= 0 ? '#ca8a04' : '#dc2626',
+                            }}>
+                              {aggregate >= 0 ? '+' : ''}{aggregate.toFixed(2)}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b', textAlign: 'center' }}>
+                      Average dissonance handling score (0 = acceptable, positive = good, negative = problematic)
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -788,6 +921,37 @@ export default function App() {
               />
               <ObservationList observations={results.harmonicImplication.observations} />
             </Section>
+
+            {/* Sequential Potential */}
+            {results.sequentialPotential && (
+              <Section title="Sequential Potential" defaultCollapsed={true}>
+                <DataRow
+                  data={{
+                    'Has Sequences': results.sequentialPotential.hasSequences ? 'Yes' : 'No',
+                    'Sequential Notes': results.sequentialPotential.hasSequences
+                      ? `${results.sequentialPotential.totalSequentialNotes} (${Math.round(results.sequentialPotential.sequenceRatio * 100)}%)`
+                      : 'N/A',
+                    'Longest Sequence': results.sequentialPotential.longestSequence
+                      ? `${results.sequentialPotential.longestSequence.repetitions}× ${results.sequentialPotential.longestSequence.unitLength} notes`
+                      : 'None',
+                  }}
+                />
+                <ObservationList observations={results.sequentialPotential.observations} />
+                {results.sequentialPotential.hasSequences && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: '#f0f9ff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    color: '#0369a1',
+                  }}>
+                    Sequences detected: Motions within sequential passages receive reduced penalties.
+                  </div>
+                )}
+              </Section>
+            )}
 
             {/* Tonal Answer */}
             <Section title="Tonal Answer" helpKey="tonalAnswer">
@@ -885,42 +1049,51 @@ export default function App() {
                     const issueCount = s.issueCount || 0;
                     const warningCount = s.warningCount || 0;
 
-                    // Gradation: clean → warnings only → 1-2 issues → 3-4 issues → 5+ issues
-                    let bgColor, borderColor, textColor, badge;
+                    // Get the dissonance score for this stretto
+                    const strettoScore = s.dissonanceAnalysis?.summary?.averageScore || 0;
+
+                    // Gradation: based on score AND issues
+                    let bgColor, borderColor, textColor, badge, scoreDisplay;
                     if (isSelected) {
                       bgColor = '#1f2937';
                       borderColor = '#1f2937';
                       textColor = 'white';
+                      scoreDisplay = strettoScore.toFixed(1);
                     } else if (s.clean) {
                       // Clean - bright green
                       bgColor = '#dcfce7';
                       borderColor = '#86efac';
                       textColor = '#166534';
                       badge = '✓';
+                      scoreDisplay = `+${strettoScore.toFixed(1)}`;
                     } else if (s.viable) {
                       // Viable with warnings - yellow-green
                       bgColor = '#fef9c3';
                       borderColor = '#fde047';
                       textColor = '#854d0e';
                       badge = `⚠${warningCount}`;
-                    } else if (issueCount <= 2) {
-                      // Close to viable - light orange
+                      scoreDisplay = strettoScore >= 0 ? `+${strettoScore.toFixed(1)}` : strettoScore.toFixed(1);
+                    } else if (strettoScore >= 0) {
+                      // Positive score but has issues - light orange
                       bgColor = '#ffedd5';
                       borderColor = '#fdba74';
                       textColor = '#c2410c';
                       badge = issueCount.toString();
-                    } else if (issueCount <= 4) {
-                      // Moderate issues - orange
+                      scoreDisplay = `+${strettoScore.toFixed(1)}`;
+                    } else if (strettoScore >= -1) {
+                      // Slightly negative - orange
                       bgColor = '#fee2e2';
                       borderColor = '#fca5a5';
                       textColor = '#b91c1c';
                       badge = issueCount.toString();
+                      scoreDisplay = strettoScore.toFixed(1);
                     } else {
-                      // Many issues - red
+                      // Very negative - red
                       bgColor = '#fecaca';
                       borderColor = '#f87171';
                       textColor = '#991b1b';
                       badge = issueCount.toString();
+                      scoreDisplay = strettoScore.toFixed(1);
                     }
 
                     return (
@@ -939,15 +1112,25 @@ export default function App() {
                           transition: 'all 0.15s',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          gap: '6px',
                         }}
                       >
                         <span>{s.distanceFormatted}</span>
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: '700',
+                          opacity: isSelected ? 1 : 0.9,
+                          backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)',
+                          padding: '1px 4px',
+                          borderRadius: '3px',
+                        }}>
+                          {scoreDisplay}
+                        </span>
                         {badge && (
                           <span style={{
-                            fontSize: '10px',
+                            fontSize: '9px',
                             fontWeight: '600',
-                            opacity: isSelected ? 1 : 0.8,
+                            opacity: isSelected ? 1 : 0.7,
                           }}>
                             {badge}
                           </span>
@@ -957,11 +1140,10 @@ export default function App() {
                   })}
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '10px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <span><strong>Score:</strong> dissonance quality</span>
                   <span><span style={{ color: '#166534' }}>✓</span> = clean</span>
                   <span><span style={{ color: '#854d0e' }}>⚠</span> = warnings</span>
-                  <span><span style={{ color: '#c2410c' }}>1-2</span> = close</span>
-                  <span><span style={{ color: '#b91c1c' }}>3-4</span> = moderate</span>
-                  <span><span style={{ color: '#991b1b' }}>5+</span> = many issues</span>
+                  <span style={{ color: '#c2410c' }}>numbers = issue count</span>
                 </div>
               </div>
 
@@ -978,38 +1160,56 @@ export default function App() {
                       border: s.viable ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
                     }}
                   >
-                    <div
-                      style={{
-                        marginBottom: '10px',
-                        fontSize: '14px',
-                        fontWeight: '600',
-                        color: s.viable ? (s.clean ? '#065f46' : '#854d0e') : '#475569',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                      }}
-                    >
-                      <span>{s.distanceFormatted}</span>
-                      <span style={{
-                        fontSize: '11px',
-                        fontWeight: '400',
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        backgroundColor: s.viable ? (s.clean ? '#dcfce7' : '#fef9c3') : '#f1f5f9',
-                        color: s.viable ? (s.clean ? '#059669' : '#a16207') : '#64748b',
-                      }}>
-                        {s.overlapPercent}% overlap
-                      </span>
-                      {s.viable && (
-                        <span style={{
-                          fontSize: '11px',
-                          fontWeight: '500',
-                          color: s.clean ? '#059669' : '#d97706',
-                        }}>
-                          {s.clean ? 'Clean' : `${s.warningCount} consideration${s.warningCount !== 1 ? 's' : ''}`}
-                        </span>
-                      )}
-                    </div>
+                    {(() => {
+                      const strettoScore = s.dissonanceAnalysis?.summary?.averageScore || 0;
+                      return (
+                        <div
+                          style={{
+                            marginBottom: '10px',
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            color: s.viable ? (s.clean ? '#065f46' : '#854d0e') : '#475569',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <span>{s.distanceFormatted}</span>
+                          {/* Individual stretto score - prominently displayed */}
+                          <span style={{
+                            fontSize: '16px',
+                            fontWeight: '700',
+                            padding: '4px 10px',
+                            borderRadius: '6px',
+                            backgroundColor: strettoScore >= 0.5 ? '#dcfce7' : strettoScore >= 0 ? '#fef9c3' : '#fee2e2',
+                            color: strettoScore >= 0.5 ? '#16a34a' : strettoScore >= 0 ? '#ca8a04' : '#dc2626',
+                            border: `1px solid ${strettoScore >= 0.5 ? '#86efac' : strettoScore >= 0 ? '#fde047' : '#fca5a5'}`,
+                          }}>
+                            Score: {strettoScore >= 0 ? '+' : ''}{strettoScore.toFixed(2)}
+                          </span>
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: '400',
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            backgroundColor: s.viable ? (s.clean ? '#dcfce7' : '#fef9c3') : '#f1f5f9',
+                            color: s.viable ? (s.clean ? '#059669' : '#a16207') : '#64748b',
+                          }}>
+                            {s.overlapPercent}% overlap
+                          </span>
+                          {s.viable && (
+                            <span style={{
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              color: s.clean ? '#059669' : '#d97706',
+                            }}>
+                              {s.clean ? 'Clean' : `${s.warningCount} consideration${s.warningCount !== 1 ? 's' : ''}`}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <StrettoViz
                       subject={results.subject}
                       distance={s.distance}
@@ -1086,7 +1286,7 @@ export default function App() {
                 <Section title="Double Counterpoint (Invertibility)" helpKey="doubleCounterpoint">
                   <InvertibilityViz
                     subject={results.subject}
-                    cs={results.countersubject.map((n) => ({ ...n, pitch: n.pitch + csOctaveShift }))}
+                    cs={results.countersubject}
                     formatter={results.formatter}
                     originalIssues={results.doubleCounterpoint.original.issues || []}
                     invertedIssues={results.doubleCounterpoint.inverted.issues || []}

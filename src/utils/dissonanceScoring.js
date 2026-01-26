@@ -8,6 +8,7 @@
  *
  * Semantic Categories for visualization:
  *   consonant_normal:      Normal consonant interval (pale green)
+ *   consonant_preparation: Consonance that prepares an upcoming dissonance (cyan/teal)
  *   consonant_repetitive:  Same interval repeated too often (yellowish)
  *   consonant_good_resolution: Consonance after well-resolved dissonance (bright green)
  *   consonant_bad_resolution:  Consonance after poorly-resolved dissonance (orange)
@@ -906,6 +907,19 @@ function scoreConsonance(currSim, allSims, index, intervalHistory) {
   const prevSims = allSims.filter(s => s.onset < currSim.onset);
   const prevSim = prevSims.length > 0 ? prevSims[prevSims.length - 1] : null;
 
+  // Check if this consonance prepares an upcoming dissonance
+  const nextSims = allSims.filter(s => s.onset > currSim.onset);
+  const nextSim = nextSims.length > 0 ? nextSims[0] : null;
+  let isPreparation = false;
+  if (nextSim) {
+    let nextIsDissonant = !nextSim.interval.isConsonant();
+    // P4 special case
+    if (nextSim.interval.class === 4 && isP4DissonantInContext(nextSim)) {
+      nextIsDissonant = true;
+    }
+    isPreparation = nextIsDissonant;
+  }
+
   if (prevSim && !prevSim.interval.isConsonant()) {
     const prevV1 = pitchName(prevSim.voice1Note.pitch);
     const prevV2 = pitchName(prevSim.voice2Note.pitch);
@@ -972,6 +986,16 @@ function scoreConsonance(currSim, allSims, index, intervalHistory) {
     });
   }
 
+  // Mark as preparation if it precedes a dissonance (and isn't a resolution)
+  if (isPreparation && category === 'consonant_normal') {
+    category = 'consonant_preparation';
+    details.unshift({
+      text: `Preparation for upcoming dissonance`,
+      impact: 0,
+      type: 'info',
+    });
+  }
+
   return {
     type: 'consonant',
     category,
@@ -984,6 +1008,7 @@ function scoreConsonance(currSim, allSims, index, intervalHistory) {
     v2Pitch,
     details,
     resolvesDissonance: prevSim && !prevSim.interval.isConsonant(),
+    isPreparation,
   };
 }
 

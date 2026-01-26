@@ -51,11 +51,36 @@ export const VIZ_COLORS = {
 
 /**
  * Get interval style based on consonance and score
- * @param {Object} options - { isConsonant, isPerfect, score }
+ * @param {Object} options - { isConsonant, isPerfect, score, category }
  * @returns {Object} { color, bg, fill, label }
  */
-export function getIntervalStyle({ isConsonant, isPerfect, score = 0 }) {
+export function getIntervalStyle({ isConsonant, isPerfect, score = 0, category }) {
   if (isConsonant) {
+    // Check for specific categories first
+    if (category === 'consonant_preparation') {
+      return {
+        color: '#0891b2',
+        bg: '#cffafe',
+        fill: '#67e8f9',
+        label: 'Preparation',
+      };
+    }
+    if (category === 'consonant_good_resolution') {
+      return {
+        color: '#059669',
+        bg: '#a7f3d0',
+        fill: '#6ee7b7',
+        label: 'Good resolution',
+      };
+    }
+    if (category === 'consonant_bad_resolution') {
+      return {
+        color: '#ea580c',
+        bg: '#fed7aa',
+        fill: '#fdba74',
+        label: 'Poor resolution',
+      };
+    }
     if (isPerfect) {
       return {
         color: VIZ_COLORS.perfectConsonant,
