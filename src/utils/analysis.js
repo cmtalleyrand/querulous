@@ -1202,14 +1202,16 @@ export function detectSequences(notes, minLength = 3) {
       const rawIntervalPattern = rawIntervals.slice(start, start + unitLen - 1);
       const rhythmPattern = rhythms.slice(start, start + unitLen);
 
-      // Look for repetitions of this pattern
+      // Look for CONSECUTIVE repetitions of this pattern
+      // A true melodic sequence must have adjacent repetitions - not scattered occurrences
       let repetitions = 1;
       let matches = [{ startNote: start, endNote: start + unitLen - 1 }];
-      let lastMatchEnd = start + unitLen;
+      let nextPos = start + unitLen;
 
-      for (let pos = start + unitLen; pos <= notes.length - unitLen; pos++) {
-        const candidateIntervals = intervalClasses.slice(pos, pos + unitLen - 1);
-        const candidateRhythms = rhythms.slice(pos, pos + unitLen);
+      // Only look at the immediately following position - sequences must be consecutive
+      while (nextPos <= notes.length - unitLen) {
+        const candidateIntervals = intervalClasses.slice(nextPos, nextPos + unitLen - 1);
+        const candidateRhythms = rhythms.slice(nextPos, nextPos + unitLen);
 
         // Check if interval CLASSES AND rhythms match
         const intervalsMatch = intervalClassPatternsMatch(intervalPattern, candidateIntervals);
@@ -1217,17 +1219,24 @@ export function detectSequences(notes, minLength = 3) {
 
         if (intervalsMatch && rhythmsMatch) {
           repetitions++;
-          matches.push({ startNote: pos, endNote: pos + unitLen - 1 });
-          lastMatchEnd = pos + unitLen;
-          pos = lastMatchEnd - 1;
+          matches.push({ startNote: nextPos, endNote: nextPos + unitLen - 1 });
+          nextPos = nextPos + unitLen; // Move to the next consecutive position
+        } else {
+          // No match at the consecutive position - stop looking
+          // This ensures we only detect true sequences, not scattered motifs
+          break;
         }
       }
 
       // If we found at least one repetition, record it
       if (repetitions >= 2) {
+        // Get the end note index from the last match
+        const lastMatch = matches[matches.length - 1];
+        const endNoteIdx = lastMatch.endNote;
+
         // Don't record if we already have a longer sequence covering this region
         const overlaps = sequences.some(seq =>
-          seq.startNoteIndex <= start && seq.endNoteIndex >= lastMatchEnd - 1 && seq.unitLength >= unitLen
+          seq.startNoteIndex <= start && seq.endNoteIndex >= endNoteIdx && seq.unitLength >= unitLen
         );
 
         if (!overlaps) {
@@ -1238,7 +1247,7 @@ export function detectSequences(notes, minLength = 3) {
 
           sequences.push({
             startNoteIndex: start,
-            endNoteIndex: lastMatchEnd - 1,
+            endNoteIndex: endNoteIdx,
             unitLength: unitLen,
             repetitions,
             intervalPattern: rawIntervalPattern, // Store raw semitones for display
@@ -1248,7 +1257,7 @@ export function detectSequences(notes, minLength = 3) {
             transpositions,
             isExactRepetition: transpositions.every(t => t === 0),
             startBeat: notes[start].onset,
-            endBeat: notes[lastMatchEnd - 1].onset + notes[lastMatchEnd - 1].duration,
+            endBeat: notes[endNoteIdx].onset + notes[endNoteIdx].duration,
           });
         }
       }
