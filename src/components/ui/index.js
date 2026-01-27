@@ -4,3 +4,4 @@ export { DataRow } from './DataRow';
 export { Select } from './Select';
 export { ABCBox } from './ABCBox';
 export { InfoButton, HelpModal } from './InfoButton';
+export { IssuesSummary } from './IssuesSummary';

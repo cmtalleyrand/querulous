@@ -2,12 +2,95 @@ import { ScaleDegree, NoteEvent } from '../types';
 import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants';
 
 /**
+ * Validate ABC notation against time signature
+ * Returns array of warnings about measure duration mismatches
+ * @param {string} abcText - The ABC notation
+ * @param {number[]} meter - Time signature [numerator, denominator]
+ * @param {number} defaultNoteLength - Default note length as decimal (e.g., 0.125 for 1/8)
+ * @returns {Array<{measure: number, expected: number, actual: number, message: string}>}
+ */
+export function validateABCTiming(abcText, meter, defaultNoteLength = 1/8) {
+  const warnings = [];
+  const measureDuration = (meter[0] * 4) / meter[1]; // Duration in quarter notes
+
+  let noteText = '';
+  for (const line of abcText.split('\n')) {
+    const t = line.trim();
+    if (!t.startsWith('%') && !t.match(/^[A-Z]:/)) {
+      noteText += ' ' + t;
+    }
+  }
+
+  // Clean up
+  noteText = noteText.replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
+
+  // Split by bar lines
+  const measures = noteText.split(/\|+:?|:\|+/).filter(m => m.trim());
+
+  for (let i = 0; i < measures.length; i++) {
+    const measureContent = measures[i].trim();
+    if (!measureContent || measureContent === ']') continue;
+
+    let totalDuration = 0;
+
+    // Parse notes and rests in this measure
+    const pat = /([zx])([\d]*\/?[\d]*)?|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
+    let m;
+
+    while ((m = pat.exec(measureContent)) !== null) {
+      let dur = defaultNoteLength;
+      const durStr = m[2] || m[6]; // rest duration or note duration
+
+      if (durStr) {
+        if (durStr.includes('/')) {
+          const p = durStr.split('/');
+          dur = (defaultNoteLength * (p[0] ? parseInt(p[0]) : 1)) / (p[1] ? parseInt(p[1]) : 2);
+        } else {
+          dur = defaultNoteLength * parseInt(durStr);
+        }
+      }
+
+      totalDuration += dur * 4; // Convert to quarter notes
+    }
+
+    // Check if measure duration matches expected
+    // Allow small tolerance for floating point
+    if (totalDuration > 0 && Math.abs(totalDuration - measureDuration) > 0.01) {
+      // Skip final measure if it's incomplete (pickup/anacrusis or ending)
+      const isFirst = i === 0;
+      const isLast = i === measures.length - 1 || (i === measures.length - 2 && !measures[i+1].trim());
+
+      // Only warn for middle measures with wrong duration
+      if (!isFirst && !isLast) {
+        warnings.push({
+          measure: i + 1,
+          expected: measureDuration,
+          actual: totalDuration,
+          message: `Measure ${i + 1}: expected ${measureDuration} beats, found ${totalDuration.toFixed(2)} beats`,
+        });
+      } else if (isFirst && totalDuration > measureDuration) {
+        // First measure can be a pickup (less than full) but not more
+        warnings.push({
+          measure: 1,
+          expected: measureDuration,
+          actual: totalDuration,
+          message: `Measure 1: ${totalDuration.toFixed(2)} beats exceeds ${measureDuration} (time signature mismatch?)`,
+        });
+      }
+    }
+  }
+
+  return warnings;
+}
+
+/**
  * Extract header information from ABC notation text
  */
 export function extractABCHeaders(abcText) {
   let key = null,
     mode = null,
     noteLength = null,
+    noteLengthFraction = null, // Store as [numerator, denominator]
     meter = null;
 
   for (const line of abcText.split('\n')) {
@@ -16,7 +99,12 @@ export function extractABCHeaders(abcText) {
     // Parse note length (L:)
     if (t.startsWith('L:')) {
       const m = t.match(/L:\s*(\d+)\/(\d+)/);
-      if (m) noteLength = parseInt(m[1]) / parseInt(m[2]);
+      if (m) {
+        const num = parseInt(m[1]);
+        const denom = parseInt(m[2]);
+        noteLength = num / denom;
+        noteLengthFraction = [num, denom];
+      }
     }
 
     // Parse time signature (M:)
@@ -65,7 +153,7 @@ export function extractABCHeaders(abcText) {
     }
   }
 
-  return { key, mode, noteLength, meter };
+  return { key, mode, noteLength, noteLengthFraction, meter };
 }
 
 /**
@@ -97,6 +185,7 @@ export function computeScaleDegree(pitch, tonic, mode) {
 export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null, keySignatureOverride = null) {
   let noteText = '',
     defaultNoteLength = defaultNoteLengthOverride || 1 / 8,
+    defaultNoteLengthFraction = defaultNoteLengthOverride ? null : [1, 8], // [numerator, denominator]
     keySignature = keySignatureOverride || [];
 
   for (const line of abcText.split('\n')) {
@@ -105,7 +194,10 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
     if (t.startsWith('L:')) {
       const m = t.match(/L:\s*(\d+)\/(\d+)/);
       if (m && !defaultNoteLengthOverride) {
-        defaultNoteLength = parseInt(m[1]) / parseInt(m[2]);
+        const num = parseInt(m[1]);
+        const denom = parseInt(m[2]);
+        defaultNoteLength = num / denom;
+        defaultNoteLengthFraction = [num, denom];
       }
     } else if (t.startsWith('K:') && !keySignatureOverride) {
       // Only use K: header for key signature if no override provided
@@ -123,8 +215,9 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
   let currentOnset = 0;
   let activeAccidentals = {};
 
-  // Pattern matches bar lines OR notes - bar lines reset accidentals per ABC standard
-  const pat = /(\|+:?|:\|+)|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
+  // Pattern matches bar lines, rests, OR notes - bar lines reset accidentals per ABC standard
+  // Rests are 'z' (audible rest) or 'x' (invisible rest) followed by optional duration
+  const pat = /(\|+:?|:\|+)|([zx])([\d]*\/?[\d]*)?|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
   let m;
 
   while ((m = pat.exec(noteText)) !== null) {
@@ -134,7 +227,25 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
       continue;
     }
 
-    const [, , acc, letter, octMod, durStr] = m;
+    // Check if this is a rest - advance time but don't create a note
+    if (m[2]) {
+      const restDurStr = m[3];
+      let restDur = defaultNoteLength;
+      if (restDurStr) {
+        if (restDurStr.includes('/')) {
+          const p = restDurStr.split('/');
+          restDur = (defaultNoteLength * (p[0] ? parseInt(p[0]) : 1)) / (p[1] ? parseInt(p[1]) : 2);
+        } else {
+          restDur = defaultNoteLength * parseInt(restDurStr);
+        }
+      }
+      currentOnset += restDur * 4;
+      continue;
+    }
+
+    const [, , , , acc, letter, octMod, durStr] = m;
+    if (!letter) continue;
+
     let pitch = NOTE_TO_MIDI[letter];
     if (pitch === undefined) continue;
 
@@ -191,7 +302,7 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
     currentOnset += dur * 4;
   }
 
-  return { notes, defaultNoteLength };
+  return { notes, defaultNoteLength, defaultNoteLengthFraction };
 }
 
 /**
@@ -225,8 +336,14 @@ export function midiToABC(pitch, keySignature) {
 
 /**
  * Generate ABC notation for the tonal answer
+ * @param {Array} subject - Array of NoteEvents
+ * @param {Object} keyInfo - Key information {tonic, keySignature, mode}
+ * @param {Object} answerData - Answer analysis {tonalMotions, mutationPoint}
+ * @param {number} defaultNoteLength - Note length as decimal
+ * @param {number[]} meter - Time signature as [numerator, denominator]
+ * @param {number[]} noteLengthFraction - Note length as [numerator, denominator] fraction
  */
-export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLength, meter = [4, 4]) {
+export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLength, meter = [4, 4], noteLengthFraction = null) {
   const { tonic, keySignature, mode } = keyInfo;
   const { tonalMotions, mutationPoint } = answerData;
 
@@ -243,10 +360,36 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
       ? ' dor'
       : '';
 
-  const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
-  const lNum = Math.round(defaultNoteLength * 100);
-  const g = gcd(lNum, 100);
-  const measDur = meter[0] * (4 / meter[1]);
+  // Use the fraction directly if provided, otherwise try to reconstruct
+  let lNumDisplay, lDenomDisplay;
+  if (noteLengthFraction && noteLengthFraction[0] && noteLengthFraction[1]) {
+    lNumDisplay = noteLengthFraction[0];
+    lDenomDisplay = noteLengthFraction[1];
+  } else {
+    // Fallback: try common note lengths
+    const commonFractions = [
+      [1, 1], [1, 2], [1, 4], [1, 8], [1, 16], [1, 32],
+      [3, 4], [3, 8], [3, 16]
+    ];
+    let found = false;
+    for (const [n, d] of commonFractions) {
+      if (Math.abs(defaultNoteLength - n / d) < 0.001) {
+        lNumDisplay = n;
+        lDenomDisplay = d;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      // Last resort: use decimal approximation
+      lNumDisplay = Math.round(defaultNoteLength * 16);
+      lDenomDisplay = 16;
+    }
+  }
+
+  // Calculate measure duration in internal units (quarter notes)
+  // A measure = numerator / denominator whole notes = numerator * 4 / denominator quarter notes
+  const measDur = (meter[0] * 4) / meter[1];
 
   const answerKeySig =
     KEY_SIGNATURES[answerKey + (['natural_minor', 'harmonic_minor', 'dorian'].includes(mode) ? 'm' : '')] ||
@@ -298,13 +441,18 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
 
   if (line.trim()) body += line;
 
-  return `K:${answerKey}${modeSuffix}\nL:${lNum / g}/${100 / g}\n${body.trim()}`;
+  return `K:${answerKey}${modeSuffix}\nL:${lNumDisplay}/${lDenomDisplay}\n${body.trim()}`;
 }
 
 /**
  * Format the subject as ABC notation
+ * @param {Array} subject - Array of NoteEvents
+ * @param {Object} keyInfo - Key information {key, mode}
+ * @param {number} defaultNoteLength - Note length as decimal
+ * @param {number[]} meter - Time signature as [numerator, denominator]
+ * @param {number[]} noteLengthFraction - Note length as [numerator, denominator] fraction
  */
-export function formatSubjectABC(subject, keyInfo, defaultNoteLength, meter = [4, 4]) {
+export function formatSubjectABC(subject, keyInfo, defaultNoteLength, meter = [4, 4], noteLengthFraction = null) {
   const { key, mode } = keyInfo;
 
   let modeSuffix = ['natural_minor', 'harmonic_minor'].includes(mode)
@@ -313,10 +461,34 @@ export function formatSubjectABC(subject, keyInfo, defaultNoteLength, meter = [4
       ? ' dor'
       : '';
 
-  const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
-  const lNum = Math.round(defaultNoteLength * 100);
-  const g = gcd(lNum, 100);
-  const measDur = meter[0] * (4 / meter[1]);
+  // Use the fraction directly if provided, otherwise try to reconstruct
+  let lNumDisplay, lDenomDisplay;
+  if (noteLengthFraction && noteLengthFraction[0] && noteLengthFraction[1]) {
+    lNumDisplay = noteLengthFraction[0];
+    lDenomDisplay = noteLengthFraction[1];
+  } else {
+    // Fallback: try common note lengths
+    const commonFractions = [
+      [1, 1], [1, 2], [1, 4], [1, 8], [1, 16], [1, 32],
+      [3, 4], [3, 8], [3, 16]
+    ];
+    let found = false;
+    for (const [n, d] of commonFractions) {
+      if (Math.abs(defaultNoteLength - n / d) < 0.001) {
+        lNumDisplay = n;
+        lDenomDisplay = d;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      lNumDisplay = Math.round(defaultNoteLength * 16);
+      lDenomDisplay = 16;
+    }
+  }
+
+  // Calculate measure duration in internal units
+  const measDur = (meter[0] * 4) / meter[1];
 
   const tokens = [];
   let measCount = 0;
@@ -350,5 +522,5 @@ export function formatSubjectABC(subject, keyInfo, defaultNoteLength, meter = [4
 
   if (line.trim()) body += line;
 
-  return `K:${key}${modeSuffix}\nL:${lNum / g}/${100 / g}\n${body.trim()}`;
+  return `K:${key}${modeSuffix}\nL:${lNumDisplay}/${lDenomDisplay}\n${body.trim()}`;
 }

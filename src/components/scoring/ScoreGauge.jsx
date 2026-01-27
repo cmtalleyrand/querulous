@@ -1,14 +1,24 @@
 import { getScoreColor, getScoreRating } from '../../utils/scoring';
 
 /**
- * Circular score gauge component
+ * Circular score gauge component for base-zero scores
+ * Shows score with +/- prefix and visual indicator
  */
 export function ScoreGauge({ score, size = 120, strokeWidth = 10, label }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const progress = (score / 100) * circumference;
+  // Map base-zero score (-30 to +30) to progress (0 to 1)
+  // 0 baseline = 50%, -30 = 0%, +30 = 100%
+  const normalizedProgress = Math.max(0, Math.min(1, (score + 30) / 60));
+  const progress = normalizedProgress * circumference;
   const color = getScoreColor(score);
   const rating = getScoreRating(score);
+
+  // Format score with sign
+  const formatScore = (s) => {
+    const rounded = Math.round(s * 10) / 10;
+    return rounded >= 0 ? `+${rounded}` : `${rounded}`;
+  };
 
   return (
     <div
@@ -49,11 +59,11 @@ export function ScoreGauge({ score, size = 120, strokeWidth = 10, label }) {
           textAnchor="middle"
           dominantBaseline="middle"
           fill={color}
-          fontSize={size / 4}
+          fontSize={size / 5}
           fontWeight="600"
           style={{ transform: 'rotate(90deg)', transformOrigin: 'center' }}
         >
-          {score}
+          {formatScore(score)}
         </text>
       </svg>
       {label && (

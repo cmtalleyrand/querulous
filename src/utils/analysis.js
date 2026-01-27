@@ -1,6 +1,6 @@
 import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
-import { metricWeight, pitchName } from './formatter';
-import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
+import { metricWeight, pitchName, isDuringRest } from './formatter';
+import { scoreDissonance, analyzeAllDissonances, getMeter } from './dissonanceScoring';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -235,9 +235,16 @@ export function analyzeDissonances(sims, v1Notes, v2Notes, formatter) {
 
 /**
  * Find all simultaneous note pairs between two voices
+ * Uses the current meter set in dissonanceScoring module
+ *
+ * IMPORTANT: This only creates simultaneities when actual notes overlap.
+ * Rests in one voice do NOT create simultaneities - they are silence.
+ * If v1 has notes A (0-1) and B (2-3), and v2 has note C (0-3),
+ * we get simultaneities at A-C and B-C, but NOT during 1-2 (rest in v1).
  */
 export function findSimultaneities(v1, v2) {
   const sims = [];
+  const meter = getMeter();
 
   for (const n1 of v1) {
     const s1 = n1.onset;
@@ -247,9 +254,11 @@ export function findSimultaneities(v1, v2) {
       const s2 = n2.onset;
       const e2 = n2.onset + n2.duration;
 
+      // Only create simultaneity if BOTH notes are sounding
+      // This correctly excludes rest periods (gaps between notes)
       if (s1 < e2 && s2 < e1) {
         const start = Math.max(s1, s2);
-        sims.push(new Simultaneity(start, n1, n2, metricWeight(start)));
+        sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
       }
     }
   }
@@ -390,6 +399,7 @@ export function testContourIndependence(subject, cs, formatter) {
 export function testHarmonicImplication(subject, tonic, mode, formatter) {
   if (!subject.length) return { error: 'No notes' };
 
+  const meter = getMeter();
   const degrees = subject.map((n) => n.scaleDegree);
   const observations = [];
 
@@ -429,7 +439,7 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
   for (let i = 0; i < subject.length; i++) {
     const d = degrees[i];
     if (
-      (d.degree === 5 && d.alteration === 0 && metricWeight(subject[i].onset) >= 0.5) ||
+      (d.degree === 5 && d.alteration === 0 && metricWeight(subject[i].onset, meter) >= 0.5) ||
       (d.degree === 7 && d.alteration === 0)
     ) {
       domArr = {
@@ -490,6 +500,7 @@ export function testRhythmicVariety(subject, formatter) {
 export function testRhythmicComplementarity(subject, cs) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
+  const meter = getMeter();
   const sOnsets = new Set(subject.map((n) => Math.round(n.onset * 100) / 100));
   const cOnsets = new Set(cs.map((n) => Math.round(n.onset * 100) / 100));
   const shared = [...sOnsets].filter((o) => cOnsets.has(o));
@@ -512,7 +523,7 @@ export function testRhythmicComplementarity(subject, cs) {
 
   let strong = 0;
   for (const o of shared) {
-    if (metricWeight(o) >= 0.75) strong++;
+    if (metricWeight(o, meter) >= 0.75) strong++;
   }
 
   return { overlapRatio: ratio, strongBeatCollisions: strong, observations };
@@ -520,13 +531,18 @@ export function testRhythmicComplementarity(subject, cs) {
 
 /**
  * Test stretto viability at various time intervals
+ * Issues are weighted by: beat strength, note duration, and consecutiveness
  */
 export function testStrettoViability(subject, formatter, minOverlap = 0.5, increment = 1, octaveDisp = 12) {
   if (subject.length < 2) return { error: 'Too short' };
 
+  const meter = getMeter();
   const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
   const maxDist = subLen * (1 - minOverlap);
   const results = [];
+
+  // Calculate average note duration for relative weighting
+  const avgDuration = subject.reduce((sum, n) => sum + n.duration, 0) / subject.length;
 
   for (let dist = increment; dist <= maxDist; dist += increment) {
     const comes = subject.map(
@@ -538,11 +554,23 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
 
     // Check parallel perfects (serious issue)
     for (const v of checkParallelPerfects(sims, formatter)) {
-      issues.push({ onset: v.onset, description: v.description, type: 'parallel' });
+      // Find the simultaneity to get metric weight and duration info
+      const sim = sims.find(s => Math.abs(s.onset - v.onset) < 0.01);
+      const metricWt = sim ? sim.metricWeight : 0.5;
+      const noteDur = sim ? Math.max(sim.voice1Note.duration, sim.voice2Note.duration) : avgDuration;
+
+      issues.push({
+        onset: v.onset,
+        description: v.description,
+        type: 'parallel',
+        metricWeight: metricWt,
+        duration: noteDur,
+        baseSeverity: 2.0, // Parallel perfects are always serious
+      });
     }
 
     // Analyze dissonances with new scoring system
-    const dissonanceAnalysis = analyzeAllDissonances(sims, subject, comes);
+    const dissonanceAnalysis = analyzeAllDissonances(sims);
 
     // Evaluate each dissonance based on score
     for (const d of dissonanceAnalysis.dissonances) {
@@ -550,6 +578,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       if (!sim) continue;
 
       const metricLabel = sim.metricWeight === 1.0 ? 'downbeat' : (sim.metricWeight >= 0.75 ? 'strong beat' : 'weak beat');
+      const noteDur = Math.max(sim.voice1Note.duration, sim.voice2Note.duration);
 
       if (d.score < -1.0) {
         // Serious issue - badly handled dissonance
@@ -562,6 +591,9 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
           comesPitch: d.v2Pitch,
           score: d.score,
           details: d.details,
+          metricWeight: sim.metricWeight,
+          duration: noteDur,
+          baseSeverity: Math.abs(d.score),
         });
       } else if (d.score < 0 && d.isStrongBeat) {
         // Warning - marginal dissonance on strong beat
@@ -572,9 +604,54 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
           interval: d.interval,
           score: d.score,
           details: d.details,
+          metricWeight: sim.metricWeight,
+          duration: noteDur,
         });
       }
       // Score >= 0 means acceptable dissonance treatment
+    }
+
+    // Calculate weighted severity for issues
+    // Weight factors: beat strength (1-2x), duration (0.5-2x), consecutiveness (1.5x for each consecutive)
+    issues.sort((a, b) => a.onset - b.onset);
+    let totalWeightedSeverity = 0;
+    let consecutiveCount = 0;
+    let lastOnset = -Infinity;
+
+    for (let i = 0; i < issues.length; i++) {
+      const issue = issues[i];
+
+      // Beat strength multiplier: downbeat = 2x, strong beat = 1.5x, weak beat = 1x
+      const beatMultiplier = issue.metricWeight >= 1.0 ? 2.0 :
+                            issue.metricWeight >= 0.75 ? 1.5 :
+                            issue.metricWeight >= 0.5 ? 1.2 : 1.0;
+
+      // Duration multiplier: longer notes = more severe (relative to average)
+      const durationRatio = (issue.duration || avgDuration) / avgDuration;
+      const durationMultiplier = Math.max(0.5, Math.min(2.0, durationRatio));
+
+      // Consecutiveness: issues within 1 beat of each other compound
+      const isConsecutive = (issue.onset - lastOnset) <= 1.0;
+      if (isConsecutive) {
+        consecutiveCount++;
+      } else {
+        consecutiveCount = 0;
+      }
+      const consecutiveMultiplier = 1.0 + (consecutiveCount * 0.5);
+
+      // Calculate weighted severity
+      const baseSeverity = issue.baseSeverity || 1.0;
+      const weightedSeverity = baseSeverity * beatMultiplier * durationMultiplier * consecutiveMultiplier;
+
+      issue.weightedSeverity = weightedSeverity;
+      issue.severityFactors = {
+        beat: beatMultiplier,
+        duration: durationMultiplier,
+        consecutive: consecutiveMultiplier,
+      };
+
+      totalWeightedSeverity += weightedSeverity;
+      lastOnset = issue.onset;
     }
 
     // Deduplicate simultaneities for motion analysis
@@ -622,7 +699,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       const snapBeat = Math.round(sim.onset * 2) / 2;
       if (!beatSnapshots.has(snapBeat)) {
         // Get dissonance scoring
-        const scoring = scoreDissonance(sim, sims, subject, comes);
+        const scoring = scoreDissonance(sim, sims);
 
         beatSnapshots.set(snapBeat, {
           onset: sim.onset,
@@ -648,12 +725,35 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       intervalPoints.push(beatSnapshots.get(beat));
     }
 
-    // Calculate quality rating based on issue severity
+    // Calculate quality rating based on weighted severity (not just count)
+    // Thresholds: clean = 0, good < 2, acceptable < 4, marginal < 6, problematic >= 6
     let qualityRating = 'clean';
-    if (issues.length > 0) {
-      qualityRating = issues.length > 2 ? 'problematic' : 'marginal';
+    if (totalWeightedSeverity > 0) {
+      if (totalWeightedSeverity >= 6) {
+        qualityRating = 'problematic';
+      } else if (totalWeightedSeverity >= 4) {
+        qualityRating = 'marginal';
+      } else if (totalWeightedSeverity >= 2) {
+        qualityRating = 'acceptable';
+      } else {
+        qualityRating = 'good';
+      }
     } else if (warnings.length > 0) {
       qualityRating = warnings.length > 2 ? 'acceptable' : 'good';
+    }
+
+    // Determine consecutive issues count (for summary)
+    let maxConsecutiveIssues = 0;
+    let currentConsecutive = 0;
+    let prevOnset = -Infinity;
+    for (const issue of issues) {
+      if (issue.onset - prevOnset <= 1.0) {
+        currentConsecutive++;
+        maxConsecutiveIssues = Math.max(maxConsecutiveIssues, currentConsecutive);
+      } else {
+        currentConsecutive = 1;
+      }
+      prevOnset = issue.onset;
     }
 
     results.push({
@@ -662,20 +762,40 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       overlapPercent: Math.round(((subLen - dist) / subLen) * 100),
       issueCount: issues.length,
       warningCount: warnings.length,
+      weightedSeverity: totalWeightedSeverity,
+      maxConsecutiveIssues,
       issues,
       warnings,
       intervalPoints,
       viable: issues.length === 0,
       clean: issues.length === 0 && warnings.length === 0,
       qualityRating,
+      // Include full dissonance analysis for base-zero scoring
+      dissonanceAnalysis: {
+        summary: dissonanceAnalysis.summary,
+        // avgDissonanceScore: this is the key metric for stretto scoring
+        // It represents the average counterpoint quality at this distance
+      },
     });
   }
 
-  // Generate summary with counts by category
+  // Generate summary with counts by category (based on weighted severity)
   const cleanCount = results.filter(r => r.clean).length;
   const viableCount = results.filter(r => r.viable).length;
-  const marginalCount = results.filter(r => !r.viable && r.issueCount <= 2).length;
-  const problematicCount = results.filter(r => r.issueCount > 2).length;
+  const marginalCount = results.filter(r => r.qualityRating === 'marginal').length;
+  const problematicCount = results.filter(r => r.qualityRating === 'problematic').length;
+  const acceptableCount = results.filter(r => r.qualityRating === 'acceptable').length;
+
+  // Calculate severity statistics
+  const allSeverities = results.map(r => r.weightedSeverity);
+  const avgSeverity = allSeverities.reduce((a, b) => a + b, 0) / (allSeverities.length || 1);
+  const maxSeverity = Math.max(...allSeverities);
+
+  // Find best stretto (lowest weighted severity among non-clean)
+  const nonClean = results.filter(r => !r.clean);
+  const bestNonClean = nonClean.length > 0
+    ? nonClean.reduce((best, r) => r.weightedSeverity < best.weightedSeverity ? r : best)
+    : null;
 
   return {
     subjectLengthBeats: subLen,
@@ -687,10 +807,15 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       totalTested: results.length,
       clean: cleanCount,
       viable: viableCount,
+      acceptable: acceptableCount,
       marginal: marginalCount,
       problematic: problematicCount,
+      avgWeightedSeverity: avgSeverity,
+      maxWeightedSeverity: maxSeverity,
       bestDistance: cleanCount > 0 ? results.find(r => r.clean)?.distanceFormatted :
                     viableCount > 0 ? results.find(r => r.viable)?.distanceFormatted : null,
+      bestNonCleanDistance: bestNonClean?.distanceFormatted || null,
+      bestNonCleanSeverity: bestNonClean?.weightedSeverity || null,
     },
   };
 }
@@ -701,6 +826,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
 export function testTonalAnswer(subject, mode, keyInfo, formatter) {
   if (!subject.length) return { error: 'Empty' };
 
+  const meter = getMeter();
   const degrees = subject.map((n) => n.scaleDegree);
   const tonalMotions = [];
   let mutationPoint = null;
@@ -733,7 +859,7 @@ export function testTonalAnswer(subject, mode, keyInfo, formatter) {
     if (i === 0 && c.degree === 5) {
       tonalMotions.push({ type: 'initial-5', description: 'Begins on ^5; answer begins on ^1' });
       for (let j = 1; j < degrees.length; j++) {
-        if (degrees[j].degree === 1 && degrees[j].alteration === 0 && metricWeight(subject[j].onset) >= 0.5) {
+        if (degrees[j].degree === 1 && degrees[j].alteration === 0 && metricWeight(subject[j].onset, meter) >= 0.5) {
           mutationPoint = j;
           break;
         }
@@ -811,6 +937,9 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
     // Analyze dissonances with classification
     const dissonanceAnalysis = analyzeDissonances(sims, v1, v2, formatter);
 
+    // Get detailed scoring from dissonanceScoring module
+    const detailedScoring = analyzeAllDissonances(sims);
+
     // Only flag unprepared strong-beat dissonances as issues
     for (const d of dissonanceAnalysis.unprepared) {
       if (d.metricWeight >= 0.75) {
@@ -828,6 +957,8 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
       perfects,
       dissonant,
       dissonanceAnalysis,
+      detailedScoring, // Include detailed scores for use in scoring.js
+      totalIntervals: sims.length,
       imperfectRatio: strong.length > 0 ? (thirds + sixths) / strong.length : 0,
     };
   };
@@ -974,5 +1105,308 @@ export function testModulatoryRobustness(subject, cs, formatter) {
     }
   }
 
-  return { violations, intervalProfile: { consonant, dissonant, thirds, sixths, perfects }, observations };
+  // Get detailed dissonance scoring
+  const detailedScoring = analyzeAllDissonances(sims);
+
+  return {
+    violations,
+    intervalProfile: { consonant, dissonant, thirds, sixths, perfects },
+    observations,
+    detailedScoring, // Include for use in scoring.js
+  };
+}
+
+/**
+ * Convert semitone interval to sequence class for pattern matching.
+ * - 2nds (1-2 st), 3rds (3-4 st), 6ths (8-9 st), 7ths (10-11 st): same class regardless of M/m
+ * - Unison (0) and Octave (±12): same class
+ * - P4 up (+5) ≡ P5 down (-7); P5 up (+7) ≡ P4 down (-5) — inversions match
+ * - But P4 up ≠ P5 up; P4 down ≠ P5 down (same direction = different class)
+ */
+function toSequenceClass(semitones) {
+  const abs = Math.abs(semitones);
+  const sign = Math.sign(semitones);
+
+  // Unison and octave are same class
+  if (abs === 0 || abs === 12) return { class: 1, dir: sign || 1 };
+
+  // 2nds (1-2 semitones)
+  if (abs === 1 || abs === 2) return { class: 2, dir: sign };
+
+  // 3rds (3-4 semitones)
+  if (abs === 3 || abs === 4) return { class: 3, dir: sign };
+
+  // P4 and P5 with inversion equivalence:
+  // P4 up (+5) ≡ P5 down (-7): both are "4th-class ascending"
+  // P5 up (+7) ≡ P4 down (-5): both are "5th-class ascending"
+  if (semitones === 5 || semitones === -7) return { class: 4, dir: 1 };
+  if (semitones === 7 || semitones === -5) return { class: 5, dir: 1 };
+
+  // Tritone
+  if (abs === 6) return { class: 'TT', dir: sign };
+
+  // 6ths (8-9 semitones)
+  if (abs === 8 || abs === 9) return { class: 6, dir: sign };
+
+  // 7ths (10-11 semitones)
+  if (abs === 10 || abs === 11) return { class: 7, dir: sign };
+
+  // Larger intervals: use semitones directly
+  return { class: abs, dir: sign };
+}
+
+function sequenceClassesEqual(a, b) {
+  return a.class === b.class && a.dir === b.dir;
+}
+
+function intervalClassPatternsMatch(pattern1, pattern2) {
+  if (pattern1.length !== pattern2.length) return false;
+  for (let i = 0; i < pattern1.length; i++) {
+    if (!sequenceClassesEqual(pattern1[i], pattern2[i])) return false;
+  }
+  return true;
+}
+
+/**
+ * Detect melodic sequences in a voice
+ * A sequence is a melodic pattern that repeats (with or without transposition)
+ * Uses interval CLASSES not exact semitones (M3 and m3 are both "3rd")
+ * @param {NoteEvent[]} notes - Array of notes to analyze
+ * @param {number} minLength - Minimum number of notes in a sequence unit (default 3)
+ * @returns {Object} - Detected sequences with their patterns
+ */
+export function detectSequences(notes, minLength = 3) {
+  if (notes.length < minLength * 2) {
+    return { sequences: [], hasSequences: false, noteRanges: [] };
+  }
+
+  // Build interval pattern using sequence classes (not raw semitones)
+  const intervalClasses = [];
+  const rawIntervals = [];
+  for (let i = 1; i < notes.length; i++) {
+    const semitones = notes[i].pitch - notes[i - 1].pitch;
+    intervalClasses.push(toSequenceClass(semitones));
+    rawIntervals.push(semitones);
+  }
+
+  // Build rhythm pattern (relative durations)
+  const rhythms = notes.map(n => n.duration);
+
+  const sequences = [];
+
+  // Try different sequence unit lengths
+  for (let unitLen = minLength; unitLen <= Math.floor(notes.length / 2); unitLen++) {
+    // Try each starting position
+    for (let start = 0; start <= notes.length - unitLen * 2; start++) {
+      const intervalPattern = intervalClasses.slice(start, start + unitLen - 1);
+      const rawIntervalPattern = rawIntervals.slice(start, start + unitLen - 1);
+      const rhythmPattern = rhythms.slice(start, start + unitLen);
+
+      // Look for CONSECUTIVE repetitions of this pattern
+      // A true melodic sequence must have adjacent repetitions - not scattered occurrences
+      let repetitions = 1;
+      let matches = [{ startNote: start, endNote: start + unitLen - 1 }];
+      let nextPos = start + unitLen;
+
+      // Only look at the immediately following position - sequences must be consecutive
+      while (nextPos <= notes.length - unitLen) {
+        const candidateIntervals = intervalClasses.slice(nextPos, nextPos + unitLen - 1);
+        const candidateRhythms = rhythms.slice(nextPos, nextPos + unitLen);
+
+        // Check if interval CLASSES AND rhythms match
+        const intervalsMatch = intervalClassPatternsMatch(intervalPattern, candidateIntervals);
+        const rhythmsMatch = rhythmsSimilar(rhythmPattern, candidateRhythms);
+
+        if (intervalsMatch && rhythmsMatch) {
+          repetitions++;
+          matches.push({ startNote: nextPos, endNote: nextPos + unitLen - 1 });
+          nextPos = nextPos + unitLen; // Move to the next consecutive position
+        } else {
+          // No match at the consecutive position - stop looking
+          // This ensures we only detect true sequences, not scattered motifs
+          break;
+        }
+      }
+
+      // If we found at least one repetition, record it
+      if (repetitions >= 2) {
+        // Get the end note index from the last match
+        const lastMatch = matches[matches.length - 1];
+        const endNoteIdx = lastMatch.endNote;
+
+        // Don't record if we already have a longer sequence covering this region
+        const overlaps = sequences.some(seq =>
+          seq.startNoteIndex <= start && seq.endNoteIndex >= endNoteIdx && seq.unitLength >= unitLen
+        );
+
+        if (!overlaps) {
+          // Calculate transposition info (may be 0 for exact repetitions)
+          const transpositions = matches.slice(1).map(m =>
+            notes[m.startNote].pitch - notes[matches[0].startNote].pitch
+          );
+
+          sequences.push({
+            startNoteIndex: start,
+            endNoteIndex: endNoteIdx,
+            unitLength: unitLen,
+            repetitions,
+            intervalPattern: rawIntervalPattern, // Store raw semitones for display
+            intervalClassPattern: intervalPattern, // Store classes for reference
+            rhythmPattern,
+            matches,
+            transpositions,
+            isExactRepetition: transpositions.every(t => t === 0),
+            startBeat: notes[start].onset,
+            endBeat: notes[endNoteIdx].onset + notes[endNoteIdx].duration,
+          });
+        }
+      }
+    }
+  }
+
+  // Sort by total coverage (longer sequences covering more notes are more significant)
+  sequences.sort((a, b) => (b.unitLength * b.repetitions) - (a.unitLength * a.repetitions));
+
+  // Remove subsequences of longer sequences
+  const filtered = sequences.filter((seq, i) => {
+    for (let j = 0; j < i; j++) {
+      const other = sequences[j];
+      if (seq.startNoteIndex >= other.startNoteIndex && seq.endNoteIndex <= other.endNoteIndex) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Build note ranges covered by sequences (for leap penalty mitigation)
+  const noteRanges = [];
+  for (const seq of filtered) {
+    for (const match of seq.matches) {
+      noteRanges.push({ start: match.startNote, end: match.endNote });
+    }
+  }
+  // Merge overlapping ranges
+  noteRanges.sort((a, b) => a.start - b.start);
+  const mergedRanges = [];
+  for (const range of noteRanges) {
+    if (mergedRanges.length === 0 || range.start > mergedRanges[mergedRanges.length - 1].end + 1) {
+      mergedRanges.push({ ...range });
+    } else {
+      mergedRanges[mergedRanges.length - 1].end = Math.max(mergedRanges[mergedRanges.length - 1].end, range.end);
+    }
+  }
+
+  return {
+    sequences: filtered,
+    hasSequences: filtered.length > 0,
+    longestSequence: filtered[0] || null,
+    totalSequentialNotes: mergedRanges.reduce((sum, r) => sum + (r.end - r.start + 1), 0),
+    sequenceRatio: mergedRanges.reduce((sum, r) => sum + (r.end - r.start + 1), 0) / notes.length,
+    noteRanges: mergedRanges,
+  };
+}
+
+/**
+ * Check if two rhythm patterns are similar (within 10% tolerance)
+ */
+function rhythmsSimilar(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ratio = a[i] / b[i];
+    if (ratio < 0.9 || ratio > 1.1) return false;
+  }
+  return true;
+}
+
+/**
+ * Format interval as readable string (e.g., "+P5", "-3rd")
+ */
+function formatIntervalName(semitones) {
+  const abs = Math.abs(semitones);
+  const sign = semitones > 0 ? '+' : '-';
+
+  const intervalNames = {
+    0: 'unison', 1: 'm2', 2: 'M2', 3: 'm3', 4: 'M3', 5: 'P4',
+    6: 'TT', 7: 'P5', 8: 'm6', 9: 'M6', 10: 'm7', 11: 'M7', 12: 'P8',
+  };
+
+  const name = intervalNames[abs] || `${abs}st`;
+  return semitones === 0 ? 'unison' : `${sign}${name}`;
+}
+
+/**
+ * Format duration as readable string
+ */
+function formatSeqDuration(beats) {
+  if (beats === 4) return 'whole';
+  if (beats === 2) return 'half';
+  if (beats === 1) return 'quarter';
+  if (beats === 0.5) return '8th';
+  if (beats === 0.25) return '16th';
+  if (beats === 3) return 'dotted half';
+  if (beats === 1.5) return 'dotted quarter';
+  if (beats === 0.75) return 'dotted 8th';
+  return `${beats}`;
+}
+
+/**
+ * Analyze sequences in a voice - returns factual description only
+ * No interpretive commentary, just the pattern itself
+ */
+export function testSequentialPotential(notes, formatter) {
+  const sequenceAnalysis = detectSequences(notes, 3);
+  const detailedSequences = [];
+
+  for (const seq of sequenceAnalysis.sequences) {
+    // Build factual pattern description: duration and interval from previous
+    const patternNotes = notes.slice(seq.startNoteIndex, seq.startNoteIndex + seq.unitLength);
+    const patternSteps = [];
+
+    for (let i = 0; i < patternNotes.length; i++) {
+      const note = patternNotes[i];
+      const dur = formatSeqDuration(note.duration);
+
+      if (i === 0) {
+        patternSteps.push({ step: i + 1, duration: dur, interval: null });
+      } else {
+        const interval = note.pitch - patternNotes[i - 1].pitch;
+        patternSteps.push({ step: i + 1, duration: dur, interval: formatIntervalName(interval) });
+      }
+    }
+
+    // Transposition between repetitions (factual)
+    let transposition = null;
+    if (!seq.isExactRepetition && seq.transpositions.length > 0) {
+      const avgTransp = seq.transpositions.reduce((a, b) => a + b, 0) / seq.transpositions.length;
+      const rounded = Math.round(avgTransp);
+      if (rounded !== 0) {
+        transposition = `${rounded > 0 ? '+' : ''}${rounded} semitones`;
+      }
+    }
+
+    detailedSequences.push({
+      startNote: seq.startNoteIndex + 1,
+      endNote: seq.endNoteIndex + 1,
+      unitLength: seq.unitLength,
+      repetitions: seq.repetitions,
+      isExact: seq.isExactRepetition,
+      transposition,
+      pattern: patternSteps,
+      noteRanges: seq.matches.map(m => ({ start: m.startNote, end: m.endNote })),
+    });
+  }
+
+  return {
+    ...sequenceAnalysis,
+    detailedSequences,
+  };
+}
+
+// Helper function
+function arraysEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
