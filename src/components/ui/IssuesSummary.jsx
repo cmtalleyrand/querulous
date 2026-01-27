@@ -3,11 +3,33 @@ import { useState } from 'react';
 /**
  * IssuesSummary - Aggregates and displays all issues from various analyses
  * Shows problems prominently at the top of the results
+ *
+ * @param {Object} results - Analysis results
+ * @param {Object} scoreResult - Score data
+ * @param {Function} onHighlight - Callback when an issue is clicked: onHighlight({ onset, type, voice })
+ * @param {Object} highlightedItem - Currently highlighted item for visual feedback
  */
-export function IssuesSummary({ results, scoreResult }) {
+export function IssuesSummary({ results, scoreResult, onHighlight, highlightedItem }) {
   const [expandedCategory, setExpandedCategory] = useState(null);
 
   if (!results) return null;
+
+  // Helper to handle item clicks
+  const handleItemClick = (item, categoryName) => {
+    if (onHighlight && item.onset !== undefined) {
+      onHighlight({
+        onset: item.onset,
+        type: categoryName,
+        description: item.description,
+      });
+    }
+  };
+
+  // Check if an item is currently highlighted
+  const isHighlighted = (item) => {
+    if (!highlightedItem || item.onset === undefined) return false;
+    return Math.abs(highlightedItem.onset - item.onset) < 0.01;
+  };
 
   // Collect all issues from various analyses
   const categories = [];
@@ -268,28 +290,66 @@ export function IssuesSummary({ results, scoreResult }) {
                     {cat.detail}
                   </div>
                 )}
-                {cat.issues.map((issue, i) => (
-                  <div key={`issue-${i}`} style={{
-                    fontSize: '12px',
-                    color: '#dc2626',
-                    padding: '4px 0 4px 10px',
-                    borderLeft: '2px solid #fca5a5',
-                    marginBottom: '4px',
-                  }}>
-                    {issue.description}
-                  </div>
-                ))}
-                {cat.warnings.map((warning, i) => (
-                  <div key={`warn-${i}`} style={{
-                    fontSize: '12px',
-                    color: '#92400e',
-                    padding: '4px 0 4px 10px',
-                    borderLeft: '2px solid #fcd34d',
-                    marginBottom: '4px',
-                  }}>
-                    {warning.description}
-                  </div>
-                ))}
+                {cat.issues.map((issue, i) => {
+                  const hasOnset = issue.onset !== undefined;
+                  const highlighted = isHighlighted(issue);
+                  return (
+                    <div
+                      key={`issue-${i}`}
+                      onClick={hasOnset ? () => handleItemClick(issue, cat.name) : undefined}
+                      style={{
+                        fontSize: '12px',
+                        color: '#dc2626',
+                        padding: '6px 10px',
+                        borderLeft: highlighted ? '4px solid #dc2626' : '2px solid #fca5a5',
+                        marginBottom: '4px',
+                        borderRadius: '0 4px 4px 0',
+                        backgroundColor: highlighted ? '#fef2f2' : hasOnset ? '#fff' : 'transparent',
+                        cursor: hasOnset ? 'pointer' : 'default',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={hasOnset ? (e) => e.currentTarget.style.backgroundColor = '#fef2f2' : undefined}
+                      onMouseLeave={hasOnset && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
+                    >
+                      {hasOnset && (
+                        <span style={{ marginRight: '6px', opacity: 0.6 }}>
+                          ▸
+                        </span>
+                      )}
+                      {issue.description}
+                    </div>
+                  );
+                })}
+                {cat.warnings.map((warning, i) => {
+                  const hasOnset = warning.onset !== undefined;
+                  const highlighted = isHighlighted(warning);
+                  return (
+                    <div
+                      key={`warn-${i}`}
+                      onClick={hasOnset ? () => handleItemClick(warning, cat.name) : undefined}
+                      style={{
+                        fontSize: '12px',
+                        color: '#92400e',
+                        padding: '6px 10px',
+                        borderLeft: highlighted ? '4px solid #f59e0b' : '2px solid #fcd34d',
+                        marginBottom: '4px',
+                        borderRadius: '0 4px 4px 0',
+                        backgroundColor: highlighted ? '#fffbeb' : hasOnset ? '#fff' : 'transparent',
+                        cursor: hasOnset ? 'pointer' : 'default',
+                        transition: 'all 0.15s',
+                      }}
+                      onMouseEnter={hasOnset ? (e) => e.currentTarget.style.backgroundColor = '#fffbeb' : undefined}
+                      onMouseLeave={hasOnset && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
+                    >
+                      {hasOnset && (
+                        <span style={{ marginRight: '6px', opacity: 0.6 }}>
+                          ▸
+                        </span>
+                      )}
+                      {warning.description}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

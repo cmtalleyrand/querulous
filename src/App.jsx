@@ -89,6 +89,13 @@ export default function App() {
   const [saveName, setSaveName] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
 
+  // Global highlight state - used for clicking issues/items to highlight in visualizations
+  const [highlightedItem, setHighlightedItem] = useState(null);
+
+  // Sequence highlight state - for highlighting sequence ranges in piano roll
+  const [activeSequenceVoice, setActiveSequenceVoice] = useState(null);
+  const [activeSequenceRange, setActiveSequenceRange] = useState(null);
+
   // Load saved presets from localStorage on mount
   useEffect(() => {
     try {
@@ -763,13 +770,20 @@ export default function App() {
             <ScoreDashboard scoreResult={scoreResult} hasCountersubject={!!results.countersubject} />
 
             {/* Issues Summary - Show problems first */}
-            <IssuesSummary results={results} scoreResult={scoreResult} />
+            <IssuesSummary
+              results={results}
+              scoreResult={scoreResult}
+              onHighlight={setHighlightedItem}
+              highlightedItem={highlightedItem}
+            />
 
             {/* Subject Visualization */}
             <Section title="Subject" helpKey="subject" defaultCollapsed={true}>
               <PianoRoll
                 voices={[{ notes: results.subject, color: '#5c6bc0', label: 'Subject' }]}
                 sequenceRanges={results.sequences?.subject?.noteRanges || []}
+                activeSequenceRange={activeSequenceVoice === 'subject' ? activeSequenceRange : null}
+                highlightedItem={highlightedItem}
               />
             </Section>
 
@@ -933,19 +947,77 @@ export default function App() {
             {(() => {
               const allSequences = [];
               if (results.sequences?.subject?.detailedSequences?.length > 0) {
-                allSequences.push({ voice: 'Subject', color: '#5c6bc0', data: results.sequences.subject.detailedSequences });
+                allSequences.push({
+                  voice: 'Subject',
+                  voiceKey: 'subject',
+                  color: '#5c6bc0',
+                  data: results.sequences.subject.detailedSequences,
+                  notes: results.subject,
+                });
               }
               if (results.sequences?.answer?.detailedSequences?.length > 0) {
-                allSequences.push({ voice: 'Answer', color: '#26a69a', data: results.sequences.answer.detailedSequences });
+                allSequences.push({
+                  voice: 'Answer',
+                  voiceKey: 'answer',
+                  color: '#26a69a',
+                  data: results.sequences.answer.detailedSequences,
+                  notes: results.answerNotes,
+                });
               }
               if (results.sequences?.countersubject?.detailedSequences?.length > 0) {
-                allSequences.push({ voice: 'Countersubject', color: '#ef6c00', data: results.sequences.countersubject.detailedSequences });
+                allSequences.push({
+                  voice: 'Countersubject',
+                  voiceKey: 'countersubject',
+                  color: '#ef6c00',
+                  data: results.sequences.countersubject.detailedSequences,
+                  notes: results.countersubject,
+                });
               }
 
               if (allSequences.length === 0) return null;
 
+              // Format beat range for a sequence
+              const formatBeatRange = (seq, notes) => {
+                const startBeat = notes[seq.startNote - 1]?.onset;
+                const endNote = notes[seq.endNote - 1];
+                const endBeat = endNote ? endNote.onset + endNote.duration : startBeat;
+                return results.formatter
+                  ? `${results.formatter.formatBeat(startBeat)} – ${results.formatter.formatBeat(endBeat)}`
+                  : `Beat ${startBeat + 1} – ${endBeat + 1}`;
+              };
+
+              // Handle sequence click - highlight the note range
+              const handleSequenceClick = (voiceKey, seq, notes) => {
+                if (activeSequenceVoice === voiceKey &&
+                    activeSequenceRange?.start === seq.startNote - 1 &&
+                    activeSequenceRange?.end === seq.endNote - 1) {
+                  // Clicking same sequence - deselect
+                  setActiveSequenceVoice(null);
+                  setActiveSequenceRange(null);
+                } else {
+                  setActiveSequenceVoice(voiceKey);
+                  setActiveSequenceRange({ start: seq.startNote - 1, end: seq.endNote - 1 });
+                  // Also set the beat range for visualization highlight
+                  const startBeat = notes[seq.startNote - 1]?.onset || 0;
+                  const endNote = notes[seq.endNote - 1];
+                  const endBeat = endNote ? endNote.onset + endNote.duration : startBeat;
+                  setHighlightedItem({ onset: startBeat, endOnset: endBeat, type: 'sequence', voice: voiceKey });
+                }
+              };
+
               return (
                 <Section title="Sequences" defaultCollapsed={true}>
+                  <div style={{
+                    padding: '10px 14px',
+                    marginBottom: '12px',
+                    backgroundColor: '#f0f9ff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    color: '#0369a1',
+                  }}>
+                    Click a sequence to highlight it in the visualization above. Sequences are shown with a golden glow in the Subject piano roll.
+                  </div>
                   {allSequences.map((voiceSeqs, voiceIdx) => (
                     <div key={voiceIdx} style={{ marginBottom: voiceIdx < allSequences.length - 1 ? '16px' : 0 }}>
                       <div style={{
@@ -955,34 +1027,84 @@ export default function App() {
                         marginBottom: '8px',
                         paddingBottom: '4px',
                         borderBottom: `2px solid ${voiceSeqs.color}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
                       }}>
-                        {voiceSeqs.voice}
+                        <span style={{
+                          width: '12px',
+                          height: '12px',
+                          backgroundColor: voiceSeqs.color,
+                          borderRadius: '2px',
+                          display: 'inline-block',
+                        }} />
+                        {voiceSeqs.voice} ({voiceSeqs.data.length} sequence{voiceSeqs.data.length !== 1 ? 's' : ''})
                       </div>
-                      {voiceSeqs.data.map((seq, seqIdx) => (
-                        <div key={seqIdx} style={{
-                          padding: '12px',
-                          marginBottom: seqIdx < voiceSeqs.data.length - 1 ? '8px' : 0,
-                          backgroundColor: '#fffbeb',
-                          border: '1px solid #fcd34d',
-                          borderRadius: '6px',
-                        }}>
-                          <div style={{ fontSize: '13px', fontWeight: '600', color: '#92400e', marginBottom: '8px' }}>
-                            Notes {seq.startNote}–{seq.endNote}: {seq.repetitions}× repetition{seq.repetitions > 2 ? 's' : ''}
-                            {seq.transposition && ` (${seq.transposition} each)`}
-                            {seq.isExact && ' (exact)'}
-                          </div>
-                          <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#78350f' }}>
-                            <strong>Pattern:</strong>
-                            <div style={{ marginTop: '4px', paddingLeft: '8px' }}>
-                              {seq.pattern.map((step, i) => (
-                                <div key={i}>
-                                  {step.step}. {step.duration}{step.interval ? ` (${step.interval})` : ''}
-                                </div>
-                              ))}
+                      {voiceSeqs.data.map((seq, seqIdx) => {
+                        const isActive = activeSequenceVoice === voiceSeqs.voiceKey &&
+                          activeSequenceRange?.start === seq.startNote - 1;
+                        return (
+                          <div
+                            key={seqIdx}
+                            onClick={() => handleSequenceClick(voiceSeqs.voiceKey, seq, voiceSeqs.notes)}
+                            style={{
+                              padding: '12px',
+                              marginBottom: seqIdx < voiceSeqs.data.length - 1 ? '8px' : 0,
+                              backgroundColor: isActive ? '#fef3c7' : '#fffbeb',
+                              border: isActive ? '2px solid #d97706' : '1px solid #fcd34d',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={(e) => !isActive && (e.currentTarget.style.backgroundColor = '#fef9c3')}
+                            onMouseLeave={(e) => !isActive && (e.currentTarget.style.backgroundColor = '#fffbeb')}
+                          >
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'flex-start',
+                              marginBottom: '8px',
+                            }}>
+                              <div>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '2px 8px',
+                                  backgroundColor: voiceSeqs.color,
+                                  color: 'white',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: '600',
+                                  marginRight: '8px',
+                                }}>
+                                  {voiceSeqs.voice}
+                                </span>
+                                <span style={{ fontSize: '13px', fontWeight: '600', color: '#92400e' }}>
+                                  {seq.repetitions}× repetition{seq.repetitions > 2 ? 's' : ''}
+                                  {seq.transposition && ` (${seq.transposition} each)`}
+                                  {seq.isExact && ' (exact)'}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#78350f', opacity: 0.8 }}>
+                                {formatBeatRange(seq, voiceSeqs.notes)}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#78350f', marginBottom: '6px' }}>
+                              <strong>Notes {seq.startNote}–{seq.endNote}</strong> in {voiceSeqs.voice.toLowerCase()}
+                              <span style={{ marginLeft: '8px', opacity: 0.7 }}>({seq.unitLength}-note pattern)</span>
+                            </div>
+                            <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#92400e', backgroundColor: 'rgba(255,255,255,0.5)', padding: '8px', borderRadius: '4px' }}>
+                              <strong>Pattern:</strong>
+                              <span style={{ marginLeft: '8px' }}>
+                                {seq.pattern.map((step, i) => (
+                                  <span key={i}>
+                                    {step.duration}{step.interval ? ` ${step.interval}` : ''}{i < seq.pattern.length - 1 ? ' → ' : ''}
+                                  </span>
+                                ))}
+                              </span>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ))}
                 </Section>

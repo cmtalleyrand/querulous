@@ -9,8 +9,10 @@ import { generateGridLines } from '../../utils/vizConstants';
  * @param {Array} voices - Array of voice objects with notes, color, label
  * @param {string} title - Optional title for the visualization
  * @param {Array} sequenceRanges - Optional array of {start, end} note index ranges that are part of sequences
+ * @param {Object} activeSequenceRange - Currently selected sequence range {start, end} for highlighting
+ * @param {Object} highlightedItem - Currently highlighted item from global state {onset, endOnset}
  */
-export function PianoRoll({ voices, title, sequenceRanges = [] }) {
+export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRange = null, highlightedItem = null }) {
   const [hoveredNote, setHoveredNote] = useState(null);
   const [selectedNote, setSelectedNote] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -63,6 +65,23 @@ export function PianoRoll({ voices, title, sequenceRanges = [] }) {
       }
     }
     return false;
+  };
+
+  // Check if a note is in the currently active (selected) sequence range
+  const isNoteInActiveSequence = (voiceIndex, noteIndex) => {
+    if (voiceIndex !== 0 || !activeSequenceRange) return false;
+    return noteIndex >= activeSequenceRange.start && noteIndex <= activeSequenceRange.end;
+  };
+
+  // Check if a note falls within the highlighted beat range
+  const isNoteHighlighted = (note) => {
+    if (!highlightedItem) return false;
+    const noteStart = note.onset;
+    const noteEnd = note.onset + note.duration;
+    const hlStart = highlightedItem.onset;
+    const hlEnd = highlightedItem.endOnset !== undefined ? highlightedItem.endOnset : hlStart + 0.5;
+    // Check overlap
+    return noteStart < hlEnd && noteEnd > hlStart;
   };
 
   const labels = [];
@@ -141,6 +160,8 @@ export function PianoRoll({ voices, title, sequenceRanges = [] }) {
             const isHovered = hoveredNote && hoveredNote.voiceIndex === vi && hoveredNote.noteIndex === ni;
             const isSelected = selectedNote && selectedNote.voiceIndex === vi && selectedNote.noteIndex === ni;
             const inSequence = isNoteInSequence(vi, ni);
+            const inActiveSequence = isNoteInActiveSequence(vi, ni);
+            const isHighlit = isNoteHighlighted(n);
             const noteData = { ...n, voiceIndex: vi, noteIndex: ni, voiceLabel: v.label, voiceColor: v.color, inSequence };
 
             const noteX = tToX(n.onset);
@@ -148,18 +169,35 @@ export function PianoRoll({ voices, title, sequenceRanges = [] }) {
             const noteWidth = Math.max(2, n.duration * tScale - 1);
             const noteHeight = nH - 2;
 
+            // Determine visual emphasis level
+            const emphasisLevel = inActiveSequence ? 'active' : inSequence ? 'sequence' : isHighlit ? 'highlight' : 'normal';
+
             return (
               <g key={`${vi}-${ni}`}>
-                {/* Sequence highlight glow - golden background for notes in sequences */}
-                {inSequence && (
+                {/* Background highlight for sequences or highlighted items */}
+                {(inSequence || isHighlit) && (
                   <rect
-                    x={noteX - 2}
-                    y={noteY - 2}
-                    width={noteWidth + 4}
-                    height={noteHeight + 4}
-                    fill="#fbbf24"
-                    rx={4}
-                    opacity={0.4}
+                    x={noteX - 3}
+                    y={noteY - 3}
+                    width={noteWidth + 6}
+                    height={noteHeight + 6}
+                    fill={inActiveSequence ? '#f97316' : inSequence ? '#fbbf24' : '#60a5fa'}
+                    rx={5}
+                    opacity={inActiveSequence ? 0.7 : inSequence ? 0.55 : 0.5}
+                  />
+                )}
+                {/* Active sequence gets an extra glow ring */}
+                {inActiveSequence && (
+                  <rect
+                    x={noteX - 5}
+                    y={noteY - 5}
+                    width={noteWidth + 10}
+                    height={noteHeight + 10}
+                    fill="none"
+                    stroke="#ea580c"
+                    strokeWidth={2}
+                    rx={6}
+                    opacity={0.8}
                   />
                 )}
                 <rect
@@ -170,8 +208,22 @@ export function PianoRoll({ voices, title, sequenceRanges = [] }) {
                   fill={v.color}
                   rx={2}
                   opacity={v.opacity || 1}
-                  stroke={isSelected ? '#000' : isHovered ? '#666' : inSequence ? '#d97706' : 'none'}
-                  strokeWidth={isSelected ? 2 : isHovered ? 1 : inSequence ? 1.5 : 0}
+                  stroke={
+                    isSelected ? '#000' :
+                    isHovered ? '#666' :
+                    inActiveSequence ? '#c2410c' :
+                    inSequence ? '#d97706' :
+                    isHighlit ? '#2563eb' :
+                    'none'
+                  }
+                  strokeWidth={
+                    isSelected ? 2 :
+                    isHovered ? 1 :
+                    inActiveSequence ? 2.5 :
+                    inSequence ? 2 :
+                    isHighlit ? 1.5 :
+                    0
+                  }
                   style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
                   onMouseEnter={(e) => handleMouseEnter(noteData, e)}
                   onMouseLeave={handleMouseLeave}
