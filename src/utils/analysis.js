@@ -461,10 +461,135 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     });
   }
 
+  // Melodic contour analysis: leap recovery and focal point
+
+  // 1. Leap recovery: penalize unrecovered leaps, small bonus for good recovery
+  let leapRecoveries = 0;
+  let unresolvedLeaps = 0;
+  for (let i = 1; i < subject.length - 1; i++) {
+    const interval1 = subject[i].pitch - subject[i - 1].pitch;
+    const interval2 = subject[i + 1].pitch - subject[i].pitch;
+    const absInt1 = Math.abs(interval1);
+
+    // Check if first interval is a leap (>4 semitones)
+    if (absInt1 > 4) {
+      const absInt2 = Math.abs(interval2);
+      // Recovery = step (1-2 semitones) in opposite direction
+      const isOppositeDirection = (interval1 > 0 && interval2 < 0) || (interval1 < 0 && interval2 > 0);
+      const isStep = absInt2 <= 2;
+
+      if (isStep && isOppositeDirection) {
+        leapRecoveries++;
+      } else if (absInt2 > 4) {
+        // Two consecutive leaps without recovery
+        unresolvedLeaps++;
+      }
+    }
+  }
+
+  let leapRecoveryScore = 0;
+  if (leapRecoveries > 0 && unresolvedLeaps === 0) {
+    leapRecoveryScore = 0.25; // User specified +0.25 instead of +0.5
+    observations.push({
+      type: 'strength',
+      description: `Good leap recovery (${leapRecoveries} recovered leap${leapRecoveries > 1 ? 's' : ''})`,
+    });
+  } else if (unresolvedLeaps > 0) {
+    observations.push({
+      type: 'consideration',
+      description: `${unresolvedLeaps} unrecovered leap${unresolvedLeaps > 1 ? 's' : ''}`,
+    });
+  }
+
+  // 2. Focal point/climax detection: bonus up to +3.0 based on clarity
+  // A clear focal point is: the single highest (or lowest) pitch, metrically strong,
+  // in the middle portion of the subject, approached by step or small leap
+  const pitches = subject.map(n => n.pitch);
+  const maxPitch = Math.max(...pitches);
+  const minPitch = Math.min(...pitches);
+  const range = maxPitch - minPitch;
+
+  // Find all instances of highest and lowest pitch
+  const highIndices = pitches.map((p, i) => p === maxPitch ? i : -1).filter(i => i >= 0);
+  const lowIndices = pitches.map((p, i) => p === minPitch ? i : -1).filter(i => i >= 0);
+
+  let focalPointScore = 0;
+  let focalPointDetails = null;
+
+  // Check for clear high point (climax)
+  if (highIndices.length === 1 && range >= 5) {
+    const idx = highIndices[0];
+    const relativePosition = idx / (subject.length - 1);
+    const isInMiddle = relativePosition >= 0.25 && relativePosition <= 0.85;
+    const weight = metricWeight(subject[idx].onset, meter);
+    const isMetricallyStrong = weight >= 0.5;
+
+    // Check approach (step or small leap preferred)
+    let approachScore = 0;
+    if (idx > 0) {
+      const approachInterval = Math.abs(subject[idx].pitch - subject[idx - 1].pitch);
+      if (approachInterval <= 2) approachScore = 1.0; // Step approach
+      else if (approachInterval <= 4) approachScore = 0.5; // Skip approach
+    }
+
+    // Calculate focal point score (up to +3.0)
+    if (isInMiddle) {
+      focalPointScore = 1.0; // Base: clear single high point in middle
+      if (isMetricallyStrong) focalPointScore += 1.0; // Bonus: metrically strong
+      if (approachScore > 0) focalPointScore += approachScore; // Bonus: good approach
+      focalPointScore = Math.min(focalPointScore, 3.0);
+
+      focalPointDetails = {
+        type: 'high',
+        pitch: maxPitch,
+        position: idx,
+        relativePosition,
+        metricallyStrong: isMetricallyStrong,
+      };
+
+      const strengthLevel = focalPointScore >= 2.5 ? 'excellent' : focalPointScore >= 1.5 ? 'good' : 'present';
+      observations.push({
+        type: 'strength',
+        description: `Clear melodic climax (${strengthLevel}): high point at ${formatter.formatBeat(subject[idx].onset)}`,
+      });
+    }
+  }
+
+  // If no clear high point climax, check for expressive low point
+  if (focalPointScore === 0 && lowIndices.length === 1 && range >= 5) {
+    const idx = lowIndices[0];
+    const relativePosition = idx / (subject.length - 1);
+    const isInMiddle = relativePosition >= 0.25 && relativePosition <= 0.85;
+    const weight = metricWeight(subject[idx].onset, meter);
+    const isMetricallyStrong = weight >= 0.5;
+
+    if (isInMiddle) {
+      focalPointScore = 0.5; // Low point focal is less common but valid
+      if (isMetricallyStrong) focalPointScore += 0.5;
+      focalPointScore = Math.min(focalPointScore, 1.5);
+
+      focalPointDetails = {
+        type: 'low',
+        pitch: minPitch,
+        position: idx,
+        relativePosition,
+        metricallyStrong: isMetricallyStrong,
+      };
+
+      observations.push({
+        type: 'info',
+        description: `Expressive low point at ${formatter.formatBeat(subject[idx].onset)}`,
+      });
+    }
+  }
+
   return {
     opening: { degree: opening.toString(), isTonicChordTone },
     terminal: { degree: terminal.toString(), ...ti },
     dominantArrival: domArr,
+    leapRecoveryScore,
+    focalPointScore,
+    focalPointDetails,
     observations,
   };
 }
@@ -549,6 +674,87 @@ export function testRhythmicVariety(subject, formatter) {
     }
   }
 
+  // Melodic interval variety analysis
+  // Good variety = any combination involving a step (step+step, step+skip, step+leap)
+  // OR combinations of skips (3-4 semitones) and perfect leaps (5, 7, 12 semitones)
+  const intervals = [];
+  const intervalTypes = { step: 0, skip: 0, perfectLeap: 0, otherLeap: 0 };
+
+  for (let i = 1; i < subject.length; i++) {
+    const semitones = Math.abs(subject[i].pitch - subject[i - 1].pitch);
+    intervals.push(semitones);
+
+    if (semitones <= 2) {
+      intervalTypes.step++;
+    } else if (semitones <= 4) {
+      intervalTypes.skip++; // m3, M3 (3-4 semitones)
+    } else if (semitones === 5 || semitones === 7 || semitones === 12) {
+      intervalTypes.perfectLeap++; // P4, P5, P8
+    } else {
+      intervalTypes.otherLeap++; // 6ths, 7ths, etc.
+    }
+  }
+
+  // Evaluate melodic variety
+  const hasSteps = intervalTypes.step > 0;
+  const hasSkips = intervalTypes.skip > 0;
+  const hasLeaps = intervalTypes.perfectLeap + intervalTypes.otherLeap > 0;
+  const uniqueIntervalSizes = [...new Set(intervals)].length;
+
+  let melodicVarietyScore = 0;
+  const melodicObservations = [];
+
+  if (hasSteps && (hasSkips || hasLeaps)) {
+    // Good: steps combined with skips or leaps
+    melodicVarietyScore = 2;
+    melodicObservations.push({
+      type: 'strength',
+      description: 'Good melodic variety: steps combined with larger intervals',
+    });
+  } else if (hasSkips && intervalTypes.perfectLeap > 0) {
+    // Good: skips with perfect leaps (check for 2+ semitone difference)
+    const skipSizes = intervals.filter(i => i >= 3 && i <= 4);
+    const perfectSizes = intervals.filter(i => i === 5 || i === 7 || i === 12);
+    const hasVariety = skipSizes.some(s =>
+      perfectSizes.some(p => Math.abs(s - p) >= 2)
+    );
+    if (hasVariety) {
+      melodicVarietyScore = 1.5;
+      melodicObservations.push({
+        type: 'strength',
+        description: 'Melodic variety through skip/leap combinations',
+      });
+    }
+  } else if (uniqueIntervalSizes >= 3) {
+    melodicVarietyScore = 1;
+    melodicObservations.push({
+      type: 'info',
+      description: `${uniqueIntervalSizes} distinct interval sizes`,
+    });
+  } else if (uniqueIntervalSizes === 1) {
+    melodicVarietyScore = -1;
+    melodicObservations.push({
+      type: 'consideration',
+      description: 'Monotonous: only one interval size used',
+    });
+  }
+
+  observations.push(...melodicObservations);
+
+  // Add interval type summary
+  const typeSummary = [];
+  if (intervalTypes.step > 0) typeSummary.push(`${intervalTypes.step} steps`);
+  if (intervalTypes.skip > 0) typeSummary.push(`${intervalTypes.skip} skips`);
+  if (intervalTypes.perfectLeap > 0) typeSummary.push(`${intervalTypes.perfectLeap} perfect leaps`);
+  if (intervalTypes.otherLeap > 0) typeSummary.push(`${intervalTypes.otherLeap} other leaps`);
+
+  if (typeSummary.length > 0) {
+    observations.push({
+      type: 'info',
+      description: `Melodic intervals: ${typeSummary.join(', ')}`,
+    });
+  }
+
   return {
     uniqueDurations: unique.length,
     durationNames: names,
@@ -556,6 +762,8 @@ export function testRhythmicVariety(subject, formatter) {
     totalRestDuration,
     offBeatCount,
     offBeatRatio,
+    intervalTypes,
+    melodicVarietyScore,
     observations,
   };
 }
