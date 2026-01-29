@@ -30,6 +30,21 @@ All category scores are aggregated into an overall weighted average.
 | Answer junction: strong/good | +3 | Clear I→V or ii→V motion |
 | Answer junction: static/unusual | -3 | V→V stasis or problematic junction |
 
+**Answer Junction Explained:**
+The "junction" is the harmonic progression implied when the subject's terminal note connects to the answer's entry on the dominant. A **problematic junction** occurs when:
+- **Static**: Subject ends on ^5, creating V→V (dominant to dominant, no harmonic motion)
+- **Unusual**: Subject ends on chromatic degrees or ^6, creating unclear harmonic connection
+
+| Terminal Degree | Junction | Quality |
+|-----------------|----------|---------|
+| ^1 | I→V | Strong |
+| ^7 | vii°→V | Strong |
+| ^4 | IV→V | Strong |
+| ^2 | ii→V | Good |
+| ^3 | I→V | Good |
+| ^5 | V→V | Static (problematic) |
+| Other | ?→V | Unusual (problematic) |
+
 ---
 
 ### 2. Rhythmic Character (Weight: 0.8)
