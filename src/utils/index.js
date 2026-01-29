@@ -57,15 +57,7 @@ export { HELP_CONTENT, getHelpContent, getHelpTopics } from './helpContent';
 
 // Dissonance scoring system
 export {
+  createAnalysisContext,
   scoreDissonance,
   analyzeAllDissonances,
-  setP4Treatment,
-  getP4Treatment,
-  setMeter,
-  getMeter,
-  setSequenceRanges,
-  getSequenceRanges,
-  setSequenceBeatRanges,
-  isOnsetInSequence,
-  isNoteInSequence,
 } from './dissonanceScoring';

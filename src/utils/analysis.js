@@ -1,6 +1,6 @@
 import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName, isDuringRest } from './formatter';
-import { scoreDissonance, analyzeAllDissonances, getMeter } from './dissonanceScoring';
+import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -235,16 +235,18 @@ export function analyzeDissonances(sims, v1Notes, v2Notes, formatter) {
 
 /**
  * Find all simultaneous note pairs between two voices
- * Uses the current meter set in dissonanceScoring module
  *
  * IMPORTANT: This only creates simultaneities when actual notes overlap.
  * Rests in one voice do NOT create simultaneities - they are silence.
  * If v1 has notes A (0-1) and B (2-3), and v2 has note C (0-3),
  * we get simultaneities at A-C and B-C, but NOT during 1-2 (rest in v1).
+ *
+ * @param {NoteEvent[]} v1 - First voice notes
+ * @param {NoteEvent[]} v2 - Second voice notes
+ * @param {number[]} meter - Time signature [numerator, denominator]
  */
-export function findSimultaneities(v1, v2) {
+export function findSimultaneities(v1, v2, meter) {
   const sims = [];
-  const meter = getMeter();
 
   for (const n1 of v1) {
     const s1 = n1.onset;
@@ -399,7 +401,7 @@ export function testContourIndependence(subject, cs, formatter) {
 export function testHarmonicImplication(subject, tonic, mode, formatter) {
   if (!subject.length) return { error: 'No notes' };
 
-  const meter = getMeter();
+  const meter = formatter.meter;
   const degrees = subject.map((n) => n.scaleDegree);
   const observations = [];
 
@@ -497,10 +499,8 @@ export function testRhythmicVariety(subject, formatter) {
 /**
  * Analyze rhythmic complementarity between subject and countersubject
  */
-export function testRhythmicComplementarity(subject, cs) {
+export function testRhythmicComplementarity(subject, cs, meter) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
-
-  const meter = getMeter();
   const sOnsets = new Set(subject.map((n) => Math.round(n.onset * 100) / 100));
   const cOnsets = new Set(cs.map((n) => Math.round(n.onset * 100) / 100));
   const shared = [...sOnsets].filter((o) => cOnsets.has(o));
@@ -533,10 +533,10 @@ export function testRhythmicComplementarity(subject, cs) {
  * Test stretto viability at various time intervals
  * Issues are weighted by: beat strength, note duration, and consecutiveness
  */
-export function testStrettoViability(subject, formatter, minOverlap = 0.5, increment = 1, octaveDisp = 12) {
+export function testStrettoViability(subject, formatter, minOverlap = 0.5, increment = 1, octaveDisp = 12, scoringOptions = {}) {
   if (subject.length < 2) return { error: 'Too short' };
 
-  const meter = getMeter();
+  const meter = formatter.meter;
   const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
   const maxDist = subLen * (1 - minOverlap);
   const results = [];
@@ -548,7 +548,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     const comes = subject.map(
       (n) => new NoteEvent(n.pitch + octaveDisp, n.duration, n.onset + dist, n.scaleDegree, n.abcNote)
     );
-    const sims = findSimultaneities(subject, comes);
+    const sims = findSimultaneities(subject, comes, meter);
     const issues = [];
     const warnings = [];
 

@@ -566,13 +566,16 @@ export function calculateInvertibilityScore(result) {
     });
   }
 
-  // Parallel perfects - critical issues in EITHER position
+  // Parallel perfects - critical voice-leading issues in EITHER position
+  // NOTE: The invAvg already includes consonance repetition penalties (consecutive perfects: -0.5 each),
+  // so this penalty is reduced to avoid double-counting the same underlying problem.
+  // This catches the specific voice-leading error (parallel motion to perfect intervals)
+  // which the average score only partially reflects.
   const origIssues = result.original?.issues?.length || 0;
   const invIssues = result.inverted?.issues?.length || 0;
 
   if (invIssues > 0) {
-    // Issues in inverted position are the main concern
-    const penalty = Math.min(12, invIssues * 5);
+    const penalty = Math.min(6, invIssues * 2);
     internal -= penalty;
     details.push({
       factor: `${invIssues} parallel perfect(s) in inverted position`,

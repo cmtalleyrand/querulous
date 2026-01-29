@@ -19,63 +19,50 @@
 
 import { pitchName, metricWeight } from './formatter';
 
-// Configuration
-let treatP4AsDissonant = false; // Toggle for P4 treatment (forces all P4s as dissonant)
-let currentMeter = [4, 4]; // Default meter, can be updated
-let sequenceNoteRanges = []; // Ranges of note indices that are part of sequences (for penalty mitigation)
-
-export function setP4Treatment(dissonant) {
-  treatP4AsDissonant = dissonant;
-}
-
-export function getP4Treatment() {
-  return treatP4AsDissonant;
+/**
+ * Create an analysis context with all configuration needed for scoring.
+ * This replaces previous module-level mutable state.
+ *
+ * @param {Object} options
+ * @param {boolean} [options.treatP4AsDissonant=false] - Force all P4s as dissonant
+ * @param {number[]} [options.meter=[4,4]] - Time signature [numerator, denominator]
+ * @param {Array} [options.sequenceBeatRanges=[]] - Array of {startBeat, endBeat} for penalty mitigation
+ * @param {Array} [options.sequenceNoteRanges=[]] - Array of {start, end} note index ranges
+ * @returns {Object} Analysis context
+ */
+export function createAnalysisContext(options = {}) {
+  return {
+    treatP4AsDissonant: options.treatP4AsDissonant || false,
+    meter: options.meter || [4, 4],
+    sequenceBeatRanges: options.sequenceBeatRanges || [],
+    sequenceNoteRanges: options.sequenceNoteRanges || [],
+  };
 }
 
 /**
  * Check if P4 should be treated as dissonant based on voice positions
- * P4 is dissonant when the lower note is the bass (lowest voice)
- * P4 is consonant between upper voices
+ * In two-voice counterpoint, P4 against the bass is always dissonant.
  * @param {Simultaneity} sim - The simultaneity to check
- * @returns {boolean} - Whether this P4 should be treated as dissonant
+ * @param {Object} ctx - Analysis context
+ * @returns {boolean}
  */
-function isP4DissonantInContext(sim) {
+function isP4DissonantInContext(sim, ctx) {
   // If user forced all P4s as dissonant, respect that
-  if (treatP4AsDissonant) return true;
+  if (ctx.treatP4AsDissonant) return true;
 
   // In two-voice counterpoint, the lower voice IS the bass
-  // So P4 against the lower voice is dissonant
-  // This is the traditional rule: P4 sounding against the bass is dissonant
+  // P4 sounding against the bass is dissonant
   return true; // In 2-voice texture, P4 is generally treated as dissonant
-}
-
-export function setMeter(meter) {
-  currentMeter = meter;
-}
-
-export function getMeter() {
-  return currentMeter;
-}
-
-/**
- * Set the sequence note ranges for leap penalty mitigation
- * @param {Array} ranges - Array of {start, end} objects indicating note indices in sequences
- */
-export function setSequenceRanges(ranges) {
-  sequenceNoteRanges = ranges || [];
-}
-
-export function getSequenceRanges() {
-  return sequenceNoteRanges;
 }
 
 /**
  * Check if a note index is within a sequence
  * @param {number} noteIndex - The index of the note in the voice
- * @returns {boolean} - True if the note is part of a detected sequence
+ * @param {Object} ctx - Analysis context
+ * @returns {boolean}
  */
-export function isNoteInSequence(noteIndex) {
-  for (const range of sequenceNoteRanges) {
+function isNoteInSequence(noteIndex, ctx) {
+  for (const range of ctx.sequenceNoteRanges) {
     if (noteIndex >= range.start && noteIndex <= range.end) {
       return true;
     }
@@ -83,24 +70,14 @@ export function isNoteInSequence(noteIndex) {
   return false;
 }
 
-// Store sequence beat ranges (onset-based) for checking by time
-let sequenceBeatRanges = [];
-
-/**
- * Set sequence beat ranges (by onset time)
- * @param {Array} ranges - Array of {startBeat, endBeat} objects
- */
-export function setSequenceBeatRanges(ranges) {
-  sequenceBeatRanges = ranges || [];
-}
-
 /**
  * Check if an onset time falls within a sequence
  * @param {number} onset - The onset time to check
- * @returns {boolean} - True if the onset is during a melodic sequence
+ * @param {Object} ctx - Analysis context
+ * @returns {boolean}
  */
-export function isOnsetInSequence(onset) {
-  for (const range of sequenceBeatRanges) {
+function isOnsetInSequence(onset, ctx) {
+  for (const range of ctx.sequenceBeatRanges) {
     if (onset >= range.startBeat && onset <= range.endBeat) {
       return true;
     }
@@ -276,8 +253,8 @@ function getMotionType(prevSim, currSim) {
 /**
  * Check if this is a strong beat (weight >= 0.75)
  */
-function isStrongBeat(onset) {
-  return metricWeight(onset, currentMeter) >= 0.75;
+function isStrongBeat(onset, ctx) {
+  return metricWeight(onset, ctx.meter) >= 0.75;
 }
 
 /**
@@ -368,7 +345,7 @@ function getEntryRestModifier(restContext, currSim) {
  * Entry penalties are now deferred to be calculated based on how the leap is resolved
  * Rest handling: If entering from a rest longer than the note duration, motion bonuses/penalties are halved
  */
-function scoreEntry(prevSim, currSim, restContext = null) {
+function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   let score = 0; // Base
   const details = [];
 
@@ -428,7 +405,7 @@ function scoreEntry(prevSim, currSim, restContext = null) {
   }
 
   // Meter modifier
-  if (isStrongBeat(currSim.onset)) {
+  if (isStrongBeat(currSim.onset, ctx)) {
     score -= 1.0;
     details.push(`Strong beat: -1.0`);
   }
@@ -449,14 +426,14 @@ function scoreEntry(prevSim, currSim, restContext = null) {
  * Penalties are mitigated if the melodic motion is part of a sequence
  * Rest handling: -0.5 penalty if resolved by abandonment (one voice drops out)
  */
-function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
+function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   if (!nextSim) {
     return { score: -1.0, details: ['Unresolved (no following note)'], motion: null, v1Resolution: null, v2Resolution: null, resolvedByAbandonment: false };
   }
 
   // Check if this is actually a resolution (D → C) or just movement (D → D)
   const isConsonant = nextSim.interval.isConsonant() ||
-    (nextSim.interval.class === 4 && !treatP4AsDissonant); // P4 can be consonant
+    (nextSim.interval.class === 4 && !ctx.treatP4AsDissonant); // P4 can be consonant
 
   // Differentiate between perfect and imperfect consonance resolution
   // Perfect consonances: unison (1), P5 (5), P8 (8)
@@ -508,8 +485,8 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
   const motion = getMotionType(currSim, nextSim);
 
   // Check if either voice's motion is part of a sequence (by onset time)
-  const v1InSequence = isOnsetInSequence(currSim.onset);
-  const v2InSequence = isOnsetInSequence(currSim.onset);
+  const v1InSequence = isOnsetInSequence(currSim.onset, ctx);
+  const v2InSequence = isOnsetInSequence(currSim.onset, ctx);
 
   // Resolution modifier - check how each voice resolves with proportional penalties
   let v1Resolution = null;
@@ -643,7 +620,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null) {
 /**
  * Check for pattern matches and return bonus
  */
-function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
+function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
   const patterns = [];
 
   if (!prevSim || !nextSim || !entryInfo || !exitInfo) {
@@ -653,7 +630,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
   let bonus = 0;
 
   // SUSPENSION: Entry=Oblique+Strong, Exit=Step Down by the voice that held
-  if (entryInfo.motion.type === 'oblique' && isStrongBeat(currSim.onset)) {
+  if (entryInfo.motion.type === 'oblique' && isStrongBeat(currSim.onset, ctx)) {
     // Check which voice held and which moved
     const heldVoice = !entryInfo.motion.v1Moved ? 1 : (!entryInfo.motion.v2Moved ? 2 : null);
     if (heldVoice) {
@@ -666,7 +643,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
   }
 
   // APPOGGIATURA: Entry=Leap/Skip+Strong, Exit=Step Opposite by the voice that leaped
-  if (isStrongBeat(currSim.onset)) {
+  if (isStrongBeat(currSim.onset, ctx)) {
     // Check if V1 leaped in and steps out opposite
     if (entryInfo.v1MelodicInterval !== 0) {
       const entryMag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
@@ -715,7 +692,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
     if (!entryIsStep || !exitIsSkip || !sameDirection) return null;
 
     const isDescending = melodicInterval < 0;
-    const isWeakBeat = !isStrongBeat(currSim.onset);
+    const isWeakBeat = !isStrongBeat(currSim.onset, ctx);
 
     if (isDescending && isWeakBeat) {
       // Traditional cambiata: step down, skip down, weak beat
@@ -799,7 +776,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
   }
 
   // PASSING TONE: Stepwise through in same direction (handled separately as it's weak beat)
-  if (!isStrongBeat(currSim.onset) && !patterns.length) {
+  if (!isStrongBeat(currSim.onset, ctx) && !patterns.length) {
     // Check V1 passing
     if (entryInfo.v1MelodicInterval !== 0 && exitInfo.v1Resolution) {
       const entryMag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
@@ -843,7 +820,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
   }
 
   // ANTICIPATION: Entry=Oblique+Weak, Exit=Oblique (same note repeated)
-  if (entryInfo.motion.type === 'oblique' && !isStrongBeat(currSim.onset) && exitInfo.motion.type === 'oblique') {
+  if (entryInfo.motion.type === 'oblique' && !isStrongBeat(currSim.onset, ctx) && exitInfo.motion.type === 'oblique') {
     patterns.push({ type: 'anticipation', bonus: 0, description: 'Anticipation (oblique entry and exit on weak beat)' });
   }
 
@@ -854,7 +831,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo) {
  * Score a consonance based on context
  * Tracks repetition and resolution quality
  */
-function scoreConsonance(currSim, allSims, index, intervalHistory) {
+function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
   const intervalClass = currSim.interval.class;
   const v1Pitch = pitchName(currSim.voice1Note.pitch);
   const v2Pitch = pitchName(currSim.voice2Note.pitch);
@@ -914,7 +891,7 @@ function scoreConsonance(currSim, allSims, index, intervalHistory) {
   if (nextSim) {
     let nextIsDissonant = !nextSim.interval.isConsonant();
     // P4 special case
-    if (nextSim.interval.class === 4 && isP4DissonantInContext(nextSim)) {
+    if (nextSim.interval.class === 4 && isP4DissonantInContext(nextSim, ctx)) {
       nextIsDissonant = true;
     }
     isPreparation = nextIsDissonant;
@@ -1013,10 +990,11 @@ function scoreConsonance(currSim, allSims, index, intervalHistory) {
 }
 
 /**
- * Main scoring function for a dissonance
- * Analyzes the C → D → C chain and returns comprehensive score
+ * Internal scoring function that accepts a pre-built analysis context.
+ * Used by analyzeAllDissonances to avoid redundant context creation.
  */
-export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = []) {
+function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
+
   // Find previous and next simultaneities
   const prevSims = allSims.filter(s => s.onset < currSim.onset);
   const nextSims = allSims.filter(s => s.onset > currSim.onset);
@@ -1029,25 +1007,25 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
   // P4 special handling - in two-voice counterpoint, P4 is generally treated as dissonant
   // because one voice is always the bass, and P4 against bass is dissonant
   if (currSim.interval.class === 4) {
-    isDissonant = isP4DissonantInContext(currSim);
+    isDissonant = isP4DissonantInContext(currSim, ctx);
   }
 
   if (!isDissonant) {
     // Score as consonance with context
-    return scoreConsonance(currSim, allSims, index, intervalHistory);
+    return scoreConsonance(currSim, allSims, index, intervalHistory, ctx);
   }
 
   // Analyze rest context for entry/exit handling
   const restContext = analyzeRestContext(prevSim, currSim, nextSim);
 
   // Score entry (with rest context for motion modifier reduction)
-  const entryInfo = scoreEntry(prevSim, currSim, restContext);
+  const entryInfo = scoreEntry(prevSim, currSim, restContext, ctx);
 
   // Score exit (with rest context for abandonment and phantom note handling)
-  const exitInfo = scoreExit(currSim, nextSim, entryInfo, restContext);
+  const exitInfo = scoreExit(currSim, nextSim, entryInfo, restContext, ctx);
 
   // Check patterns
-  const patternInfo = checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo);
+  const patternInfo = checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx);
 
   // Calculate total score
   const totalScore = entryInfo.score + exitInfo.score + patternInfo.bonus;
@@ -1107,7 +1085,7 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
     v1Pitch,
     v2Pitch,
     onset: currSim.onset,
-    isStrongBeat: isStrongBeat(currSim.onset),
+    isStrongBeat: isStrongBeat(currSim.onset, ctx),
     entry: entryInfo,
     exit: exitInfo,
     patterns: patternInfo.patterns,
@@ -1122,6 +1100,21 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
 }
 
 /**
+ * Public scoring function for a single dissonance.
+ * Creates an analysis context from options and delegates to internal implementation.
+ *
+ * @param {Simultaneity} currSim - The simultaneity to score
+ * @param {Simultaneity[]} allSims - All simultaneities for context
+ * @param {number} index - Index in allSims (-1 if unknown)
+ * @param {number[]} intervalHistory - Previous interval classes for repetition tracking
+ * @param {Object} options - Analysis options (treatP4AsDissonant, meter, sequenceBeatRanges, sequenceNoteRanges)
+ */
+export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = [], options = {}) {
+  const ctx = createAnalysisContext(options);
+  return _scoreDissonance(currSim, allSims, index, intervalHistory, ctx);
+}
+
+/**
  * Analyze all intervals in a passage with context tracking
  *
  * Consecutive dissonance handling:
@@ -1129,13 +1122,14 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
  * - Consecutive dissonances compound: 2 in a row = both penalized, 3 in a row = all penalized
  * - This is tracked in the summary as consecutiveDissonanceGroups
  */
-export function analyzeAllDissonances(sims) {
+export function analyzeAllDissonances(sims, options = {}) {
+  const ctx = createAnalysisContext(options);
   const results = [];
   const intervalHistory = []; // Track interval classes for repetition detection
 
   for (let i = 0; i < sims.length; i++) {
     const sim = sims[i];
-    const scoring = scoreDissonance(sim, sims, i, intervalHistory);
+    const scoring = _scoreDissonance(sim, sims, i, intervalHistory, ctx);
     results.push({
       onset: sim.onset,
       ...scoring,

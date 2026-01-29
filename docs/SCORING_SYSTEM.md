@@ -79,7 +79,7 @@ Score is based on **inverted position dissonance quality**.
 | Inverted position quality | ×5 | Average dissonance score in inverted position |
 | Inverted much worse than original | -3 to -8 | Quality difference > 1.0 |
 | Inverted better than original | +3 | Rare but valuable |
-| Parallel perfects (inverted) | -5 per issue (max -12) | Critical issue |
+| Parallel perfects (inverted) | -2 per issue (max -6) | Voice-leading error (reduced from -5 to avoid overlap with quality score which already penalizes consecutive perfects) |
 | High imperfect consonance ratio (≥60%) | +5 | 3rds/6ths are safe for inversion |
 | Low imperfect consonance ratio (<30%) | -3 | Too many perfect intervals |
 
