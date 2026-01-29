@@ -315,32 +315,40 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
     };
   });
 
-  // Calculate overall average counterpoint score across all distances
-  const avgCounterpointScore = distanceScores.reduce((sum, d) => sum + d.avgScore, 0) / totalTests;
+  // Sort by score (best first) and take top 3
+  // Rationale: You're unlikely to use more than 3 stretto distances in practice,
+  // so what matters is whether your best options are good, not the average of all.
+  const sortedScores = [...distanceScores].sort((a, b) => b.avgScore - a.avgScore);
+  const top3 = sortedScores.slice(0, 3);
+  const rest = sortedScores.slice(3);
 
-  // Internal score: scale the average counterpoint score
-  // Counterpoint scores typically range -3 to +3, map to internal -15 to +15
-  let internal = avgCounterpointScore * 5;
+  // Primary score: average of top 3 (or fewer if less than 3 tested)
+  const top3Avg = top3.reduce((sum, d) => sum + d.avgScore, 0) / top3.length;
+
+  // Secondary: rest of distances contribute at 25% weight
+  const restAvg = rest.length > 0 ? rest.reduce((sum, d) => sum + d.avgScore, 0) / rest.length : 0;
+  const weightedAvg = rest.length > 0
+    ? (top3Avg * 0.75 + restAvg * 0.25)
+    : top3Avg;
+
+  // Internal score: scale to -15 to +15 range
+  let internal = weightedAvg * 5;
 
   details.push({
-    factor: `Average counterpoint score: ${avgCounterpointScore.toFixed(2)}`,
-    impact: Math.round(internal),
+    factor: `Top ${top3.length} stretto distances avg: ${top3Avg.toFixed(2)}`,
+    impact: Math.round(top3Avg * 5),
   });
 
-  // Bonus for number of "good" distances (avgScore >= 0)
-  const goodDistances = distanceScores.filter(d => d.avgScore >= 0).length;
-  const goodRatio = goodDistances / totalTests;
-
-  if (goodRatio >= 0.7) {
-    internal += 8;
-    details.push({ factor: `${goodDistances}/${totalTests} distances with good counterpoint`, impact: +8 });
-  } else if (goodRatio >= 0.5) {
-    internal += 4;
-    details.push({ factor: `${goodDistances}/${totalTests} distances with good counterpoint`, impact: +4 });
-  } else if (goodRatio < 0.3) {
-    internal -= 5;
-    details.push({ factor: `Only ${goodDistances}/${totalTests} distances workable`, impact: -5 });
+  if (rest.length > 0) {
+    details.push({
+      factor: `Other ${rest.length} distances avg: ${restAvg.toFixed(2)} (25% weight)`,
+      impact: Math.round(restAvg * 5 * 0.25),
+      type: 'info',
+    });
   }
+
+  // Count good distances for context
+  const goodDistances = distanceScores.filter(d => d.avgScore >= 0).length;
 
   // Bonus for close stretto possibility (high overlap with good counterpoint)
   const closeGood = distanceScores.filter(d => {
@@ -566,31 +574,9 @@ export function calculateInvertibilityScore(result) {
     });
   }
 
-  // Parallel perfects - critical voice-leading issues in EITHER position
-  // NOTE: The invAvg already includes consonance repetition penalties (consecutive perfects: -0.5 each),
-  // so this penalty is reduced to avoid double-counting the same underlying problem.
-  // This catches the specific voice-leading error (parallel motion to perfect intervals)
-  // which the average score only partially reflects.
-  const origIssues = result.original?.issues?.length || 0;
-  const invIssues = result.inverted?.issues?.length || 0;
-
-  if (invIssues > 0) {
-    const penalty = Math.min(6, invIssues * 2);
-    internal -= penalty;
-    details.push({
-      factor: `${invIssues} parallel perfect(s) in inverted position`,
-      impact: -penalty,
-    });
-  }
-
-  if (origIssues > 0 && invIssues === 0) {
-    // Original has issues but inverted doesn't - interesting case
-    details.push({
-      factor: `${origIssues} issue(s) in original (inverted is cleaner)`,
-      impact: 0,
-      type: 'info',
-    });
-  }
+  // Parallel perfects penalty removed - already reflected in the average score
+  // which includes consecutive perfect consonance penalties. Adding a separate
+  // penalty here was double-counting.
 
   // Imperfect consonance ratio - higher ratio means safer inversion
   const origRatio = result.original?.imperfectRatio || 0;
@@ -624,9 +610,12 @@ export const calculateDoubleCounterpointScore = calculateInvertibilityScore;
 
 /**
  * Calculate Rhythmic Interplay score (base-zero)
- * Baseline 0 = 50% attack overlap (moderate independence)
- * Positive = complementary rhythms (low overlap)
- * Negative = homorhythmic (high overlap)
+ * Baseline 0 = moderate overlap (~40-60%)
+ * Positive = good complementarity (some independence but not disruptive)
+ * Negative = too similar (homorhythmic) OR too different (disruptive hocket)
+ *
+ * Note: Strong beat attacks are EXPECTED and normal. We don't penalize collisions.
+ * Instead, we penalize lack of variety (all attacks on strong beats, none off-beat).
  */
 export function calculateRhythmicInterplayScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
@@ -635,37 +624,44 @@ export function calculateRhythmicInterplayScore(result) {
   const details = [];
   const overlapRatio = result.overlapRatio || 0.5;
 
-  // Score based on distance from 50% (neutral)
-  // 0-30% overlap = strong complementarity (+15)
-  // 30-50% = good (+5 to 0)
-  // 50-70% = fair (0 to -5)
-  // 70-100% = homorhythmic (-5 to -15)
+  // Score based on overlap - both extremes are bad
+  // 0-15% = disruptive hocket (penalty)
+  // 15-30% = some independence but pushing it
+  // 30-60% = good complementarity (reward)
+  // 60-80% = moderate overlap (slight penalty)
+  // 80-100% = homorhythmic (strong penalty)
 
-  if (overlapRatio <= 0.3) {
-    internal = 15;
-    details.push({ factor: `Strong rhythmic independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: +15 });
-  } else if (overlapRatio <= 0.5) {
-    // Linear interpolation from +8 at 30% to 0 at 50%
-    internal = Math.round(8 * (0.5 - overlapRatio) / 0.2);
-    details.push({ factor: `Good rhythmic independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
-  } else if (overlapRatio <= 0.7) {
-    // Linear interpolation from 0 at 50% to -8 at 70%
-    internal = Math.round(-8 * (overlapRatio - 0.5) / 0.2);
-    details.push({ factor: `Moderate overlap (${Math.round(overlapRatio * 100)}%)`, impact: internal });
+  if (overlapRatio <= 0.15) {
+    // Too little overlap - disruptive, not complementary
+    internal = -10;
+    details.push({ factor: `Disruptive hocket-like rhythm (${Math.round(overlapRatio * 100)}% overlap)`, impact: -10 });
+  } else if (overlapRatio <= 0.3) {
+    // Some independence, slight caution
+    internal = 5;
+    details.push({ factor: `High independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: +5 });
+  } else if (overlapRatio <= 0.6) {
+    // Good complementarity - ideal range
+    internal = 10;
+    details.push({ factor: `Good rhythmic interplay (${Math.round(overlapRatio * 100)}% overlap)`, impact: +10 });
+  } else if (overlapRatio <= 0.8) {
+    // Moderate overlap - getting similar
+    internal = Math.round(-5 * (overlapRatio - 0.6) / 0.2);
+    details.push({ factor: `Similar rhythms (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
   } else {
-    // Linear interpolation from -8 at 70% to -15 at 100%
-    internal = Math.round(-8 - 7 * (overlapRatio - 0.7) / 0.3);
+    // Homorhythmic - voices too similar
+    internal = Math.round(-5 - 10 * (overlapRatio - 0.8) / 0.2);
     details.push({ factor: `Homorhythmic (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
   }
 
-  // Strong beat collision penalty
-  const collisions = result.strongBeatCollisions || 0;
-  if (collisions > 4) {
+  // Off-beat variety check: penalize if ALL attacks are on strong beats (no variety)
+  // Strong beat attacks are expected and normal - but some off-beat variety is good
+  const offBeatRatio = result.offBeatRatio || 0;
+  if (offBeatRatio === 0 && result.totalAttacks > 4) {
     internal -= 5;
-    details.push({ factor: `${collisions} strong beat collisions`, impact: -5 });
-  } else if (collisions > 2) {
-    internal -= 2;
-    details.push({ factor: `${collisions} strong beat collisions`, impact: -2 });
+    details.push({ factor: 'No off-beat attacks (lacks rhythmic variety)', impact: -5 });
+  } else if (offBeatRatio > 0 && offBeatRatio < 0.1) {
+    // Very few off-beat attacks
+    details.push({ factor: `${Math.round(offBeatRatio * 100)}% off-beat attacks`, impact: 0, type: 'info' });
   }
 
   return {
@@ -680,9 +676,17 @@ export const calculateRhythmicComplementarityScore = calculateRhythmicInterplayS
 
 /**
  * Calculate Voice Independence score (base-zero)
- * Baseline 0 = average motion variety
- * Positive = high contrary motion, good voice differentiation
- * Negative = excessive parallel motion
+ *
+ * Target ratio: 4:1 (contrary+oblique) vs (similar+parallel)
+ * - 3:1 is slightly low (small penalty)
+ * - 2:1 is too low (larger penalty)
+ * - 6:1+ is too high (small penalty)
+ *
+ * Within contrary+oblique: contrary:oblique should be around 5:2
+ * - Too skewed either way (>3:1) is penalized
+ *
+ * Within similar+parallel: similar:parallel should be at least 2:1
+ * - Less than 2:1 is penalized, less than 3:2 even more
  */
 export function calculateVoiceIndependenceScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
@@ -693,41 +697,74 @@ export function calculateVoiceIndependenceScore(result) {
   const contraryRatio = result.contraryRatio || 0;
   const parallelRatio = result.parallelRatio || 0;
   const obliqueRatio = result.obliqueRatio || 0;
+  const similarRatio = result.similarRatio || 0;
 
-  // Contrary motion: ideal is 30-50%, score relative to that
-  if (contraryRatio >= 0.5) {
-    internal += 12;
-    details.push({ factor: `Strong contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: +12 });
-  } else if (contraryRatio >= 0.35) {
-    internal += 8;
-    details.push({ factor: `Good contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: +8 });
-  } else if (contraryRatio >= 0.2) {
-    internal += 3;
-    details.push({ factor: `Moderate contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: +3 });
-  } else {
+  // Calculate grouped ratios
+  const independentMotion = contraryRatio + obliqueRatio;
+  const dependentMotion = similarRatio + parallelRatio;
+
+  // Main ratio: independent vs dependent (target 4:1 = 80% independent)
+  const mainRatio = dependentMotion > 0 ? independentMotion / dependentMotion : 10;
+
+  if (mainRatio >= 3.5 && mainRatio <= 5) {
+    // Ideal range (around 4:1)
+    internal += 10;
+    details.push({ factor: `Good motion balance (${mainRatio.toFixed(1)}:1 independent:dependent)`, impact: +10 });
+  } else if (mainRatio >= 2.5 && mainRatio < 3.5) {
+    // 3:1 range - slightly low
+    internal += 5;
+    details.push({ factor: `Acceptable motion balance (${mainRatio.toFixed(1)}:1)`, impact: +5 });
+  } else if (mainRatio >= 1.5 && mainRatio < 2.5) {
+    // 2:1 range - too low
     internal -= 5;
-    details.push({ factor: `Low contrary motion (${Math.round(contraryRatio * 100)}%)`, impact: -5 });
-  }
-
-  // Parallel motion: penalize if too high
-  if (parallelRatio > 0.4) {
+    details.push({ factor: `Low independence (${mainRatio.toFixed(1)}:1)`, impact: -5 });
+  } else if (mainRatio < 1.5) {
+    // Less than 1.5:1 - very poor
     internal -= 12;
-    details.push({ factor: `Excessive parallel motion (${Math.round(parallelRatio * 100)}%)`, impact: -12 });
-  } else if (parallelRatio > 0.25) {
-    internal -= 5;
-    details.push({ factor: `High parallel motion (${Math.round(parallelRatio * 100)}%)`, impact: -5 });
-  } else if (parallelRatio <= 0.1) {
+    details.push({ factor: `Poor independence (${mainRatio.toFixed(1)}:1)`, impact: -12 });
+  } else if (mainRatio > 6) {
+    // Too skewed toward independent - slight penalty
     internal += 5;
-    details.push({ factor: `Low parallel motion (${Math.round(parallelRatio * 100)}%)`, impact: +5 });
+    details.push({ factor: `High independence (${mainRatio.toFixed(1)}:1) - slightly excessive`, impact: +5 });
+  } else {
+    // 5-6 range
+    internal += 8;
+    details.push({ factor: `Strong independence (${mainRatio.toFixed(1)}:1)`, impact: +8 });
   }
 
-  // Oblique motion: adds variety
-  if (obliqueRatio >= 0.2) {
-    internal += 5;
-    details.push({ factor: `Good oblique motion (${Math.round(obliqueRatio * 100)}%)`, impact: +5 });
-  } else if (obliqueRatio >= 0.1) {
-    internal += 2;
-    details.push({ factor: `Some oblique motion (${Math.round(obliqueRatio * 100)}%)`, impact: +2 });
+  // Contrary vs oblique balance (target around 5:2 = 2.5:1)
+  if (obliqueRatio > 0) {
+    const coRatio = contraryRatio / obliqueRatio;
+    if (coRatio >= 2 && coRatio <= 3) {
+      // Good balance
+      internal += 3;
+      details.push({ factor: `Good contrary/oblique balance (${coRatio.toFixed(1)}:1)`, impact: +3 });
+    } else if (coRatio > 3) {
+      // Too much contrary relative to oblique
+      const penalty = Math.min(3, Math.floor((coRatio - 3) / 2));
+      if (penalty > 0) {
+        internal -= penalty;
+        details.push({ factor: `Lacking oblique motion (${coRatio.toFixed(1)}:1 contrary:oblique)`, impact: -penalty });
+      }
+    }
+  }
+
+  // Similar vs parallel balance (target at least 2:1)
+  if (parallelRatio > 0 && similarRatio > 0) {
+    const spRatio = similarRatio / parallelRatio;
+    if (spRatio < 1.5) {
+      // Less than 3:2 - strong penalty
+      internal -= 5;
+      details.push({ factor: `Too much parallel vs similar (${spRatio.toFixed(1)}:1)`, impact: -5 });
+    } else if (spRatio < 2) {
+      // Less than 2:1 - moderate penalty
+      internal -= 2;
+      details.push({ factor: `High parallel motion ratio (${spRatio.toFixed(1)}:1 similar:parallel)`, impact: -2 });
+    }
+  } else if (parallelRatio > 0.2) {
+    // Lots of parallel, no similar
+    internal -= 5;
+    details.push({ factor: `Excessive parallel motion (${Math.round(parallelRatio * 100)}%)`, impact: -5 });
   }
 
   return {
@@ -742,67 +779,49 @@ export const calculateContourIndependenceScore = calculateVoiceIndependenceScore
 
 /**
  * Calculate Transposition Stability score (base-zero)
- * Baseline 0 = acceptable counterpoint against the answer
- * Based on dissonance analysis when CS sounds against the dominant-level answer
+ * Simply uses the counterpoint quality score against the answer, weighted for length.
  */
 export function calculateTranspositionStabilityScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
-  let internal = 0;
   const details = [];
 
-  // Primary factor: dissonance scoring against the answer
+  // Primary and only factor: dissonance scoring against the answer
   const detailedScoring = result.detailedScoring?.summary;
-  if (detailedScoring && detailedScoring.totalDissonances > 0) {
-    const avgScore = detailedScoring.averageScore;
+  const totalIntervals = detailedScoring?.totalIntervals || 0;
+
+  if (detailedScoring && totalIntervals > 0) {
+    const avgScore = detailedScoring.averageScore || 0;
     // Scale: avg -3 to +3 maps to internal -15 to +15
-    internal = avgScore * 5;
+    // Weight slightly by length (more intervals = more reliable assessment)
+    const lengthFactor = Math.min(1.2, 0.8 + totalIntervals / 50);
+    const internal = avgScore * 5 * lengthFactor;
+
     details.push({
       factor: `Counterpoint quality vs answer: ${avgScore.toFixed(2)}`,
       impact: Math.round(internal),
     });
-  } else if (detailedScoring) {
-    // No dissonances - good
-    internal = 10;
-    details.push({ factor: 'No dissonances against answer', impact: +10 });
-  }
 
-  // Consonance profile on strong beats
-  const profile = result.intervalProfile;
-  if (profile) {
-    const total = profile.consonant + profile.dissonant;
-    if (total > 0) {
-      const consPercent = Math.round((profile.consonant / total) * 100);
-
-      // Baseline expectation: ~70% consonant
-      if (consPercent >= 85) {
-        internal += 8;
-        details.push({ factor: `${consPercent}% consonant on strong beats (strong)`, impact: +8 });
-      } else if (consPercent >= 70) {
-        internal += 3;
-        details.push({ factor: `${consPercent}% consonant on strong beats (good)`, impact: +3 });
-      } else if (consPercent < 50) {
-        internal -= 8;
-        details.push({ factor: `Only ${consPercent}% consonant on strong beats`, impact: -8 });
-      }
+    if (totalIntervals < 10) {
+      details.push({
+        factor: `Short overlap (${totalIntervals} intervals)`,
+        impact: 0,
+        type: 'info',
+      });
     }
+
+    return {
+      score: toDisplayScore(internal),
+      internal,
+      details,
+    };
   }
 
-  // Parallel perfect violations
-  const violations = result.violations?.length || 0;
-  if (violations === 0) {
-    internal += 3;
-    details.push({ factor: 'No parallel perfect violations', impact: +3 });
-  } else {
-    const penalty = Math.min(15, violations * 5);
-    internal -= penalty;
-    details.push({ factor: `${violations} parallel perfect violation(s)`, impact: -penalty });
-  }
-
+  // No analysis data
   return {
-    score: toDisplayScore(internal),
-    internal,
-    details,
+    score: toDisplayScore(0),
+    internal: 0,
+    details: [{ factor: 'No counterpoint data available', impact: 0 }],
   };
 }
 

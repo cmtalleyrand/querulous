@@ -60,4 +60,13 @@ export {
   createAnalysisContext,
   scoreDissonance,
   analyzeAllDissonances,
+  // Global state setters (backward compatibility)
+  setMeter,
+  getMeter,
+  setP4Treatment,
+  getP4Treatment,
+  setSequenceRanges,
+  getSequenceRanges,
+  setSequenceBeatRanges,
+  getSequenceBeatRanges,
 } from './dissonanceScoring';

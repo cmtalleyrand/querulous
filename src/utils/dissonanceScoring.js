@@ -19,6 +19,57 @@
 
 import { pitchName, metricWeight } from './formatter';
 
+// ===========================================================================
+// Global state for backward compatibility
+// TODO: Migrate all callers to use createAnalysisContext pattern
+// ===========================================================================
+let _globalMeter = [4, 4];
+let _globalP4Treatment = false;
+let _globalSequenceRanges = [];
+let _globalSequenceBeatRanges = [];
+
+export function setMeter(meter) {
+  _globalMeter = meter;
+}
+
+export function getMeter() {
+  return _globalMeter;
+}
+
+export function setP4Treatment(treatAsDissonant) {
+  _globalP4Treatment = treatAsDissonant;
+}
+
+export function getP4Treatment() {
+  return _globalP4Treatment;
+}
+
+export function setSequenceRanges(ranges) {
+  _globalSequenceRanges = ranges;
+}
+
+export function getSequenceRanges() {
+  return _globalSequenceRanges;
+}
+
+export function setSequenceBeatRanges(ranges) {
+  _globalSequenceBeatRanges = ranges;
+}
+
+export function getSequenceBeatRanges() {
+  return _globalSequenceBeatRanges;
+}
+
+// Helper to get a context from global state (for legacy callers)
+function getGlobalContext() {
+  return {
+    treatP4AsDissonant: _globalP4Treatment,
+    meter: _globalMeter,
+    sequenceBeatRanges: _globalSequenceBeatRanges,
+    sequenceNoteRanges: _globalSequenceRanges,
+  };
+}
+
 /**
  * Create an analysis context with all configuration needed for scoring.
  * This replaces previous module-level mutable state.
@@ -404,10 +455,12 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
     }
   }
 
-  // Meter modifier
+  // Meter modifier - reduced from -1.0 to -0.5 since accented passing tones
+  // and neighbor tones are acceptable. Additional penalty for unresolved
+  // strong-beat dissonances is applied in scoreExit.
   if (isStrongBeat(currSim.onset, ctx)) {
-    score -= 1.0;
-    details.push(`Strong beat: -1.0`);
+    score -= 0.5;
+    details.push(`Strong beat: -0.5`);
   }
 
   return {
@@ -457,8 +510,8 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     details.push('Resolves to consonance: +0.5');
   } else {
     // Resolution to another dissonance
-    score = -1.5;
-    details.push('Leads to another dissonance (no resolution): -1.5');
+    score = -0.75;
+    details.push('Leads to another dissonance (no resolution): -0.75');
   }
 
   // Check for resolution by abandonment (one voice drops out)
@@ -651,7 +704,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
         const entryDir = Math.sign(entryInfo.v1MelodicInterval);
         if (exitInfo.v1Resolution.magnitude.type === 'step' && exitInfo.v1Resolution.direction === -entryDir) {
           bonus += 2.5;
-          patterns.push({ type: 'appoggiatura', bonus: 2.5, voice: 1, description: 'Appoggiatura (V1 leaps in, steps out opposite)' });
+          patterns.push({ type: 'appoggiatura', bonus: 2.0, voice: 1, description: 'Appoggiatura (V1 leaps in, steps out opposite)' });
         }
       }
     }
@@ -662,7 +715,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
         const entryDir = Math.sign(entryInfo.v2MelodicInterval);
         if (exitInfo.v2Resolution.magnitude.type === 'step' && exitInfo.v2Resolution.direction === -entryDir) {
           bonus += 2.5;
-          patterns.push({ type: 'appoggiatura', bonus: 2.5, voice: 2, description: 'Appoggiatura (V2 leaps in, steps out opposite)' });
+          patterns.push({ type: 'appoggiatura', bonus: 2.0, voice: 2, description: 'Appoggiatura (V2 leaps in, steps out opposite)' });
         }
       }
     }
@@ -856,25 +909,25 @@ function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
   }
 
   // Repetition penalties:
-  // - 2+ consecutive perfect intervals (unison, 5th, octave) = penalty
-  // - 3+ consecutive 3rds = penalty
-  // - 3+ consecutive 6ths = penalty
-  if (isPerfect && consecutiveCount >= 1) {
-    // This would be the 2nd consecutive perfect
+  // - 3+ consecutive perfect intervals (unison, 5th, octave) = penalty (2 allowed)
+  // - 4+ consecutive 3rds = penalty (3 allowed)
+  // - 4+ consecutive 6ths = penalty (3 allowed)
+  if (isPerfect && consecutiveCount >= 2) {
+    // This would be the 3rd consecutive perfect
     score -= 0.5;
     category = 'consonant_repetitive';
     const intervalNames = { 1: 'unisons', 5: '5ths', 8: 'octaves' };
     details.push({
-      text: `2nd consecutive ${intervalNames[intervalClass] || 'perfect interval'} (${v1Pitch}-${v2Pitch})`,
+      text: `3rd+ consecutive ${intervalNames[intervalClass] || 'perfect interval'} (${v1Pitch}-${v2Pitch})`,
       impact: -0.5,
       type: 'penalty',
     });
-  } else if ((isThird || isSixth) && consecutiveCount >= 2) {
-    // This would be the 3rd consecutive 3rd or 6th
+  } else if ((isThird || isSixth) && consecutiveCount >= 3) {
+    // This would be the 4th consecutive 3rd or 6th
     score -= 0.3;
     category = 'consonant_repetitive';
     details.push({
-      text: `3rd consecutive ${intervalClass}th (${v1Pitch}-${v2Pitch})`,
+      text: `4th+ consecutive ${intervalClass}th (${v1Pitch}-${v2Pitch})`,
       impact: -0.3,
       type: 'penalty',
     });
@@ -933,23 +986,23 @@ function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
       resolutionDetails.push(`Voice 2 held (${v2Pitch})`);
     }
 
+    // Resolution quality tracked for visualization but no score impact
+    // (already scored in the dissonance's exit scoring - avoid double counting)
     if (goodResolution) {
-      score += 0.5;
       category = 'consonant_good_resolution';
       details.push({
         text: `Good resolution: ${prevInterval} (${prevV1}/${prevV2}) → ${intervalName} (${v1Pitch}/${v2Pitch})`,
         subtext: resolutionDetails.join('; '),
-        impact: +0.5,
-        type: 'bonus',
+        impact: 0,
+        type: 'info',
       });
     } else {
-      score -= 0.3;
       category = 'consonant_bad_resolution';
       details.push({
         text: `Weak resolution: ${prevInterval} → ${intervalName} by leap`,
         subtext: resolutionDetails.join('; '),
-        impact: -0.3,
-        type: 'penalty',
+        impact: 0,
+        type: 'info',
       });
     }
   }

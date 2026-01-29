@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { getMeter } from '../../utils/dissonanceScoring';
 import { generateGridLines } from '../../utils/vizConstants';
 
 /**
@@ -11,8 +10,9 @@ import { generateGridLines } from '../../utils/vizConstants';
  * @param {Array} sequenceRanges - Optional array of {start, end} note index ranges that are part of sequences
  * @param {Object} activeSequenceRange - Currently selected sequence range {start, end} for highlighting
  * @param {Object} highlightedItem - Currently highlighted item from global state {onset, endOnset}
+ * @param {Array} meter - Time signature [numerator, denominator]
  */
-export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRange = null, highlightedItem = null }) {
+export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRange = null, highlightedItem = null, meter = [4, 4] }) {
   const [hoveredNote, setHoveredNote] = useState(null);
   const [selectedNote, setSelectedNote] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -128,7 +128,6 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
         >
         {/* Beat grid lines - meter-aware */}
         {(() => {
-          const meter = getMeter();
           const gridLines = generateGridLines(maxT, meter, { showSubdivisions: false });
 
           return gridLines.map((line, i) => (

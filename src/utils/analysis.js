@@ -479,13 +479,16 @@ export function testRhythmicVariety(subject, formatter) {
   const unique = [...new Set(durs.map((d) => Math.round(d * 1000) / 1000))];
   const names = unique.map((d) => formatter.formatDuration(d));
   const observations = [];
+  const meter = formatter.meter;
 
+  // Note value variety
   if (unique.length === 1) {
     observations.push({ type: 'consideration', description: `Uniform rhythm (all ${names[0]}s)` });
   } else {
     observations.push({ type: 'info', description: `${unique.length} note values: ${names.join(', ')}` });
   }
 
+  // Long-short / short-long contrast
   const hasLS = durs.some((d, i) => i > 0 && durs[i - 1] >= d * 2);
   const hasSL = durs.some((d, i) => i > 0 && durs[i - 1] <= d / 2);
 
@@ -493,7 +496,68 @@ export function testRhythmicVariety(subject, formatter) {
     observations.push({ type: 'strength', description: 'Good rhythmic contrast' });
   }
 
-  return { uniqueDurations: unique.length, durationNames: names, observations };
+  // Rest detection: gaps between notes create rhythmic variety
+  let restCount = 0;
+  let totalRestDuration = 0;
+  for (let i = 1; i < subject.length; i++) {
+    const prevEnd = subject[i - 1].onset + subject[i - 1].duration;
+    const gap = subject[i].onset - prevEnd;
+    if (gap > 0.01) { // Small tolerance for rounding
+      restCount++;
+      totalRestDuration += gap;
+    }
+  }
+
+  if (restCount > 0) {
+    observations.push({
+      type: 'info',
+      description: `${restCount} rest${restCount > 1 ? 's' : ''} (${totalRestDuration.toFixed(2)} beats total)`,
+    });
+    if (restCount >= 2 || totalRestDuration >= 1) {
+      observations.push({ type: 'strength', description: 'Rests add rhythmic variety' });
+    }
+  }
+
+  // Off-beat (syncopated) attacks: notes starting off the beat create variety
+  // even with uniform note values
+  const measureLength = (meter[0] * 4) / meter[1]; // Internal units per measure
+  const beatUnit = meter[1] >= 8 && meter[0] % 3 === 0 ? 1.5 : 1; // Compound vs simple
+  let offBeatCount = 0;
+  let onBeatCount = 0;
+
+  for (const note of subject) {
+    const beatPosition = note.onset % beatUnit;
+    const isOnBeat = beatPosition < 0.05 || beatPosition > beatUnit - 0.05;
+    if (isOnBeat) {
+      onBeatCount++;
+    } else {
+      offBeatCount++;
+    }
+  }
+
+  const offBeatRatio = offBeatCount / subject.length;
+
+  if (offBeatCount > 0) {
+    observations.push({
+      type: 'info',
+      description: `${offBeatCount}/${subject.length} off-beat attacks (${Math.round(offBeatRatio * 100)}%)`,
+    });
+    if (offBeatRatio >= 0.2 && offBeatRatio <= 0.6) {
+      observations.push({ type: 'strength', description: 'Good syncopation/off-beat variety' });
+    } else if (offBeatRatio > 0.6) {
+      observations.push({ type: 'consideration', description: 'Heavily syncopated (may obscure meter)' });
+    }
+  }
+
+  return {
+    uniqueDurations: unique.length,
+    durationNames: names,
+    restCount,
+    totalRestDuration,
+    offBeatCount,
+    offBeatRatio,
+    observations,
+  };
 }
 
 /**

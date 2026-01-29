@@ -784,6 +784,7 @@ export default function App() {
                 sequenceRanges={results.sequences?.subject?.noteRanges || []}
                 activeSequenceRange={activeSequenceVoice === 'subject' ? activeSequenceRange : null}
                 highlightedItem={highlightedItem}
+                meter={results.meter}
               />
             </Section>
 
@@ -826,6 +827,7 @@ export default function App() {
                     voice2={{ notes: results.countersubject, color: '#22c55e', label: 'CS' }}
                     title="Answer + Countersubject"
                     formatter={results.formatter}
+                    meter={results.meter}
                   />
                 </Section>
 
@@ -835,6 +837,7 @@ export default function App() {
                     voice2={{ notes: results.countersubject, color: '#22c55e', label: 'CS' }}
                     title="Subject + Countersubject"
                     formatter={results.formatter}
+                    meter={results.meter}
                   />
                 </Section>
 
@@ -1376,6 +1379,7 @@ export default function App() {
                       intervalPoints={s.intervalPoints || []}
                       formatter={results.formatter}
                       octaveDisp={strettoOctaveVal}
+                      meter={results.meter}
                     />
                     {(s.issues.length > 0 || (s.warnings && s.warnings.length > 0)) && (
                       <div style={{ marginTop: '10px' }}>
@@ -1448,6 +1452,7 @@ export default function App() {
                     formatter={results.formatter}
                     originalIssues={results.doubleCounterpoint.original.issues || []}
                     invertedIssues={results.doubleCounterpoint.inverted.issues || []}
+                    meter={results.meter}
                   />
                   <div style={{ marginTop: '12px' }}>
                     <DataRow
