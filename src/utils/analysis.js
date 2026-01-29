@@ -503,7 +503,8 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
 
   // 2. Focal point/climax detection: bonus up to +3.0 based on clarity
   // A clear focal point is: the single highest (or lowest) pitch, metrically strong,
-  // in the middle portion of the subject, approached by step or small leap
+  // in the middle portion of the subject
+  // NOTE: approach by step or leap doesn't matter - a dramatic leap to climax is just as valid
   const pitches = subject.map(n => n.pitch);
   const maxPitch = Math.max(...pitches);
   const minPitch = Math.min(...pitches);
@@ -524,19 +525,14 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     const weight = metricWeight(subject[idx].onset, meter);
     const isMetricallyStrong = weight >= 0.5;
 
-    // Check approach (step or small leap preferred)
-    let approachScore = 0;
-    if (idx > 0) {
-      const approachInterval = Math.abs(subject[idx].pitch - subject[idx - 1].pitch);
-      if (approachInterval <= 2) approachScore = 1.0; // Step approach
-      else if (approachInterval <= 4) approachScore = 0.5; // Skip approach
-    }
-
     // Calculate focal point score (up to +3.0)
+    // - Base: single clear high point in middle = +1.5
+    // - Metrically strong = +1.0
+    // - Good range (>octave) = +0.5
     if (isInMiddle) {
-      focalPointScore = 1.0; // Base: clear single high point in middle
+      focalPointScore = 1.5; // Base: clear single high point in middle
       if (isMetricallyStrong) focalPointScore += 1.0; // Bonus: metrically strong
-      if (approachScore > 0) focalPointScore += approachScore; // Bonus: good approach
+      if (range >= 12) focalPointScore += 0.5; // Bonus: large range (octave+)
       focalPointScore = Math.min(focalPointScore, 3.0);
 
       focalPointDetails = {
@@ -545,9 +541,10 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
         position: idx,
         relativePosition,
         metricallyStrong: isMetricallyStrong,
+        range,
       };
 
-      const strengthLevel = focalPointScore >= 2.5 ? 'excellent' : focalPointScore >= 1.5 ? 'good' : 'present';
+      const strengthLevel = focalPointScore >= 2.5 ? 'excellent' : focalPointScore >= 2.0 ? 'good' : 'present';
       observations.push({
         type: 'strength',
         description: `Clear melodic climax (${strengthLevel}): high point at ${formatter.formatBeat(subject[idx].onset)}`,

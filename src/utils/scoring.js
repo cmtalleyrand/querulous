@@ -687,6 +687,8 @@ export const calculateRhythmicComplementarityScore = calculateRhythmicInterplayS
  *
  * Within similar+parallel: similar:parallel should be at least 2:1
  * - Less than 2:1 is penalized, less than 3:2 even more
+ *
+ * Size of motion: Large similar/parallel motion is worse than small
  */
 export function calculateVoiceIndependenceScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
@@ -733,18 +735,31 @@ export function calculateVoiceIndependenceScore(result) {
   }
 
   // Contrary vs oblique balance (target around 5:2 = 2.5:1)
+  // Below 5:2 (2.5:1) should get small reward
   if (obliqueRatio > 0) {
     const coRatio = contraryRatio / obliqueRatio;
-    if (coRatio >= 2 && coRatio <= 3) {
-      // Good balance
-      internal += 3;
-      details.push({ factor: `Good contrary/oblique balance (${coRatio.toFixed(1)}:1)`, impact: +3 });
+    if (coRatio >= 1.5 && coRatio <= 2.5) {
+      // Below 5:2 - good balance with healthy oblique, reward
+      internal += 5;
+      details.push({ factor: `Good contrary/oblique balance (${coRatio.toFixed(1)}:1) - healthy oblique`, impact: +5 });
+    } else if (coRatio > 2.5 && coRatio <= 3) {
+      // Around 5:2 - acceptable
+      internal += 2;
+      details.push({ factor: `Acceptable contrary/oblique (${coRatio.toFixed(1)}:1)`, impact: +2 });
     } else if (coRatio > 3) {
-      // Too much contrary relative to oblique
-      const penalty = Math.min(3, Math.floor((coRatio - 3) / 2));
+      // Too much contrary relative to oblique - penalize, larger penalty for larger skew
+      const penalty = Math.min(5, Math.floor((coRatio - 3)));
       if (penalty > 0) {
         internal -= penalty;
         details.push({ factor: `Lacking oblique motion (${coRatio.toFixed(1)}:1 contrary:oblique)`, impact: -penalty });
+      }
+    } else if (coRatio < 1) {
+      // More oblique than contrary - also penalize if >3:1 the other way
+      const invRatio = 1 / coRatio;
+      if (invRatio > 3) {
+        const penalty = Math.min(5, Math.floor(invRatio - 3));
+        internal -= penalty;
+        details.push({ factor: `Excessive oblique vs contrary (1:${invRatio.toFixed(1)})`, impact: -penalty });
       }
     }
   }
@@ -765,6 +780,32 @@ export function calculateVoiceIndependenceScore(result) {
     // Lots of parallel, no similar
     internal -= 5;
     details.push({ factor: `Excessive parallel motion (${Math.round(parallelRatio * 100)}%)`, impact: -5 });
+  }
+
+  // SIZE OF MOTION consideration
+  // Large parallel/similar motion is worse than small
+  // result.details contains motion info - check for large interval parallel motions
+  if (result.details && result.details.length > 0) {
+    let largeParallelCount = 0;
+    let largeSimilarCount = 0;
+    for (const d of result.details) {
+      if (d.type === 'parallel' && d.interval && Math.abs(d.interval) > 4) {
+        largeParallelCount++;
+      }
+      if (d.type === 'similar' && d.interval && Math.abs(d.interval) > 4) {
+        largeSimilarCount++;
+      }
+    }
+    if (largeParallelCount > 2) {
+      const penalty = Math.min(5, largeParallelCount - 2);
+      internal -= penalty;
+      details.push({ factor: `Large parallel leaps (${largeParallelCount} instances)`, impact: -penalty });
+    }
+    if (largeSimilarCount > 3) {
+      const penalty = Math.min(3, largeSimilarCount - 3);
+      internal -= penalty;
+      details.push({ factor: `Large similar motion leaps (${largeSimilarCount} instances)`, impact: -penalty });
+    }
   }
 
   return {
