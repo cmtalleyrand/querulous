@@ -11,14 +11,14 @@
 - [ ] Unified view refinement - UnifiedCounterpointViz created but may need work
 
 ### Scoring
-- [ ] Stretto: Use top 3 distances, not percentage of viable
-- [ ] Rhythmic variety: Account for rests/syncopation
-- [ ] Double-counting in invertibility parallel perfects - remove
-- [ ] Sequences: Linked to scoring (75% penalty reduction) but user asked if linked?
+- [ ] Stretto: Use top 3 distances, not percentage of viable // i think it does this
+- [ ] Rhythmic variety: Account for rests/syncopation // zi think youve done this
+- [ ] Double-counting in invertibility parallel perfects - remove. // youve already done this, I asked you to check and you did not
+- [ ] Sequences: Linked to scoring (75% penalty reduction) but user asked if linked? // you've already acted on this
 
-### For Later
+### For Later // for right after you get the app working again
 - [ ] Second countersubject support (CS2)
-- [ ] Harmonic scoring integration refinement
+- [ ] Harmonic scoring integration refinement // not a clue how it is scored now
 
 ---
 
