@@ -396,9 +396,9 @@ export function IntervalAnalysisViz({
                 const regionEnd = nextPt ? tToX(nextPt.onset) : x + 15;
                 const regionWidth = Math.max(4, regionEnd - x - 1);
 
-                // Region height - span between voices, minimum 6px
-                const regionTop = Math.min(y1, y2);
-                const regionHeight = Math.max(6, Math.abs(y2 - y1));
+                // Region height - span between voices INCLUDING note heights (like StrettoViz)
+                const regionTop = Math.min(y1, y2) - noteHeight / 2;
+                const regionHeight = Math.abs(y2 - y1) + noteHeight;
 
                 const label = pt.isConsonant
                   ? pt.intervalClass.toString()
@@ -418,19 +418,8 @@ export function IntervalAnalysisViz({
                       width={regionWidth}
                       height={regionHeight}
                       fill={style.bg}
-                      opacity={isHighlighted || isSelected ? 0.85 : 0.5}
-                      rx={2}
-                    />
-
-                    {/* Border line on left edge for clarity */}
-                    <line
-                      x1={x}
-                      y1={regionTop}
-                      x2={x}
-                      y2={regionTop + regionHeight}
-                      stroke={style.color}
-                      strokeWidth={isHighlighted || isSelected ? 2.5 : 1.5}
-                      opacity={0.8}
+                      opacity={isHighlighted || isSelected ? 0.9 : 0.5}
+                      rx={3}
                     />
 
                     {/* Show label only on hover/select */}

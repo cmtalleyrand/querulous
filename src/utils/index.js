@@ -70,3 +70,6 @@ export {
   setSequenceBeatRanges,
   getSequenceBeatRanges,
 } from './dissonanceScoring';
+
+// Harmonic analysis
+export { analyzeHarmonicImplication } from './harmonicAnalysis';

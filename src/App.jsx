@@ -118,15 +118,49 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [csPos, csShift]);
 
+  // Helper: prepend ABC headers if not already present
+  const prependABCHeaders = (abc, key, mode, noteLength, timeSig) => {
+    if (!abc.trim()) return abc;
+
+    const headers = [];
+    const hasK = /^\s*K:/m.test(abc);
+    const hasL = /^\s*L:/m.test(abc);
+    const hasM = /^\s*M:/m.test(abc);
+
+    // Build mode suffix for key
+    const modeMap = {
+      major: '',
+      natural_minor: 'm',
+      harmonic_minor: 'm',
+      dorian: 'dor',
+      phrygian: 'phr',
+      lydian: 'lyd',
+      mixolydian: 'mix',
+    };
+    const modeStr = modeMap[mode] || '';
+
+    if (!hasK) headers.push(`K:${key}${modeStr}`);
+    if (!hasL) headers.push(`L:${noteLength}`);
+    if (!hasM) headers.push(`M:${timeSig}`);
+
+    if (headers.length === 0) return abc;
+    return headers.join('\n') + '\n' + abc;
+  };
+
   // Save preset
   const savePreset = () => {
     if (!saveName.trim()) return;
 
+    // Include ABC headers (K, L, M) in the saved text
+    const subjectWithHeaders = prependABCHeaders(subjectInput, selKey, selMode, selNoteLen, selTimeSig);
+    const csWithHeaders = csInput.trim() ? prependABCHeaders(csInput, selKey, selMode, selNoteLen, selTimeSig) : '';
+    const answerWithHeaders = answerInput.trim() ? prependABCHeaders(answerInput, selKey, selMode, selNoteLen, selTimeSig) : '';
+
     const preset = {
       name: saveName.trim(),
-      subject: subjectInput,
-      countersubject: csInput,
-      answer: answerInput,
+      subject: subjectWithHeaders,
+      countersubject: csWithHeaders,
+      answer: answerWithHeaders,
       settings: {
         key: selKey,
         mode: selMode,
