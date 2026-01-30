@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { pitchName, metricWeight, metricPosition } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { scoreDissonance } from '../../utils/dissonanceScoring';
-import { getGridMetrics, generateGridLines } from '../../utils/vizConstants';
+import { getGridMetrics, generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
 
 // Dissonance type definitions for tooltips
 const DISSONANCE_DEFINITIONS = {
@@ -163,11 +163,11 @@ export function IntervalAnalysisViz({
 
   const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
 
-  // Colors
+  // Colors - use VIZ_COLORS for consistency with stretto viz
   const hasIssues = issues.length > 0;
   const hasWarnings = warnings.length > 0;
-  const bgColor = hasIssues ? '#fef2f2' : hasWarnings ? '#fffbeb' : '#f8fafc';
-  const borderColor = hasIssues ? '#fca5a5' : hasWarnings ? '#fcd34d' : '#cbd5e1';
+  const bgColor = hasIssues ? VIZ_COLORS.issueBackground : hasWarnings ? VIZ_COLORS.warningBackground : VIZ_COLORS.cleanBackground;
+  const borderColor = hasIssues ? VIZ_COLORS.issueBorder : hasWarnings ? VIZ_COLORS.warningBorder : VIZ_COLORS.cleanBorder;
 
   // Check if a note is sounding at a given time
   const isNoteSoundingAt = (note, time) => note.onset <= time && time < note.onset + note.duration;
@@ -207,50 +207,14 @@ export function IntervalAnalysisViz({
     }
   };
 
-  // Semantic color scheme based on interval context
-  // Preparation: blue-green (consonance preparing dissonance)
-  // Dissonance: purple spectrum (handled), red (bad)
-  // Resolution: bright green (good), orange (poor)
-  // Normal: pale green
+  // Get styling using unified getIntervalStyle from vizConstants
+  // This ensures consistent colors across all visualizations (stretto, unified, etc.)
   const getScoreStyle = (pt) => {
-    const { category, score, isConsonant } = pt;
-
-    // Consonances
-    if (isConsonant) {
-      switch (category) {
-        case 'consonant_preparation':
-          // Blue-green for preparation - distinct from normal consonance
-          return { color: '#0891b2', bg: '#cffafe', label: 'Preparation', lineColor: '#06b6d4' };
-        case 'consonant_good_resolution':
-          return { color: '#059669', bg: '#a7f3d0', label: 'Good resolution', lineColor: '#10b981' };
-        case 'consonant_bad_resolution':
-          return { color: '#ea580c', bg: '#fed7aa', label: 'Poor resolution', lineColor: '#f97316' };
-        case 'consonant_repetitive':
-          return { color: '#a16207', bg: '#fef08a', label: 'Repetitive', lineColor: '#ca8a04' };
-        default: // consonant_normal
-          return { color: '#4ade80', bg: '#dcfce7', label: 'Consonant', lineColor: '#86efac' };
-      }
-    }
-
-    // Dissonances - purple spectrum for handled, red for bad
-    switch (category) {
-      case 'dissonant_good':
-        // Bright purple for well-handled dissonances - brighter the better
-        if (score >= 2.0) return { color: '#7c3aed', bg: '#ddd6fe', label: 'Strong', lineColor: '#8b5cf6' };
-        if (score >= 1.0) return { color: '#8b5cf6', bg: '#ede9fe', label: 'Good', lineColor: '#a78bfa' };
-        return { color: '#a78bfa', bg: '#f3f0ff', label: 'Acceptable', lineColor: '#c4b5fd' };
-
-      case 'dissonant_marginal':
-        // Purple-red for marginal
-        return { color: '#c026d3', bg: '#fae8ff', label: 'Marginal', lineColor: '#d946ef' };
-
-      case 'dissonant_bad':
-      default:
-        // Red for problematic dissonances - darker = worse
-        if (score <= -2.0) return { color: '#b91c1c', bg: '#fecaca', label: 'Severe', lineColor: '#dc2626' };
-        if (score <= -1.0) return { color: '#dc2626', bg: '#fee2e2', label: 'Problematic', lineColor: '#ef4444' };
-        return { color: '#ea580c', bg: '#ffedd5', label: 'Weak', lineColor: '#f97316' };
-    }
+    const { category, score, isConsonant, intervalClass } = pt;
+    const isPerfect = [1, 5, 8].includes(intervalClass);
+    const style = getIntervalStyle({ isConsonant, isPerfect, score, category });
+    // Add lineColor for backwards compatibility
+    return { ...style, lineColor: style.color };
   };
 
   return (

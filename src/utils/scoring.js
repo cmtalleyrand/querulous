@@ -174,7 +174,8 @@ export function getScoreBgColor(score) {
 /**
  * Calculate Tonal Definition score (base-zero)
  * Baseline 0 = ambiguous tonal center
- * Factors: opening note, terminal quality, dominant arrival
+ * Factors: opening note, terminal quality, dominant arrival, harmonic clarity,
+ *          leap recovery, focal point
  */
 export function calculateTonalDefinitionScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
@@ -213,6 +214,28 @@ export function calculateTonalDefinitionScore(result) {
       internal += 2;
       details.push({ factor: 'Dominant arrival present', impact: +2 });
     }
+  }
+
+  // Harmonic clarity from chord analysis (0-2.5 points, scaled to internal)
+  // This measures how clearly the melody implies specific harmonies
+  if (result.harmonicClarityScore && result.harmonicClarityScore > 0) {
+    const clarityImpact = Math.round(result.harmonicClarityScore * 4); // Scale to 0-10
+    internal += clarityImpact;
+    details.push({ factor: 'Harmonic clarity', impact: clarityImpact });
+  }
+
+  // Leap recovery bonus (user specified +0.25 base, scaled to internal)
+  if (result.leapRecoveryScore && result.leapRecoveryScore > 0) {
+    const leapImpact = Math.round(result.leapRecoveryScore * 8); // ~2 points
+    internal += leapImpact;
+    details.push({ factor: 'Good leap recovery', impact: leapImpact });
+  }
+
+  // Focal point/climax bonus (0-3 points, scaled to internal)
+  if (result.focalPointScore && result.focalPointScore > 0) {
+    const focalImpact = Math.round(result.focalPointScore * 3); // Scale to ~9 max
+    internal += focalImpact;
+    details.push({ factor: 'Clear melodic climax', impact: focalImpact });
   }
 
   return {

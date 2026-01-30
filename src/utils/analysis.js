@@ -1,6 +1,7 @@
 import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName, isDuringRest } from './formatter';
 import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
+import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -580,6 +581,63 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     }
   }
 
+  // 3. Chord/Harmony analysis: analyze what harmonies the melody implies
+  // Uses the analyzeChords function from harmonicAnalysis.js
+  let chordAnalysis = null;
+  let harmonicClarityScore = 0;
+
+  try {
+    chordAnalysis = analyzeChords(subject, meter, tonic);
+
+    if (chordAnalysis && chordAnalysis.summary) {
+      const { harmonicClarity, startsOnTonic, endsOnTonic, impliesDominant, uniqueHarmonies } = chordAnalysis.summary;
+
+      // Score based on harmonic clarity (0-1 scale from analyzeChords)
+      // High clarity = consistent chord implications, scores 0 to +2
+      harmonicClarityScore = harmonicClarity >= 0.8 ? 2.0 :
+                            harmonicClarity >= 0.6 ? 1.0 :
+                            harmonicClarity >= 0.4 ? 0.5 : 0;
+
+      // Bonus for strong tonal anchors
+      if (startsOnTonic && endsOnTonic) {
+        harmonicClarityScore += 0.5;
+        observations.push({
+          type: 'strength',
+          description: 'Strong tonal framing: starts and ends on tonic harmony',
+        });
+      } else if (startsOnTonic || endsOnTonic) {
+        observations.push({
+          type: 'info',
+          description: `${startsOnTonic ? 'Starts' : 'Ends'} on tonic harmony`,
+        });
+      }
+
+      // Note dominant implication
+      if (impliesDominant) {
+        observations.push({
+          type: 'info',
+          description: 'Melody implies dominant function',
+        });
+      }
+
+      // Observation about harmonic clarity
+      if (harmonicClarity >= 0.7) {
+        observations.push({
+          type: 'strength',
+          description: `Clear harmonic implications (${uniqueHarmonies} chord${uniqueHarmonies !== 1 ? 's' : ''} suggested)`,
+        });
+      } else if (harmonicClarity < 0.4) {
+        observations.push({
+          type: 'consideration',
+          description: 'Ambiguous harmonic implications',
+        });
+      }
+    }
+  } catch (e) {
+    // Chord analysis failed - not critical
+    console.warn('Chord analysis failed:', e);
+  }
+
   return {
     opening: { degree: opening.toString(), isTonicChordTone },
     terminal: { degree: terminal.toString(), ...ti },
@@ -587,6 +645,8 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     leapRecoveryScore,
     focalPointScore,
     focalPointDetails,
+    chordAnalysis,
+    harmonicClarityScore,
     observations,
   };
 }

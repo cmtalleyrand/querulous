@@ -5,6 +5,7 @@ import {
   StrettoViz,
   IntervalAnalysisViz,
   InvertibilityViz,
+  UnifiedCounterpointViz,
   Section,
   ObservationList,
   DataRow,
@@ -825,53 +826,19 @@ export default function App() {
             {/* Countersubject Sections */}
             {results.countersubject && (
               <>
-                <Section title="Answer + Countersubject" helpKey="countersubject">
-                  <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', alignItems: 'flex-end' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', color: '#546e7a', marginBottom: '4px' }}>
-                        CS Position
-                      </label>
-                      <select
-                        value={csPos}
-                        onChange={(e) => setCsPos(e.target.value)}
-                        style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
-                      >
-                        {CS_POSITION_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', color: '#546e7a', marginBottom: '4px' }}>
-                        Octave Shift
-                      </label>
-                      <select
-                        value={csShift}
-                        onChange={(e) => setCsShift(e.target.value)}
-                        style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
-                      >
-                        {OCTAVE_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <IntervalAnalysisViz
-                    voice1={{ notes: results.answerNotes, color: '#f59e0b', label: 'Answer' }}
-                    voice2={{ notes: results.countersubject, color: '#22c55e', label: 'CS' }}
-                    title="Answer + Countersubject"
+                <Section title="Voice Comparison" helpKey="countersubject">
+                  <UnifiedCounterpointViz
+                    voices={{
+                      subject: results.subject,
+                      answer: results.answerNotes,
+                      cs1: results.countersubject,
+                    }}
                     formatter={results.formatter}
                     meter={results.meter}
-                  />
-                </Section>
-
-                <Section title="Subject + Countersubject">
-                  <IntervalAnalysisViz
-                    voice1={{ notes: results.subject, color: '#6366f1', label: 'Subject' }}
-                    voice2={{ notes: results.countersubject, color: '#22c55e', label: 'CS' }}
-                    title="Subject + Countersubject"
-                    formatter={results.formatter}
-                    meter={results.meter}
+                    defaultVoice1="answer"
+                    defaultVoice2="cs1"
+                    defaultTransposition={0}
+                    title="Counterpoint Analysis"
                   />
                 </Section>
 
