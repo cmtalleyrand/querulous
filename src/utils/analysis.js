@@ -1194,12 +1194,32 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
       issues.push({ ...v, config: name });
     }
 
-    for (const s of strong) {
+    // Check P4s against bass - but allow if properly resolved (4-3 suspension)
+    for (let i = 0; i < strong.length; i++) {
+      const s = strong[i];
       if (s.interval.class === 4 && s.voice2Note.pitch < s.voice1Note.pitch) {
-        issues.push({
-          config: name,
-          description: `4th against bass (${pitchName(s.voice1Note.pitch)}-${pitchName(s.voice2Note.pitch)}) at ${formatter.formatBeat(s.onset)}`,
-        });
+        // Check if this P4 resolves properly (step down to a 3rd)
+        const nextSims = sims.filter(sim => sim.onset > s.onset);
+        const nextSim = nextSims.length > 0 ? nextSims[0] : null;
+
+        let properlyResolved = false;
+        if (nextSim) {
+          // Check if the upper voice (voice1) steps down to create a 3rd
+          const v1Moved = nextSim.voice1Note.pitch !== s.voice1Note.pitch;
+          const v1SteppedDown = v1Moved &&
+            s.voice1Note.pitch - nextSim.voice1Note.pitch >= 1 &&
+            s.voice1Note.pitch - nextSim.voice1Note.pitch <= 2;
+          const resolvesToThird = nextSim.interval.class === 3;
+
+          properlyResolved = v1SteppedDown && resolvesToThird;
+        }
+
+        if (!properlyResolved) {
+          issues.push({
+            config: name,
+            description: `Unresolved 4th against bass (${pitchName(s.voice1Note.pitch)}-${pitchName(s.voice2Note.pitch)}) at ${formatter.formatBeat(s.onset)}`,
+          });
+        }
       }
     }
 
@@ -1387,10 +1407,16 @@ export function testModulatoryRobustness(subject, cs, formatter) {
 
 /**
  * Convert semitone interval to sequence class for pattern matching.
- * - 2nds (1-2 st), 3rds (3-4 st), 6ths (8-9 st), 7ths (10-11 st): same class regardless of M/m
+ * For MELODIC sequences, we match the melodic shape - direction matters!
+ *
+ * - 2nds (1-2 st), 3rds (3-4 st): same class regardless of M/m, but direction preserved
+ * - 6ths (8-9 st), 7ths (10-11 st): same class regardless of M/m, direction preserved
  * - Unison (0) and Octave (±12): same class
- * - P4 up (+5) ≡ P5 down (-7); P5 up (+7) ≡ P4 down (-5) — inversions match
- * - But P4 up ≠ P5 up; P4 down ≠ P5 down (same direction = different class)
+ * - P4 (5 st) and P5 (7 st): SEPARATE classes, direction preserved
+ *   (P4 up ≠ P5 down for melodic sequences - the melodic shape is different)
+ *
+ * Note: Inversion equivalence (P4 up ≡ P5 down) applies to HARMONIC intervals,
+ * not melodic sequence matching where the contour matters.
  */
 function toSequenceClass(semitones) {
   const abs = Math.abs(semitones);
@@ -1405,11 +1431,10 @@ function toSequenceClass(semitones) {
   // 3rds (3-4 semitones)
   if (abs === 3 || abs === 4) return { class: 3, dir: sign };
 
-  // P4 and P5 with inversion equivalence:
-  // P4 up (+5) ≡ P5 down (-7): both are "4th-class ascending"
-  // P5 up (+7) ≡ P4 down (-5): both are "5th-class ascending"
-  if (semitones === 5 || semitones === -7) return { class: 4, dir: 1 };
-  if (semitones === 7 || semitones === -5) return { class: 5, dir: 1 };
+  // P4 and P5: separate classes, direction preserved
+  // P4 up (+5) is NOT equivalent to P5 down (-7) for melodic sequences
+  if (abs === 5) return { class: 4, dir: sign };  // P4
+  if (abs === 7) return { class: 5, dir: sign };  // P5
 
   // Tritone
   if (abs === 6) return { class: 'TT', dir: sign };

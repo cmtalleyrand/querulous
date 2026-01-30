@@ -241,16 +241,23 @@ function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, 
 
 /**
  * Determine motion type between two simultaneities
- * Returns: 'oblique', 'contrary', 'similar', 'similar_step', 'similar_same_type', 'parallel'
+ * Returns: 'oblique', 'asynchronous', 'contrary', 'similar', 'similar_step', 'similar_same_type', 'parallel'
  *
- * Similar motion subtypes:
- * - similar_step: One or both voices move by step (most acceptable)
- * - similar_same_type: Both move by same interval type but different size (less acceptable)
- * - similar: Different interval types (acceptable)
- * - parallel: Same interval size (least acceptable - parallel 5ths/8ves forbidden)
+ * Motion types:
+ * - asynchronous: One voice entered from a rest (not just held) - reduced penalties
+ * - oblique: One voice holds while other moves (no rest)
+ * - contrary: Voices move in opposite directions
+ * - similar_step: Same direction, one/both move by step (most acceptable similar)
+ * - similar: Same direction, different interval types (acceptable)
+ * - similar_same_type: Same direction, same interval type but different size (less acceptable)
+ * - parallel: Same direction and interval size (parallel 5ths/8ves forbidden)
+ *
+ * @param {Simultaneity} prevSim - Previous simultaneity
+ * @param {Simultaneity} currSim - Current simultaneity
+ * @param {Object} restContext - Rest analysis from analyzeRestContext
  */
-function getMotionType(prevSim, currSim) {
-  if (!prevSim) return { type: 'unknown', v1Moved: true, v2Moved: true, v1Interval: 0, v2Interval: 0 };
+function getMotionType(prevSim, currSim, restContext = null) {
+  if (!prevSim) return { type: 'unknown', v1Moved: true, v2Moved: true, v1Interval: 0, v2Interval: 0, v1FromRest: false, v2FromRest: false };
 
   const v1Moved = currSim.voice1Note !== prevSim.voice1Note &&
                   currSim.voice1Note.pitch !== prevSim.voice1Note.pitch;
@@ -260,25 +267,36 @@ function getMotionType(prevSim, currSim) {
   const v1Interval = v1Moved ? Math.abs(currSim.voice1Note.pitch - prevSim.voice1Note.pitch) : 0;
   const v2Interval = v2Moved ? Math.abs(currSim.voice2Note.pitch - prevSim.voice2Note.pitch) : 0;
 
+  // Check if entry was from a rest (asynchronous motion)
+  const v1FromRest = restContext?.entryFromRest?.v1 || false;
+  const v2FromRest = restContext?.entryFromRest?.v2 || false;
+  const anyFromRest = v1FromRest || v2FromRest;
+
   if (!v1Moved && !v2Moved) {
-    return { type: 'static', v1Moved: false, v2Moved: false, v1Interval: 0, v2Interval: 0 };
+    return { type: 'static', v1Moved: false, v2Moved: false, v1Interval: 0, v2Interval: 0, v1FromRest, v2FromRest };
+  }
+
+  // Asynchronous: one voice entered from rest while other is sounding
+  // This is distinct from oblique (where held voice was already sounding)
+  if (anyFromRest && (!v1Moved || !v2Moved)) {
+    return { type: 'asynchronous', v1Moved, v2Moved, v1Interval, v2Interval, v1FromRest, v2FromRest };
   }
 
   if (!v1Moved || !v2Moved) {
-    return { type: 'oblique', v1Moved, v2Moved, v1Interval, v2Interval };
+    return { type: 'oblique', v1Moved, v2Moved, v1Interval, v2Interval, v1FromRest, v2FromRest };
   }
 
   const v1Dir = Math.sign(currSim.voice1Note.pitch - prevSim.voice1Note.pitch);
   const v2Dir = Math.sign(currSim.voice2Note.pitch - prevSim.voice2Note.pitch);
 
   if (v1Dir === -v2Dir) {
-    return { type: 'contrary', v1Moved: true, v2Moved: true, v1Interval, v2Interval };
+    return { type: 'contrary', v1Moved: true, v2Moved: true, v1Interval, v2Interval, v1FromRest, v2FromRest };
   }
 
   // Similar motion - determine subtype based on interval characteristics
   // Parallel: same interval size
   if (v1Interval === v2Interval) {
-    return { type: 'parallel', v1Moved: true, v2Moved: true, v1Interval, v2Interval };
+    return { type: 'parallel', v1Moved: true, v2Moved: true, v1Interval, v2Interval, v1FromRest, v2FromRest };
   }
 
   // Check if either voice moves by step (1-2 semitones)
@@ -286,7 +304,7 @@ function getMotionType(prevSim, currSim) {
   const v2IsStep = v2Interval <= 2;
 
   if (v1IsStep || v2IsStep) {
-    return { type: 'similar_step', v1Moved: true, v2Moved: true, v1Interval, v2Interval };
+    return { type: 'similar_step', v1Moved: true, v2Moved: true, v1Interval, v2Interval, v1FromRest, v2FromRest };
   }
 
   // Check if both voices move by same interval type (skip, perfect_leap, large_leap)
@@ -294,11 +312,11 @@ function getMotionType(prevSim, currSim) {
   const v2Mag = getIntervalMagnitude(v2Interval);
 
   if (v1Mag.type === v2Mag.type) {
-    return { type: 'similar_same_type', v1Moved: true, v2Moved: true, v1Interval, v2Interval, intervalType: v1Mag.type };
+    return { type: 'similar_same_type', v1Moved: true, v2Moved: true, v1Interval, v2Interval, intervalType: v1Mag.type, v1FromRest, v2FromRest };
   }
 
   // Different interval types
-  return { type: 'similar', v1Moved: true, v2Moved: true, v1Interval, v2Interval };
+  return { type: 'similar', v1Moved: true, v2Moved: true, v1Interval, v2Interval, v1FromRest, v2FromRest };
 }
 
 /**
@@ -394,7 +412,10 @@ function getEntryRestModifier(restContext, currSim) {
 /**
  * Score the entry into a dissonance (C → D)
  * Entry penalties are now deferred to be calculated based on how the leap is resolved
- * Rest handling: If entering from a rest longer than the note duration, motion bonuses/penalties are halved
+ * Rest handling:
+ * - Asynchronous motion (entry from rest): neutral, no bonus or penalty
+ * - Leaps after rests: reduced penalty (feels less sudden)
+ * - If entering from a rest longer than the note duration, motion penalties are halved
  */
 function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   let score = 0; // Base
@@ -404,18 +425,25 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
     return { score: 0, details: ['No previous simultaneity'], motion: null, v1MelodicInterval: 0, v2MelodicInterval: 0, restModifier: 1.0 };
   }
 
-  const motion = getMotionType(prevSim, currSim);
+  // Pass restContext to getMotionType for asynchronous detection
+  const motion = getMotionType(prevSim, currSim, restContext);
 
   // Calculate rest modifier if context provided
-  const restModifier = restContext ? getEntryRestModifier(restContext, currSim) : 1.0;
+  // Leaps after rests feel less sudden - reduce penalties further
+  let restModifier = restContext ? getEntryRestModifier(restContext, currSim) : 1.0;
+  if (motion.v1FromRest || motion.v2FromRest) {
+    restModifier *= 0.5; // Additional 50% reduction for leaps after rest
+  }
   const restNote = restModifier < 1.0 ? ' (reduced: entry from rest)' : '';
 
   // Motion modifier - apply rest modifier
-  // Penalties for similar motion based on subtype:
-  // - similar_step or similar (different interval types): -0.5
-  // - similar_same_type (same interval type, different size): -1.0
-  // - parallel (same interval size): -1.5
-  if (motion.type === 'oblique') {
+  // Asynchronous: one voice entered from rest - neutral (no similar/parallel concerns)
+  // Oblique/Contrary: bonus
+  // Parallel/Similar: penalties (reduced if from rest)
+  if (motion.type === 'asynchronous') {
+    // Entry from rest - neutral, no bonus or penalty for motion
+    details.push('Asynchronous entry (voice entered from rest): neutral');
+  } else if (motion.type === 'oblique') {
     const adj = 0.5 * restModifier;
     score += adj;
     details.push(`Oblique motion: +${adj.toFixed(2)}${restNote}`);
@@ -520,18 +548,28 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     details.push('Resolved by abandonment (voice dropped out): -0.5');
   }
 
-  // Check for phantom note situation: if there's a long rest before resolution,
-  // the "resolution" is delayed and less meaningful
+  // Resolution-after-rest rules:
+  // - If ONE voice held through rest and other enters → valid resolution
+  // - If BOTH voices have moved since rest → not a true resolution
+  // - Phantom note: rest up to duration/2 still counts as resolution
   if (restContext) {
-    const v1RestDur = restContext.exitToRest.v1RestDuration || 0;
-    const v2RestDur = restContext.exitToRest.v2RestDuration || 0;
+    const v1RestDur = restContext.exitToRest?.v1RestDuration || 0;
+    const v2RestDur = restContext.exitToRest?.v2RestDuration || 0;
     const v1PhantomLimit = currSim.voice1Note.duration / 2;
     const v2PhantomLimit = currSim.voice2Note.duration / 2;
 
-    // If rest exceeds phantom note duration, resolution is "distant"
-    if (v1RestDur > v1PhantomLimit || v2RestDur > v2PhantomLimit) {
+    // Check if this is a "both moved after rest" situation (invalid resolution)
+    const v1HadLongRest = v1RestDur > v1PhantomLimit;
+    const v2HadLongRest = v2RestDur > v2PhantomLimit;
+
+    if (v1HadLongRest && v2HadLongRest) {
+      // Both voices had long rests - not a valid resolution
+      score -= 1.0;
+      details.push('Invalid resolution (both voices rested then moved): -1.0');
+    } else if (v1HadLongRest || v2HadLongRest) {
+      // One voice had long rest but other held - still valid but weaker
       score -= 0.3;
-      details.push('Delayed resolution (rest exceeds phantom duration): -0.3');
+      details.push('Delayed resolution (one voice rested): -0.3');
     }
   }
 
@@ -894,14 +932,19 @@ function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
   let category = 'consonant_normal';
 
   // Check for CONSECUTIVE same intervals (not just frequency)
+  // RESTS RESET THE COUNT: -1 in history = rest marker
   const isPerfect = intervalClass === 1 || intervalClass === 5 || intervalClass === 8;
   const isThird = intervalClass === 3;
   const isSixth = intervalClass === 6;
 
   // Count consecutive same interval class at end of history
+  // Stop counting at rest markers (-1) or different intervals
   let consecutiveCount = 0;
   for (let i = intervalHistory.length - 1; i >= 0; i--) {
-    if (intervalHistory[i] === intervalClass) {
+    if (intervalHistory[i] === -1) {
+      // Rest marker - break the consecutive chain
+      break;
+    } else if (intervalHistory[i] === intervalClass) {
       consecutiveCount++;
     } else {
       break;
@@ -1170,10 +1213,10 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
 /**
  * Analyze all intervals in a passage with context tracking
  *
- * Consecutive dissonance handling:
- * - Each dissonance that resolves to another dissonance receives a -1.5 penalty (in scoreExit)
- * - Consecutive dissonances compound: 2 in a row = both penalized, 3 in a row = all penalized
- * - This is tracked in the summary as consecutiveDissonanceGroups
+ * Consecutive interval handling:
+ * - Rests RESET the consecutive count (a rest breaks the continuity)
+ * - Each dissonance that resolves to another dissonance receives a -0.75 penalty (in scoreExit)
+ * - Consecutive dissonances compound: tracked in the summary as consecutiveDissonanceGroups
  */
 export function analyzeAllDissonances(sims, options = {}) {
   const ctx = createAnalysisContext(options);
@@ -1182,6 +1225,22 @@ export function analyzeAllDissonances(sims, options = {}) {
 
   for (let i = 0; i < sims.length; i++) {
     const sim = sims[i];
+
+    // Check if there was a rest before this simultaneity (reset consecutive count)
+    if (i > 0) {
+      const prevSim = sims[i - 1];
+      const prevV1End = prevSim.voice1Note.onset + prevSim.voice1Note.duration;
+      const prevV2End = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
+      const currStart = sim.onset;
+
+      // If there's a gap (rest) before this simultaneity, reset the history
+      const gapThreshold = 0.05; // Small tolerance
+      if (currStart - prevV1End > gapThreshold || currStart - prevV2End > gapThreshold) {
+        // Rest detected - add a special marker to reset consecutive counting
+        intervalHistory.push(-1); // -1 = rest marker
+      }
+    }
+
     const scoring = _scoreDissonance(sim, sims, i, intervalHistory, ctx);
     results.push({
       onset: sim.onset,
