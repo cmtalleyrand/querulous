@@ -587,7 +587,9 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
   let harmonicClarityScore = 0;
 
   try {
-    chordAnalysis = analyzeChords(subject, meter, tonic);
+    // Convert MIDI tonic to pitch class (0-11)
+    const tonicPitchClass = typeof tonic === 'number' ? tonic % 12 : 0;
+    chordAnalysis = analyzeChords(subject, meter, tonicPitchClass);
 
     if (chordAnalysis && chordAnalysis.summary) {
       const { harmonicClarity, startsOnTonic, endsOnTonic, impliesDominant, uniqueHarmonies } = chordAnalysis.summary;
@@ -850,12 +852,7 @@ export function testRhythmicComplementarity(subject, cs, meter) {
     observations.push({ type: 'info', description: `${Math.round(ratio * 100)}% attacks coincide` });
   }
 
-  let strong = 0;
-  for (const o of shared) {
-    if (metricWeight(o, meter) >= 0.75) strong++;
-  }
-
-  return { overlapRatio: ratio, strongBeatCollisions: strong, observations };
+  return { overlapRatio: ratio, observations };
 }
 
 /**

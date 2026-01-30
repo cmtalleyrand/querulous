@@ -1476,7 +1476,6 @@ export default function App() {
                   <DataRow
                     data={{
                       Overlap: `${Math.round(results.rhythmicComplementarity.overlapRatio * 100)}%`,
-                      'Strong beat collisions': results.rhythmicComplementarity.strongBeatCollisions,
                     }}
                   />
                   <ObservationList observations={results.rhythmicComplementarity.observations} />
