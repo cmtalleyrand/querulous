@@ -850,12 +850,7 @@ export function testRhythmicComplementarity(subject, cs, meter) {
     observations.push({ type: 'info', description: `${Math.round(ratio * 100)}% attacks coincide` });
   }
 
-  let strong = 0;
-  for (const o of shared) {
-    if (metricWeight(o, meter) >= 0.75) strong++;
-  }
-
-  return { overlapRatio: ratio, strongBeatCollisions: strong, observations };
+  return { overlapRatio: ratio, observations };
 }
 
 /**

@@ -112,12 +112,6 @@ Score is based on **inverted position dissonance quality**.
 | 50-70% | 0 to -8 | Moderate overlap |
 | 70-100% | -8 to -15 | Homorhythmic (voices too similar) |
 
-**Additional Factors:**
-| Factor | Impact | Condition |
-|--------|--------|-----------|
-| >4 strong beat collisions | -5 | Excessive simultaneous attacks |
-| 3-4 strong beat collisions | -2 | Some collision issues |
-
 ---
 
 ### 6. Voice Independence (Weight: 0.9)
