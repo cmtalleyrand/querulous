@@ -241,23 +241,26 @@ function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, 
 
 /**
  * Determine motion type between two simultaneities
- * Returns: 'oblique', 'asynchronous', 'contrary', 'similar', 'similar_step', 'similar_same_type', 'parallel'
+ * Returns: 'oblique', 'contrary', 'similar', 'similar_step', 'similar_same_type', 'parallel', 'reentry'
  *
  * Motion types:
- * - asynchronous: One voice entered from a rest (not just held) - reduced penalties
- * - oblique: One voice holds while other moves (no rest)
+ * - reentry: Voice returning after long rest (>1 quarter AND >2× last note) - always neutral
+ * - oblique: One voice holds while other moves
  * - contrary: Voices move in opposite directions
  * - similar_step: Same direction, one/both move by step (most acceptable similar)
  * - similar: Same direction, different interval types (acceptable)
  * - similar_same_type: Same direction, same interval type but different size (less acceptable)
  * - parallel: Same direction and interval size (parallel 5ths/8ves forbidden)
  *
+ * Modifiers (applied to penalties):
+ * - fromRest: If entering from a rest, penalties are HALVED (asynchronous modifier)
+ *
  * @param {Simultaneity} prevSim - Previous simultaneity
  * @param {Simultaneity} currSim - Current simultaneity
  * @param {Object} restContext - Rest analysis from analyzeRestContext
  */
 function getMotionType(prevSim, currSim, restContext = null) {
-  if (!prevSim) return { type: 'unknown', v1Moved: true, v2Moved: true, v1Interval: 0, v2Interval: 0, v1FromRest: false, v2FromRest: false };
+  if (!prevSim) return { type: 'unknown', v1Moved: true, v2Moved: true, v1Interval: 0, v2Interval: 0, fromRest: false, isReentry: false };
 
   const v1Moved = currSim.voice1Note !== prevSim.voice1Note &&
                   currSim.voice1Note.pitch !== prevSim.voice1Note.pitch;
@@ -267,36 +270,50 @@ function getMotionType(prevSim, currSim, restContext = null) {
   const v1Interval = v1Moved ? Math.abs(currSim.voice1Note.pitch - prevSim.voice1Note.pitch) : 0;
   const v2Interval = v2Moved ? Math.abs(currSim.voice2Note.pitch - prevSim.voice2Note.pitch) : 0;
 
-  // Check if entry was from a rest (asynchronous motion)
+  // Check if entry was from a rest (asynchronous modifier - halves penalties)
   const v1FromRest = restContext?.entryFromRest?.v1 || false;
   const v2FromRest = restContext?.entryFromRest?.v2 || false;
-  const anyFromRest = v1FromRest || v2FromRest;
+  const fromRest = v1FromRest || v2FromRest;
 
-  if (!v1Moved && !v2Moved) {
-    return { type: 'static', v1Moved: false, v2Moved: false, v1Interval: 0, v2Interval: 0, v1FromRest, v2FromRest };
+  // Check for REENTRY: rest > 1 quarter AND > 2× last note duration
+  // This is a special case where score is always neutral (0)
+  let isReentry = false;
+  if (restContext) {
+    const v1RestDur = restContext.entryFromRest?.v1RestDuration || 0;
+    const v2RestDur = restContext.entryFromRest?.v2RestDuration || 0;
+    const v1LastNoteDur = prevSim.voice1Note.duration;
+    const v2LastNoteDur = prevSim.voice2Note.duration;
+
+    // Reentry if rest > 1 quarter (1.0) AND rest > 2× last note duration
+    const v1IsReentry = v1FromRest && v1RestDur > 1.0 && v1RestDur > 2 * v1LastNoteDur;
+    const v2IsReentry = v2FromRest && v2RestDur > 1.0 && v2RestDur > 2 * v2LastNoteDur;
+    isReentry = v1IsReentry || v2IsReentry;
   }
 
-  // Asynchronous: one voice entered from rest while other is sounding
-  // This is distinct from oblique (where held voice was already sounding)
-  if (anyFromRest && (!v1Moved || !v2Moved)) {
-    return { type: 'asynchronous', v1Moved, v2Moved, v1Interval, v2Interval, v1FromRest, v2FromRest };
+  if (!v1Moved && !v2Moved) {
+    return { type: 'static', v1Moved: false, v2Moved: false, v1Interval: 0, v2Interval: 0, fromRest, isReentry };
+  }
+
+  // Reentry motion type - always scores neutral
+  if (isReentry) {
+    return { type: 'reentry', v1Moved, v2Moved, v1Interval, v2Interval, fromRest, isReentry: true };
   }
 
   if (!v1Moved || !v2Moved) {
-    return { type: 'oblique', v1Moved, v2Moved, v1Interval, v2Interval, v1FromRest, v2FromRest };
+    return { type: 'oblique', v1Moved, v2Moved, v1Interval, v2Interval, fromRest, isReentry };
   }
 
   const v1Dir = Math.sign(currSim.voice1Note.pitch - prevSim.voice1Note.pitch);
   const v2Dir = Math.sign(currSim.voice2Note.pitch - prevSim.voice2Note.pitch);
 
   if (v1Dir === -v2Dir) {
-    return { type: 'contrary', v1Moved: true, v2Moved: true, v1Interval, v2Interval, v1FromRest, v2FromRest };
+    return { type: 'contrary', v1Moved: true, v2Moved: true, v1Interval, v2Interval, fromRest, isReentry };
   }
 
   // Similar motion - determine subtype based on interval characteristics
   // Parallel: same interval size
   if (v1Interval === v2Interval) {
-    return { type: 'parallel', v1Moved: true, v2Moved: true, v1Interval, v2Interval, v1FromRest, v2FromRest };
+    return { type: 'parallel', v1Moved: true, v2Moved: true, v1Interval, v2Interval, fromRest, isReentry };
   }
 
   // Check if either voice moves by step (1-2 semitones)
@@ -304,7 +321,7 @@ function getMotionType(prevSim, currSim, restContext = null) {
   const v2IsStep = v2Interval <= 2;
 
   if (v1IsStep || v2IsStep) {
-    return { type: 'similar_step', v1Moved: true, v2Moved: true, v1Interval, v2Interval, v1FromRest, v2FromRest };
+    return { type: 'similar_step', v1Moved: true, v2Moved: true, v1Interval, v2Interval, fromRest, isReentry };
   }
 
   // Check if both voices move by same interval type (skip, perfect_leap, large_leap)
@@ -312,11 +329,11 @@ function getMotionType(prevSim, currSim, restContext = null) {
   const v2Mag = getIntervalMagnitude(v2Interval);
 
   if (v1Mag.type === v2Mag.type) {
-    return { type: 'similar_same_type', v1Moved: true, v2Moved: true, v1Interval, v2Interval, intervalType: v1Mag.type, v1FromRest, v2FromRest };
+    return { type: 'similar_same_type', v1Moved: true, v2Moved: true, v1Interval, v2Interval, intervalType: v1Mag.type, fromRest, isReentry };
   }
 
   // Different interval types
-  return { type: 'similar', v1Moved: true, v2Moved: true, v1Interval, v2Interval, v1FromRest, v2FromRest };
+  return { type: 'similar', v1Moved: true, v2Moved: true, v1Interval, v2Interval, fromRest, isReentry };
 }
 
 /**
@@ -411,46 +428,40 @@ function getEntryRestModifier(restContext, currSim) {
 
 /**
  * Score the entry into a dissonance (C → D)
- * Entry penalties are now deferred to be calculated based on how the leap is resolved
  * Rest handling:
- * - Asynchronous motion (entry from rest): neutral, no bonus or penalty
- * - Leaps after rests: reduced penalty (feels less sudden)
- * - If entering from a rest longer than the note duration, motion penalties are halved
+ * - fromRest modifier: halves penalties for similar/parallel motion
+ * - reentry motion type: always neutral (score = 0)
  */
 function scoreEntry(prevSim, currSim, restContext = null, ctx) {
-  let score = 0; // Base
+  let score = 0;
   const details = [];
 
   if (!prevSim) {
     return { score: 0, details: ['No previous simultaneity'], motion: null, v1MelodicInterval: 0, v2MelodicInterval: 0, restModifier: 1.0 };
   }
 
-  // Pass restContext to getMotionType for asynchronous detection
+  // Pass restContext to getMotionType
   const motion = getMotionType(prevSim, currSim, restContext);
 
-  // Calculate rest modifier if context provided
-  // Leaps after rests feel less sudden - reduce penalties further
-  let restModifier = restContext ? getEntryRestModifier(restContext, currSim) : 1.0;
-  if (motion.v1FromRest || motion.v2FromRest) {
-    restModifier *= 0.5; // Additional 50% reduction for leaps after rest
+  // Reentry = always neutral
+  if (motion.type === 'reentry') {
+    details.push('Re-entry after long rest: neutral');
+    return { score: 0, details, motion, v1MelodicInterval: 0, v2MelodicInterval: 0, restModifier: 1.0 };
   }
-  const restNote = restModifier < 1.0 ? ' (reduced: entry from rest)' : '';
 
-  // Motion modifier - apply rest modifier
-  // Asynchronous: one voice entered from rest - neutral (no similar/parallel concerns)
-  // Oblique/Contrary: bonus
-  // Parallel/Similar: penalties (reduced if from rest)
-  if (motion.type === 'asynchronous') {
-    // Entry from rest - neutral, no bonus or penalty for motion
-    details.push('Asynchronous entry (voice entered from rest): neutral');
-  } else if (motion.type === 'oblique') {
-    const adj = 0.5 * restModifier;
+  // fromRest modifier: halves penalties for similar/parallel
+  const restModifier = motion.fromRest ? 0.5 : 1.0;
+  const restNote = motion.fromRest ? ' (halved: from rest)' : '';
+
+  // Motion scoring
+  if (motion.type === 'oblique') {
+    const adj = 0.5;
     score += adj;
-    details.push(`Oblique motion: +${adj.toFixed(2)}${restNote}`);
+    details.push(`Oblique motion: +${adj.toFixed(2)}`);
   } else if (motion.type === 'contrary') {
-    const adj = 0.5 * restModifier;
+    const adj = 0.5;
     score += adj;
-    details.push(`Contrary motion: +${adj.toFixed(2)}${restNote}`);
+    details.push(`Contrary motion: +${adj.toFixed(2)}`);
   } else if (motion.type === 'parallel') {
     const adj = -1.5 * restModifier;
     score += adj;
@@ -462,7 +473,7 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   } else if (motion.type === 'similar_step' || motion.type === 'similar') {
     const adj = -0.5 * restModifier;
     score += adj;
-    details.push(`Similar motion (step/different types): ${adj.toFixed(2)}${restNote}`);
+    details.push(`Similar motion: ${adj.toFixed(2)}${restNote}`);
   }
 
   // Record entry intervals for resolution penalty calculation (penalties applied in scoreExit)
@@ -1226,17 +1237,36 @@ export function analyzeAllDissonances(sims, options = {}) {
   for (let i = 0; i < sims.length; i++) {
     const sim = sims[i];
 
-    // Check if there was a rest before this simultaneity (reset consecutive count)
+    // Check if there was a rest AND the OTHER voice completed a note during it
+    // Only then do we reset consecutive count
     if (i > 0) {
       const prevSim = sims[i - 1];
       const prevV1End = prevSim.voice1Note.onset + prevSim.voice1Note.duration;
       const prevV2End = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
       const currStart = sim.onset;
+      const gapThreshold = 0.05;
 
-      // If there's a gap (rest) before this simultaneity, reset the history
-      const gapThreshold = 0.05; // Small tolerance
-      if (currStart - prevV1End > gapThreshold || currStart - prevV2End > gapThreshold) {
-        // Rest detected - add a special marker to reset consecutive counting
+      const v1Rested = currStart - prevV1End > gapThreshold;
+      const v2Rested = currStart - prevV2End > gapThreshold;
+
+      // Check if OTHER voice completed a note during the rest
+      // V1 rested: did V2 have a note that started AND ended during V1's rest?
+      // V2 rested: did V1 have a note that started AND ended during V2's rest?
+      let otherVoiceCompletedNote = false;
+
+      if (v1Rested && !v2Rested) {
+        // V1 rested, check if V2 completed a note during
+        // V2's current note started before V1's rest ended
+        const v2NoteInGap = sim.voice2Note.onset > prevV1End && sim.voice2Note.onset < currStart;
+        otherVoiceCompletedNote = v2NoteInGap;
+      } else if (v2Rested && !v1Rested) {
+        // V2 rested, check if V1 completed a note during
+        const v1NoteInGap = sim.voice1Note.onset > prevV2End && sim.voice1Note.onset < currStart;
+        otherVoiceCompletedNote = v1NoteInGap;
+      }
+
+      if ((v1Rested || v2Rested) && otherVoiceCompletedNote) {
+        // Rest with other voice activity - reset consecutive counting
         intervalHistory.push(-1); // -1 = rest marker
       }
     }

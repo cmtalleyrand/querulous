@@ -1194,34 +1194,8 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
       issues.push({ ...v, config: name });
     }
 
-    // Check P4s against bass - but allow if properly resolved (4-3 suspension)
-    for (let i = 0; i < strong.length; i++) {
-      const s = strong[i];
-      if (s.interval.class === 4 && s.voice2Note.pitch < s.voice1Note.pitch) {
-        // Check if this P4 resolves properly (step down to a 3rd)
-        const nextSims = sims.filter(sim => sim.onset > s.onset);
-        const nextSim = nextSims.length > 0 ? nextSims[0] : null;
-
-        let properlyResolved = false;
-        if (nextSim) {
-          // Check if the upper voice (voice1) steps down to create a 3rd
-          const v1Moved = nextSim.voice1Note.pitch !== s.voice1Note.pitch;
-          const v1SteppedDown = v1Moved &&
-            s.voice1Note.pitch - nextSim.voice1Note.pitch >= 1 &&
-            s.voice1Note.pitch - nextSim.voice1Note.pitch <= 2;
-          const resolvesToThird = nextSim.interval.class === 3;
-
-          properlyResolved = v1SteppedDown && resolvesToThird;
-        }
-
-        if (!properlyResolved) {
-          issues.push({
-            config: name,
-            description: `Unresolved 4th against bass (${pitchName(s.voice1Note.pitch)}-${pitchName(s.voice2Note.pitch)}) at ${formatter.formatBeat(s.onset)}`,
-          });
-        }
-      }
-    }
+    // P4s against bass are handled by the standard dissonance scoring system
+    // (they can resolve like any other dissonance, not just 4-3)
 
     // Analyze dissonances with classification
     const dissonanceAnalysis = analyzeDissonances(sims, v1, v2, formatter);
