@@ -587,7 +587,9 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
   let harmonicClarityScore = 0;
 
   try {
-    chordAnalysis = analyzeChords(subject, meter, tonic);
+    // Convert MIDI tonic to pitch class (0-11)
+    const tonicPitchClass = typeof tonic === 'number' ? tonic % 12 : 0;
+    chordAnalysis = analyzeChords(subject, meter, tonicPitchClass);
 
     if (chordAnalysis && chordAnalysis.summary) {
       const { harmonicClarity, startsOnTonic, endsOnTonic, impliesDominant, uniqueHarmonies } = chordAnalysis.summary;

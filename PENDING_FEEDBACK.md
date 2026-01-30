@@ -1,38 +1,47 @@
 # Pending Feedback Log
 
 ## CRITICAL - App Issues
-- [ ] **App not functioning** - User reports app doesn't work. Need error details.
+- [ ] **App not functioning** - Fixed tonic pitch class conversion, may need more fixes
 
-## NEW - Jan 30 (Today)
-- [x] **Strong beat collisions** - REMOVED from codebase (analysis.js, App.jsx, docs)
+## PENDING ACTIONS
 
-## VISUALIZATION ISSUES (from earlier conversation)
-- [ ] **Areas in viz** - Continued issues with area calculations
-- [ ] **Non-stretto viz less intuitive** - Color scheme inconsistency
-- [ ] **Unified view** - Created UnifiedCounterpointViz but may need refinement
+### Visualization
+- [ ] Areas in viz - issue with area calculations
+- [ ] Non-stretto viz color scheme - should match stretto viz
+- [ ] Unified view refinement - UnifiedCounterpointViz created but may need work
 
-## SCORING ISSUES (Status Unknown - need user confirmation)
+### Scoring
 - [ ] Stretto: Use top 3 distances, not percentage of viable
-- [ ] Rhythmic variety: Account for rests/syncopation creating variety
-- [ ] Double-counting in invertibility parallel perfects
-- [ ] Sequences: User asked "doesn't seem to be linked to scoring" - IS linked (75% penalty reduction)
+- [ ] Rhythmic variety: Account for rests/syncopation
+- [ ] Double-counting in invertibility parallel perfects - remove
+- [ ] Sequences: Linked to scoring (75% penalty reduction) but user asked if linked?
 
-## OLDER COMMENTS (Jan 27) - Likely Addressed
-These were from the initial review. User to confirm if still issues:
-- Voice independence 4:1 ratio (contrary+oblique vs similar+parallel)
-- Consecutive perfects: 2 allowed, penalty from 3rd
-- Consecutive 3rds/6ths: 3 allowed, penalty from 4th
-- Accented passing/neighbor tones: -0.5 not -1.0
-- Inversion equivalence: P4 up ≠ P5 up for sequences
-
-## FOR LATER
+### For Later
 - [ ] Second countersubject support (CS2)
-- [ ] Harmonic scoring integration (started, may need more)
+- [ ] Harmonic scoring integration refinement
 
 ---
-**How to use this file:**
-- Mark `[x]` when resolved
-- Add new items with date
-- I will read this file to know what's pending
 
-Last updated: 2026-01-30
+## CHANGELOG (What Claude Has Done)
+
+### 2026-01-30
+- **REMOVED** strong beat collisions from analysis.js, App.jsx, docs/SCORING_SYSTEM.md
+- **FIXED** tonic pitch class conversion in testHarmonicImplication (was passing MIDI, needed 0-11)
+- **CREATED** UnifiedCounterpointViz with voice selection and transposition options
+- **UPDATED** IntervalAnalysisViz to use VIZ_COLORS consistently
+- **INTEGRATED** chord analysis into harmonic implication scoring
+
+### 2026-01-29
+- Fixed rest handling (fromRest modifier, reentry motion type)
+- Fixed P4 resolution (uses standard dissonance scoring)
+- Fixed consecutive count reset (only when other voice completes note)
+- Added "No sequences found" message
+
+### Earlier
+- Implemented 4:1 voice independence ratio
+- Consecutive perfects: 2 allowed, penalty from 3rd (line 969)
+- Consecutive 3rds/6ths: 3 allowed, penalty from 4th (line 979)
+- Harmonic analysis module created (harmonicAnalysis.js)
+
+---
+Last updated: 2026-01-30 (by Claude)
