@@ -1,11 +1,11 @@
-import { getMeter } from '../../utils/dissonanceScoring';
 import { generateGridLines, VIZ_COLORS } from '../../utils/vizConstants';
 
 /**
  * Interval Timeline visualization component
  * Shows consonant vs dissonant intervals over time
+ * @param {Array} meter - Time signature [numerator, denominator]
  */
-export function IntervalTimeline({ sims, title, maxTime }) {
+export function IntervalTimeline({ sims, title, maxTime, meter = [4, 4] }) {
   if (!sims.length) return null;
 
   // Dynamic width based on duration - minimum 40 pixels per beat for readability

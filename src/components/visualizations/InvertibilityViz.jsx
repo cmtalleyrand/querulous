@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
-import { getMeter } from '../../utils/dissonanceScoring';
 import { generateGridLines, VIZ_COLORS } from '../../utils/vizConstants';
 
 /**
@@ -14,6 +13,7 @@ export function InvertibilityViz({
   formatter,
   originalIssues = [],
   invertedIssues = [],
+  meter = [4, 4],
 }) {
   const [viewMode, setViewMode] = useState('overlay'); // 'overlay', 'original', 'inverted'
   const [selectedBeat, setSelectedBeat] = useState(null);
@@ -22,8 +22,6 @@ export function InvertibilityViz({
   // Calculate simultaneities for both configurations
   const analysis = useMemo(() => {
     if (!subject?.length || !cs?.length) return null;
-
-    const meter = getMeter();
 
     const findSims = (v1, v2) => {
       const sims = [];
@@ -101,7 +99,7 @@ export function InvertibilityViz({
       maxPitch: Math.max(...allPitches) + 2,
       maxTime,
     };
-  }, [subject, cs]);
+  }, [subject, cs, meter]);
 
   if (!analysis) return null;
 
@@ -175,7 +173,6 @@ export function InvertibilityViz({
 
             {/* Beat grid - meter-aware */}
             {(() => {
-              const meter = getMeter();
               const gridLines = generateGridLines(maxTime, meter, { showSubdivisions: false });
 
               return gridLines.map((line, i) => (

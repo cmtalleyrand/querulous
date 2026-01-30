@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { pitchName } from '../../utils/formatter';
-import { getMeter } from '../../utils/dissonanceScoring';
 import { generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
 
 /**
  * Stretto Visualization component
  * Clear, interactive display of overlapping subject entries
  */
-export function StrettoViz({ subject, distance, issues, warnings = [], intervalPoints = [], formatter, octaveDisp }) {
+export function StrettoViz({ subject, distance, issues, warnings = [], intervalPoints = [], formatter, octaveDisp, meter = [4, 4] }) {
   const [highlightedOnset, setHighlightedOnset] = useState(null);
   const [selectedInterval, setSelectedInterval] = useState(null);
 
@@ -98,7 +97,6 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
 
             {/* Beat grid - meter-aware */}
             {(() => {
-              const meter = getMeter();
               const gridLines = generateGridLines(totalDuration, meter, { showSubdivisions: false });
 
               return gridLines.map((line, i) => {

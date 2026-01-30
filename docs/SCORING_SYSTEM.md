@@ -30,6 +30,21 @@ All category scores are aggregated into an overall weighted average.
 | Answer junction: strong/good | +3 | Clear I→V or ii→V motion |
 | Answer junction: static/unusual | -3 | V→V stasis or problematic junction |
 
+**Answer Junction Explained:**
+The "junction" is the harmonic progression implied when the subject's terminal note connects to the answer's entry on the dominant. A **problematic junction** occurs when:
+- **Static**: Subject ends on ^5, creating V→V (dominant to dominant, no harmonic motion)
+- **Unusual**: Subject ends on chromatic degrees or ^6, creating unclear harmonic connection
+
+| Terminal Degree | Junction | Quality |
+|-----------------|----------|---------|
+| ^1 | I→V | Strong |
+| ^7 | vii°→V | Strong |
+| ^4 | IV→V | Strong |
+| ^2 | ii→V | Good |
+| ^3 | I→V | Good |
+| ^5 | V→V | Static (problematic) |
+| Other | ?→V | Unusual (problematic) |
+
 ---
 
 ### 2. Rhythmic Character (Weight: 0.8)
@@ -79,7 +94,7 @@ Score is based on **inverted position dissonance quality**.
 | Inverted position quality | ×5 | Average dissonance score in inverted position |
 | Inverted much worse than original | -3 to -8 | Quality difference > 1.0 |
 | Inverted better than original | +3 | Rare but valuable |
-| Parallel perfects (inverted) | -5 per issue (max -12) | Critical issue |
+| Parallel perfects (inverted) | -2 per issue (max -6) | Voice-leading error (reduced from -5 to avoid overlap with quality score which already penalizes consecutive perfects) |
 | High imperfect consonance ratio (≥60%) | +5 | 3rds/6ths are safe for inversion |
 | Low imperfect consonance ratio (<30%) | -3 | Too many perfect intervals |
 
@@ -109,18 +124,37 @@ Score is based on **inverted position dissonance quality**.
 **Group:** Combination
 **Purpose:** Evaluates melodic contour differentiation
 
-**Motion Type Analysis:**
-| Motion Type | Impact | Threshold |
-|-------------|--------|-----------|
-| Contrary ≥50% | +12 | Strong independence |
-| Contrary ≥35% | +8 | Good independence |
-| Contrary ≥20% | +3 | Moderate |
-| Contrary <20% | -5 | Voices move together too often |
-| Parallel >40% | -12 | Excessive parallel motion |
-| Parallel 25-40% | -5 | High parallel motion |
-| Parallel ≤10% | +5 | Good variety |
-| Oblique ≥20% | +5 | Good oblique motion |
-| Oblique 10-20% | +2 | Some oblique motion |
+**Motion Ratio Analysis (Target: 4:1 independent:dependent):**
+
+| Main Ratio (ind:dep) | Score | Description |
+|---------------------|-------|-------------|
+| 3.5-5:1 | +10 | Ideal (around 4:1) |
+| 2.5-3.5:1 | +5 | Acceptable (3:1 range) |
+| 1.5-2.5:1 | -5 | Too low (2:1 range) |
+| <1.5:1 | -12 | Very poor |
+| >6:1 | +5 | Slightly excessive |
+| 5-6:1 | +8 | Strong |
+
+**Contrary:Oblique Balance (Target: around 5:2 = 2.5:1):**
+| Ratio | Score | Description |
+|-------|-------|-------------|
+| 1.5-2.5:1 | +5 | Good balance (healthy oblique) |
+| 2.5-3:1 | +2 | Acceptable |
+| >3:1 | -1 to -5 | Lacking oblique (penalty scales with skew) |
+| <1:3 | -1 to -5 | Excessive oblique (penalty scales with skew) |
+
+**Similar:Parallel Balance (Target: at least 2:1):**
+| Ratio | Score | Description |
+|-------|-------|-------------|
+| <1.5:1 | -5 | Too much parallel vs similar |
+| 1.5-2:1 | -2 | High parallel ratio |
+| >2:1 | 0 | Acceptable |
+
+**Size of Motion:**
+| Condition | Penalty |
+|-----------|---------|
+| >2 large parallel leaps (>4 semitones) | -1 to -5 |
+| >3 large similar motion leaps | -1 to -3 |
 
 ---
 
@@ -163,7 +197,7 @@ Motion type into the dissonance:
 | Parallel | -1.5 |
 
 **Metric Position:**
-- Strong beat entry: **-1.0**
+- Strong beat entry: **-0.5** (accented passing tones and neighbor tones are acceptable)
 
 ### Exit Scoring (D → ?)
 Resolution quality:
@@ -172,7 +206,7 @@ Resolution quality:
 |------------|--------|
 | To imperfect consonance (3rd, 6th) | +1.0 |
 | To perfect consonance (unison, 5th, 8ve) | +0.5 |
-| To another dissonance | -1.5 |
+| To another dissonance | **-0.75** |
 | Resolved by abandonment | -0.5 |
 | Delayed resolution (long rest) | -0.3 |
 
@@ -208,7 +242,7 @@ Leaps within detected melodic sequences receive **75% penalty reduction**, since
 | Pattern | Bonus | Detection Criteria |
 |---------|-------|-------------------|
 | Suspension | +1.5 | Oblique entry on strong beat, step-down resolution |
-| Appoggiatura | +2.5 | Leap/skip entry on strong beat, step resolution opposite |
+| Appoggiatura | +2.0 | Leap/skip entry on strong beat, step resolution opposite |
 | Cambiata (traditional) | +1.5 | Step down entry, skip-down 3rd exit, weak beat |
 | Cambiata (inverted) | +1.0 | Step up entry, skip-up 3rd exit, weak beat |
 | Cambiata (strong beat) | +0.5 | Cambiata figure on strong beat (non-traditional) |
@@ -216,6 +250,24 @@ Leaps within detected melodic sequences receive **75% penalty reduction**, since
 | Passing tone | 0 | Step through in same direction, weak beat |
 | Neighbor tone | 0 | Step out and back, weak beat |
 | Anticipation | 0 | Oblique entry and exit on weak beat |
+
+### Metric Weight Hierarchy
+
+The scoring system uses a hierarchical metric weight system:
+
+**Strong Beats (weight 0.75-1.0):**
+1. Beat 1 in all time signatures (weight: 1.0)
+2. Beat 3 in four-beat signatures (weight: 0.75) - slightly smaller penalties/rewards
+
+**Weak Beats (weight 0.1-0.5):**
+1. On the beat of any other beat (weight: 0.5)
+2. Off-beat primary subdivision (eighths usually) (weight: 0.25)
+3. Off-beat other subdivisions (weight: 0.1)
+
+**Compound Meters (6/8, 9/8, 12/8):**
+- Main beats are dotted quarters (beats 1 and 2 in 6/8, etc.)
+- Beat 1 = strong (1.0), other main beats = medium (0.5-0.75)
+- Eighth-note subdivisions within beats = weak (0.25)
 
 ---
 
@@ -226,15 +278,12 @@ Consonances are also evaluated in context:
 ### Repetition Penalties
 | Condition | Penalty |
 |-----------|---------|
-| 2+ consecutive perfect intervals (unison, 5th, 8ve) | -0.5 |
-| 3+ consecutive 3rds | -0.3 |
-| 3+ consecutive 6ths | -0.3 |
+| 3+ consecutive perfect intervals (unison, 5th, 8ve) | -0.5 per extra (2 allowed) |
+| 4+ consecutive 3rds | -0.25 per extra (3 allowed) |
+| 4+ consecutive 6ths | -0.25 per extra (3 allowed) |
 
 ### Resolution Quality
-| Condition | Impact |
-|-----------|--------|
-| Good resolution of preceding dissonance (stepwise) | +0.5 |
-| Weak resolution (by leap) | -0.3 |
+Resolution quality is tracked for visualization but **no longer scored** to avoid double-counting with dissonance exit scoring.
 
 ---
 

@@ -57,15 +57,19 @@ export { HELP_CONTENT, getHelpContent, getHelpTopics } from './helpContent';
 
 // Dissonance scoring system
 export {
+  createAnalysisContext,
   scoreDissonance,
   analyzeAllDissonances,
-  setP4Treatment,
-  getP4Treatment,
+  // Global state setters (backward compatibility)
   setMeter,
   getMeter,
+  setP4Treatment,
+  getP4Treatment,
   setSequenceRanges,
   getSequenceRanges,
   setSequenceBeatRanges,
-  isOnsetInSequence,
-  isNoteInSequence,
+  getSequenceBeatRanges,
 } from './dissonanceScoring';
+
+// Harmonic analysis
+export { analyzeHarmonicImplication } from './harmonicAnalysis';

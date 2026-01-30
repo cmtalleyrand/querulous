@@ -1,6 +1,6 @@
 import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName, isDuringRest } from './formatter';
-import { scoreDissonance, analyzeAllDissonances, getMeter } from './dissonanceScoring';
+import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -235,16 +235,18 @@ export function analyzeDissonances(sims, v1Notes, v2Notes, formatter) {
 
 /**
  * Find all simultaneous note pairs between two voices
- * Uses the current meter set in dissonanceScoring module
  *
  * IMPORTANT: This only creates simultaneities when actual notes overlap.
  * Rests in one voice do NOT create simultaneities - they are silence.
  * If v1 has notes A (0-1) and B (2-3), and v2 has note C (0-3),
  * we get simultaneities at A-C and B-C, but NOT during 1-2 (rest in v1).
+ *
+ * @param {NoteEvent[]} v1 - First voice notes
+ * @param {NoteEvent[]} v2 - Second voice notes
+ * @param {number[]} meter - Time signature [numerator, denominator]
  */
-export function findSimultaneities(v1, v2) {
+export function findSimultaneities(v1, v2, meter) {
   const sims = [];
-  const meter = getMeter();
 
   for (const n1 of v1) {
     const s1 = n1.onset;
@@ -399,7 +401,7 @@ export function testContourIndependence(subject, cs, formatter) {
 export function testHarmonicImplication(subject, tonic, mode, formatter) {
   if (!subject.length) return { error: 'No notes' };
 
-  const meter = getMeter();
+  const meter = formatter.meter;
   const degrees = subject.map((n) => n.scaleDegree);
   const observations = [];
 
@@ -459,10 +461,132 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     });
   }
 
+  // Melodic contour analysis: leap recovery and focal point
+
+  // 1. Leap recovery: penalize unrecovered leaps, small bonus for good recovery
+  let leapRecoveries = 0;
+  let unresolvedLeaps = 0;
+  for (let i = 1; i < subject.length - 1; i++) {
+    const interval1 = subject[i].pitch - subject[i - 1].pitch;
+    const interval2 = subject[i + 1].pitch - subject[i].pitch;
+    const absInt1 = Math.abs(interval1);
+
+    // Check if first interval is a leap (>4 semitones)
+    if (absInt1 > 4) {
+      const absInt2 = Math.abs(interval2);
+      // Recovery = step (1-2 semitones) in opposite direction
+      const isOppositeDirection = (interval1 > 0 && interval2 < 0) || (interval1 < 0 && interval2 > 0);
+      const isStep = absInt2 <= 2;
+
+      if (isStep && isOppositeDirection) {
+        leapRecoveries++;
+      } else if (absInt2 > 4) {
+        // Two consecutive leaps without recovery
+        unresolvedLeaps++;
+      }
+    }
+  }
+
+  let leapRecoveryScore = 0;
+  if (leapRecoveries > 0 && unresolvedLeaps === 0) {
+    leapRecoveryScore = 0.25; // User specified +0.25 instead of +0.5
+    observations.push({
+      type: 'strength',
+      description: `Good leap recovery (${leapRecoveries} recovered leap${leapRecoveries > 1 ? 's' : ''})`,
+    });
+  } else if (unresolvedLeaps > 0) {
+    observations.push({
+      type: 'consideration',
+      description: `${unresolvedLeaps} unrecovered leap${unresolvedLeaps > 1 ? 's' : ''}`,
+    });
+  }
+
+  // 2. Focal point/climax detection: bonus up to +3.0 based on clarity
+  // A clear focal point is: the single highest (or lowest) pitch, metrically strong,
+  // in the middle portion of the subject
+  // NOTE: approach by step or leap doesn't matter - a dramatic leap to climax is just as valid
+  const pitches = subject.map(n => n.pitch);
+  const maxPitch = Math.max(...pitches);
+  const minPitch = Math.min(...pitches);
+  const range = maxPitch - minPitch;
+
+  // Find all instances of highest and lowest pitch
+  const highIndices = pitches.map((p, i) => p === maxPitch ? i : -1).filter(i => i >= 0);
+  const lowIndices = pitches.map((p, i) => p === minPitch ? i : -1).filter(i => i >= 0);
+
+  let focalPointScore = 0;
+  let focalPointDetails = null;
+
+  // Check for clear high point (climax)
+  if (highIndices.length === 1 && range >= 5) {
+    const idx = highIndices[0];
+    const relativePosition = idx / (subject.length - 1);
+    const isInMiddle = relativePosition >= 0.25 && relativePosition <= 0.85;
+    const weight = metricWeight(subject[idx].onset, meter);
+    const isMetricallyStrong = weight >= 0.5;
+
+    // Calculate focal point score (up to +3.0)
+    // - Base: single clear high point in middle = +1.5
+    // - Metrically strong = +1.0
+    // - Good range (>octave) = +0.5
+    if (isInMiddle) {
+      focalPointScore = 1.5; // Base: clear single high point in middle
+      if (isMetricallyStrong) focalPointScore += 1.0; // Bonus: metrically strong
+      if (range >= 12) focalPointScore += 0.5; // Bonus: large range (octave+)
+      focalPointScore = Math.min(focalPointScore, 3.0);
+
+      focalPointDetails = {
+        type: 'high',
+        pitch: maxPitch,
+        position: idx,
+        relativePosition,
+        metricallyStrong: isMetricallyStrong,
+        range,
+      };
+
+      const strengthLevel = focalPointScore >= 2.5 ? 'excellent' : focalPointScore >= 2.0 ? 'good' : 'present';
+      observations.push({
+        type: 'strength',
+        description: `Clear melodic climax (${strengthLevel}): high point at ${formatter.formatBeat(subject[idx].onset)}`,
+      });
+    }
+  }
+
+  // If no clear high point climax, check for expressive low point
+  if (focalPointScore === 0 && lowIndices.length === 1 && range >= 5) {
+    const idx = lowIndices[0];
+    const relativePosition = idx / (subject.length - 1);
+    const isInMiddle = relativePosition >= 0.25 && relativePosition <= 0.85;
+    const weight = metricWeight(subject[idx].onset, meter);
+    const isMetricallyStrong = weight >= 0.5;
+
+    if (isInMiddle) {
+      focalPointScore = 0.5; // Low point focal is less common but valid
+      if (isMetricallyStrong) focalPointScore += 0.5;
+      focalPointScore = Math.min(focalPointScore, 1.5);
+
+      focalPointDetails = {
+        type: 'low',
+        pitch: minPitch,
+        position: idx,
+        relativePosition,
+        metricallyStrong: isMetricallyStrong,
+      };
+
+      observations.push({
+        type: 'info',
+        description: `Expressive low point at ${formatter.formatBeat(subject[idx].onset)}`,
+      });
+    }
+  }
+
   return {
     opening: { degree: opening.toString(), isTonicChordTone },
     terminal: { degree: terminal.toString(), ...ti },
     dominantArrival: domArr,
+    leapRecoveryScore,
+    focalPointScore,
+    focalPointDetails,
     observations,
   };
 }
@@ -477,13 +601,16 @@ export function testRhythmicVariety(subject, formatter) {
   const unique = [...new Set(durs.map((d) => Math.round(d * 1000) / 1000))];
   const names = unique.map((d) => formatter.formatDuration(d));
   const observations = [];
+  const meter = formatter.meter;
 
+  // Note value variety
   if (unique.length === 1) {
     observations.push({ type: 'consideration', description: `Uniform rhythm (all ${names[0]}s)` });
   } else {
     observations.push({ type: 'info', description: `${unique.length} note values: ${names.join(', ')}` });
   }
 
+  // Long-short / short-long contrast
   const hasLS = durs.some((d, i) => i > 0 && durs[i - 1] >= d * 2);
   const hasSL = durs.some((d, i) => i > 0 && durs[i - 1] <= d / 2);
 
@@ -491,16 +618,158 @@ export function testRhythmicVariety(subject, formatter) {
     observations.push({ type: 'strength', description: 'Good rhythmic contrast' });
   }
 
-  return { uniqueDurations: unique.length, durationNames: names, observations };
+  // Rest detection: gaps between notes create rhythmic variety
+  let restCount = 0;
+  let totalRestDuration = 0;
+  for (let i = 1; i < subject.length; i++) {
+    const prevEnd = subject[i - 1].onset + subject[i - 1].duration;
+    const gap = subject[i].onset - prevEnd;
+    if (gap > 0.01) { // Small tolerance for rounding
+      restCount++;
+      totalRestDuration += gap;
+    }
+  }
+
+  if (restCount > 0) {
+    observations.push({
+      type: 'info',
+      description: `${restCount} rest${restCount > 1 ? 's' : ''} (${totalRestDuration.toFixed(2)} beats total)`,
+    });
+    if (restCount >= 2 || totalRestDuration >= 1) {
+      observations.push({ type: 'strength', description: 'Rests add rhythmic variety' });
+    }
+  }
+
+  // Off-beat (syncopated) attacks: notes starting off the beat create variety
+  // even with uniform note values
+  const measureLength = (meter[0] * 4) / meter[1]; // Internal units per measure
+  const beatUnit = meter[1] >= 8 && meter[0] % 3 === 0 ? 1.5 : 1; // Compound vs simple
+  let offBeatCount = 0;
+  let onBeatCount = 0;
+
+  for (const note of subject) {
+    const beatPosition = note.onset % beatUnit;
+    const isOnBeat = beatPosition < 0.05 || beatPosition > beatUnit - 0.05;
+    if (isOnBeat) {
+      onBeatCount++;
+    } else {
+      offBeatCount++;
+    }
+  }
+
+  const offBeatRatio = offBeatCount / subject.length;
+
+  if (offBeatCount > 0) {
+    observations.push({
+      type: 'info',
+      description: `${offBeatCount}/${subject.length} off-beat attacks (${Math.round(offBeatRatio * 100)}%)`,
+    });
+    if (offBeatRatio >= 0.2 && offBeatRatio <= 0.6) {
+      observations.push({ type: 'strength', description: 'Good syncopation/off-beat variety' });
+    } else if (offBeatRatio > 0.6) {
+      observations.push({ type: 'consideration', description: 'Heavily syncopated (may obscure meter)' });
+    }
+  }
+
+  // Melodic interval variety analysis
+  // Good variety = any combination involving a step (step+step, step+skip, step+leap)
+  // OR combinations of skips (3-4 semitones) and perfect leaps (5, 7, 12 semitones)
+  const intervals = [];
+  const intervalTypes = { step: 0, skip: 0, perfectLeap: 0, otherLeap: 0 };
+
+  for (let i = 1; i < subject.length; i++) {
+    const semitones = Math.abs(subject[i].pitch - subject[i - 1].pitch);
+    intervals.push(semitones);
+
+    if (semitones <= 2) {
+      intervalTypes.step++;
+    } else if (semitones <= 4) {
+      intervalTypes.skip++; // m3, M3 (3-4 semitones)
+    } else if (semitones === 5 || semitones === 7 || semitones === 12) {
+      intervalTypes.perfectLeap++; // P4, P5, P8
+    } else {
+      intervalTypes.otherLeap++; // 6ths, 7ths, etc.
+    }
+  }
+
+  // Evaluate melodic variety
+  const hasSteps = intervalTypes.step > 0;
+  const hasSkips = intervalTypes.skip > 0;
+  const hasLeaps = intervalTypes.perfectLeap + intervalTypes.otherLeap > 0;
+  const uniqueIntervalSizes = [...new Set(intervals)].length;
+
+  let melodicVarietyScore = 0;
+  const melodicObservations = [];
+
+  if (hasSteps && (hasSkips || hasLeaps)) {
+    // Good: steps combined with skips or leaps
+    melodicVarietyScore = 2;
+    melodicObservations.push({
+      type: 'strength',
+      description: 'Good melodic variety: steps combined with larger intervals',
+    });
+  } else if (hasSkips && intervalTypes.perfectLeap > 0) {
+    // Good: skips with perfect leaps (check for 2+ semitone difference)
+    const skipSizes = intervals.filter(i => i >= 3 && i <= 4);
+    const perfectSizes = intervals.filter(i => i === 5 || i === 7 || i === 12);
+    const hasVariety = skipSizes.some(s =>
+      perfectSizes.some(p => Math.abs(s - p) >= 2)
+    );
+    if (hasVariety) {
+      melodicVarietyScore = 1.5;
+      melodicObservations.push({
+        type: 'strength',
+        description: 'Melodic variety through skip/leap combinations',
+      });
+    }
+  } else if (uniqueIntervalSizes >= 3) {
+    melodicVarietyScore = 1;
+    melodicObservations.push({
+      type: 'info',
+      description: `${uniqueIntervalSizes} distinct interval sizes`,
+    });
+  } else if (uniqueIntervalSizes === 1) {
+    melodicVarietyScore = -1;
+    melodicObservations.push({
+      type: 'consideration',
+      description: 'Monotonous: only one interval size used',
+    });
+  }
+
+  observations.push(...melodicObservations);
+
+  // Add interval type summary
+  const typeSummary = [];
+  if (intervalTypes.step > 0) typeSummary.push(`${intervalTypes.step} steps`);
+  if (intervalTypes.skip > 0) typeSummary.push(`${intervalTypes.skip} skips`);
+  if (intervalTypes.perfectLeap > 0) typeSummary.push(`${intervalTypes.perfectLeap} perfect leaps`);
+  if (intervalTypes.otherLeap > 0) typeSummary.push(`${intervalTypes.otherLeap} other leaps`);
+
+  if (typeSummary.length > 0) {
+    observations.push({
+      type: 'info',
+      description: `Melodic intervals: ${typeSummary.join(', ')}`,
+    });
+  }
+
+  return {
+    uniqueDurations: unique.length,
+    durationNames: names,
+    restCount,
+    totalRestDuration,
+    offBeatCount,
+    offBeatRatio,
+    intervalTypes,
+    melodicVarietyScore,
+    observations,
+  };
 }
 
 /**
  * Analyze rhythmic complementarity between subject and countersubject
  */
-export function testRhythmicComplementarity(subject, cs) {
+export function testRhythmicComplementarity(subject, cs, meter) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
-
-  const meter = getMeter();
   const sOnsets = new Set(subject.map((n) => Math.round(n.onset * 100) / 100));
   const cOnsets = new Set(cs.map((n) => Math.round(n.onset * 100) / 100));
   const shared = [...sOnsets].filter((o) => cOnsets.has(o));
@@ -533,10 +802,10 @@ export function testRhythmicComplementarity(subject, cs) {
  * Test stretto viability at various time intervals
  * Issues are weighted by: beat strength, note duration, and consecutiveness
  */
-export function testStrettoViability(subject, formatter, minOverlap = 0.5, increment = 1, octaveDisp = 12) {
+export function testStrettoViability(subject, formatter, minOverlap = 0.5, increment = 1, octaveDisp = 12, scoringOptions = {}) {
   if (subject.length < 2) return { error: 'Too short' };
 
-  const meter = getMeter();
+  const meter = formatter.meter;
   const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
   const maxDist = subLen * (1 - minOverlap);
   const results = [];
@@ -548,7 +817,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     const comes = subject.map(
       (n) => new NoteEvent(n.pitch + octaveDisp, n.duration, n.onset + dist, n.scaleDegree, n.abcNote)
     );
-    const sims = findSimultaneities(subject, comes);
+    const sims = findSimultaneities(subject, comes, meter);
     const issues = [];
     const warnings = [];
 
