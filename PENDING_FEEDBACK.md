@@ -18,7 +18,7 @@
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|
 | Stretto: top 3 distances | **DONE** - scoring.js:341-362 uses top 3 avg | [ ] |
-| Rhythmic: rests/syncopation | [ ] Not implemented | [ ] |
+| Rhythmic: rests/syncopation | **DONE** - analysis.js:684-732 (rest count, off-beat attacks) | [ ] |
 | Invertibility double-count | **DONE** - removed separate penalty (scoring.js:600-602) | [ ] |
 | Sequences linked to scoring | YES - 75% penalty reduction in sequences | [ ] |
 
