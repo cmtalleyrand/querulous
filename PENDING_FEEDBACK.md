@@ -3,7 +3,7 @@
 ## CRITICAL - App Issues
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|
-| App white screen | DISABLED UnifiedCounterpointViz (reverted to IntervalAnalysisViz) | [ ] Does app load now? |
+| App white screen | **FIXED** - undefined var `avgCounterpointScore` in scoring.js:404 | [ ] Does app load now? |
 
 ## PENDING ACTIONS
 
@@ -31,8 +31,11 @@
 
 ## CHANGELOG (What Claude Has Done)
 
-### 2026-01-30 (Latest)
-- **DISABLED** UnifiedCounterpointViz - suspected cause of white screen
+### 2026-01-31 (Latest)
+- **FIXED** white screen: undefined `avgCounterpointScore` variable in scoring.js:404
+
+### 2026-01-30
+- **DISABLED** UnifiedCounterpointViz - suspected cause of white screen (it wasn't)
 - **REVERTED** to using IntervalAnalysisViz for voice comparison
 - **REMOVED** strong beat collisions from codebase
 - **FIXED** tonic pitch class conversion (MIDI → 0-11)
@@ -52,4 +55,4 @@
 - Harmonic analysis module (harmonicAnalysis.js)
 
 ---
-Last updated: 2026-01-30 (by Claude)
+Last updated: 2026-01-31 (by Claude)
