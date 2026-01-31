@@ -21,10 +21,15 @@
 | Rhythmic: rests/syncopation | **DONE** - analysis.js:684-732 (rest count, off-beat attacks) | [ ] |
 | Invertibility double-count | **DONE** - removed separate penalty (scoring.js:600-602) | [ ] |
 | Sequences linked to scoring | YES - 75% penalty reduction in sequences | [ ] |
+- [ ] Stretto: Use top 3 distances, not percentage of viable // i think it does this
+- [ ] Rhythmic variety: Account for rests/syncopation // zi think youve done this
+- [ ] Double-counting in invertibility parallel perfects - remove. // youve already done this, I asked you to check and you did not
+- [ ] Sequences: Linked to scoring (75% penalty reduction) but user asked if linked? // you've already acted on this
 
-### For Later
+### For Later // for right after you get the app working again
 - [ ] Second countersubject support (CS2)
 - [ ] Harmonic scoring refinement
+- [ ] Harmonic scoring integration refinement // not a clue how it is scored now
 
 ---
 
