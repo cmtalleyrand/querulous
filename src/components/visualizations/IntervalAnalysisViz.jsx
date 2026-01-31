@@ -344,7 +344,7 @@ export function IntervalAnalysisViz({
               );
             })}
 
-            {/* Interval regions - semi-transparent filled areas between voices */}
+            {/* Interval regions - full-height vertical bars */}
             {(() => {
               return intervalPoints.map((pt, i) => {
                 const x = tToX(pt.onset);
@@ -360,9 +360,9 @@ export function IntervalAnalysisViz({
                 const regionEnd = nextPt ? tToX(nextPt.onset) : x + 15;
                 const regionWidth = Math.max(4, regionEnd - x - 1);
 
-                // Region height - span between voices INCLUDING note heights (like StrettoViz)
-                const regionTop = Math.min(y1, y2) - noteHeight / 2;
-                const regionHeight = Math.abs(y2 - y1) + noteHeight;
+                // Full height vertical bar (from header to bottom)
+                const regionTop = headerHeight;
+                const regionHeight = h - headerHeight - 20;
 
                 const label = pt.isConsonant
                   ? pt.intervalClass.toString()

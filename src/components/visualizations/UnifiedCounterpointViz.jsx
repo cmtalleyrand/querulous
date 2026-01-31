@@ -374,12 +374,12 @@ export function UnifiedCounterpointViz({
                   onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
                   onMouseLeave={() => setHighlightedOnset(null)}
                 >
-                  {/* Clickable region with semantic fill */}
+                  {/* Full-height vertical bar */}
                   <rect
                     x={x - 2}
-                    y={Math.min(y1, y2) - noteHeight/2}
+                    y={headerHeight}
                     width={regionWidth}
-                    height={Math.abs(y2 - y1) + noteHeight}
+                    height={h - headerHeight - 25}
                     fill={style.fill}
                     opacity={isSelected || isHighlighted ? 0.9 : 0.5}
                     rx={4}
