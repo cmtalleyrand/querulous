@@ -19,7 +19,7 @@
 |-------|--------------|------------|
 | Stretto: top 3 distances | [ ] Not implemented | [ ] |
 | Rhythmic: rests/syncopation | [ ] Not implemented | [ ] |
-| Invertibility double-count | [ ] Not implemented | [ ] |
+| Invertibility double-count | **DONE** - removed separate penalty (scoring.js:600-602) | [ ] |
 | Sequences linked to scoring | YES - 75% penalty reduction in sequences | [ ] |
 
 ### For Later
