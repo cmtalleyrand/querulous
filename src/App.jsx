@@ -826,10 +826,11 @@ export default function App() {
             {/* Countersubject Sections */}
             {results.countersubject && (
               <>
-                <Section title="Voice Comparison" helpKey="countersubject">
+                {/* Voice Comparison - unified view with transposition testing */}
+                <Section title="Counterpoint Analysis" helpKey="countersubject">
                   <UnifiedCounterpointViz
                     voices={{
-                      subject: results.subject,
+                      subject: results.subjectNotes,
                       answer: results.answerNotes,
                       cs1: results.countersubject,
                     }}
@@ -837,8 +838,7 @@ export default function App() {
                     meter={results.meter}
                     defaultVoice1="answer"
                     defaultVoice2="cs1"
-                    defaultTransposition={0}
-                    title="Counterpoint Analysis"
+                    title="Voice Comparison"
                   />
                 </Section>
 

@@ -53,7 +53,6 @@ export function IntervalTimeline({ sims, title, maxTime, meter = [4, 4] }) {
         >
         {/* Beat lines - meter-aware */}
         {(() => {
-          const meter = getMeter();
           const gridLines = generateGridLines(maxTime, meter, { showSubdivisions: false });
 
           return gridLines.map((line, i) => (

@@ -401,7 +401,7 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
     subjectLength,
     testedDistances: totalTests,
     goodDistances,
-    avgCounterpointScore,
+    avgCounterpointScore: weightedAvg,
     distanceScores,
   };
 
