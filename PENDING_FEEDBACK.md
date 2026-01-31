@@ -11,13 +11,13 @@
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|
 | Areas in viz | [ ] Not yet investigated | [ ] |
-| UnifiedCounterpointViz | DISABLED - was causing white screen? | [ ] Confirm fix works |
+| UnifiedCounterpointViz | **RESTORED** - re-enabled in App.jsx | [ ] Confirm works |
 | Color scheme consistency | Used VIZ_COLORS in IntervalAnalysisViz | [ ] |
 
 ### Scoring
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|
-| Stretto: top 3 distances | [ ] Not implemented | [ ] |
+| Stretto: top 3 distances | **DONE** - scoring.js:341-362 uses top 3 avg | [ ] |
 | Rhythmic: rests/syncopation | [ ] Not implemented | [ ] |
 | Invertibility double-count | **DONE** - removed separate penalty (scoring.js:600-602) | [ ] |
 | Sequences linked to scoring | YES - 75% penalty reduction in sequences | [ ] |
@@ -25,13 +25,14 @@
 ### For Later
 - [ ] Second countersubject support (CS2)
 - [ ] Harmonic scoring refinement
-- [ ] Fix and re-enable UnifiedCounterpointViz
 
 ---
 
 ## CHANGELOG (What Claude Has Done)
 
 ### 2026-01-31 (Latest)
+- **RESTORED** UnifiedCounterpointViz in App.jsx (was wrongly disabled)
+- **FIXED** getMeter error in IntervalTimeline.jsx:56 → meter already passed as prop
 - **FIXED** white screen #2: undefined `getMeter()` call in analysis.js:1155 → use `formatter.meter`
 - **FIXED** white screen #1: undefined `avgCounterpointScore` in scoring.js:404
 

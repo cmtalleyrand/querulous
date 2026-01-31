@@ -826,14 +826,19 @@ export default function App() {
             {/* Countersubject Sections */}
             {results.countersubject && (
               <>
-                {/* Voice Comparison - using original IntervalAnalysisViz for now */}
-                <Section title="Answer + Countersubject" helpKey="countersubject">
-                  <IntervalAnalysisViz
-                    voice1={{ notes: results.answerNotes, color: '#f59e0b', label: 'Answer' }}
-                    voice2={{ notes: results.countersubject, color: '#22c55e', label: 'CS' }}
-                    title="Answer + Countersubject"
+                {/* Voice Comparison - unified view with transposition testing */}
+                <Section title="Counterpoint Analysis" helpKey="countersubject">
+                  <UnifiedCounterpointViz
+                    voices={{
+                      subject: results.subjectNotes,
+                      answer: results.answerNotes,
+                      cs1: results.countersubject,
+                    }}
                     formatter={results.formatter}
                     meter={results.meter}
+                    defaultVoice1="answer"
+                    defaultVoice2="cs1"
+                    title="Voice Comparison"
                   />
                 </Section>
 
