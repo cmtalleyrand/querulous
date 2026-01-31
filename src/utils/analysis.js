@@ -1152,7 +1152,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
 export function testTonalAnswer(subject, mode, keyInfo, formatter) {
   if (!subject.length) return { error: 'Empty' };
 
-  const meter = getMeter();
+  const meter = formatter.meter;
   const degrees = subject.map((n) => n.scaleDegree);
   const tonalMotions = [];
   let mutationPoint = null;

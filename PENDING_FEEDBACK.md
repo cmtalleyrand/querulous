@@ -32,7 +32,8 @@
 ## CHANGELOG (What Claude Has Done)
 
 ### 2026-01-31 (Latest)
-- **FIXED** white screen: undefined `avgCounterpointScore` variable in scoring.js:404
+- **FIXED** white screen #2: undefined `getMeter()` call in analysis.js:1155 → use `formatter.meter`
+- **FIXED** white screen #1: undefined `avgCounterpointScore` in scoring.js:404
 
 ### 2026-01-30
 - **DISABLED** UnifiedCounterpointViz - suspected cause of white screen (it wasn't)
