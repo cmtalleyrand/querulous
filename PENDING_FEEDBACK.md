@@ -10,32 +10,53 @@
 ### Visualization
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|
-| Areas in viz | [ ] Not yet investigated | [ ] |
+| Areas in viz | **FIXED** - now uses full-height vertical bars | [ ] |
 | UnifiedCounterpointViz | **RESTORED** - re-enabled in App.jsx | [ ] Confirm works |
 | Color scheme consistency | Used VIZ_COLORS in IntervalAnalysisViz | [ ] |
 
 ### Scoring
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|
-| Stretto: top 3 distances | **DONE** - scoring.js:341-362 uses top 3 avg | [ ] |
-| Rhythmic: rests/syncopation | **DONE** - analysis.js:684-732 (rest count, off-beat attacks) | [ ] |
-| Invertibility double-count | **DONE** - removed separate penalty (scoring.js:600-602) | [ ] |
-| Sequences linked to scoring | YES - 75% penalty reduction in sequences | [ ] |
-- [ ] Stretto: Use top 3 distances, not percentage of viable // i think it does this
-- [ ] Rhythmic variety: Account for rests/syncopation // zi think youve done this
-- [ ] Double-counting in invertibility parallel perfects - remove. // youve already done this, I asked you to check and you did not
-- [ ] Sequences: Linked to scoring (75% penalty reduction) but user asked if linked? // you've already acted on this
+| Stretto: top 3 distances | **DONE** - scoring.js:341-362 uses top 3 avg | [x] User confirmed |
+| Rhythmic: rests/syncopation | **DONE** - analysis.js:684-732 (rest count, off-beat attacks) | [x] User confirmed |
+| Invertibility double-count | **DONE** - removed separate penalty (scoring.js:600-602) | [x] User confirmed |
+| Sequences linked to scoring | **DONE** - 75% penalty reduction in sequences | [x] User confirmed |
 
-### For Later // for right after you get the app working again
+### Needs Clarification
+- [ ] Visualization issues with octave displacement - what specific issue?
+
+### For Later
 - [ ] Second countersubject support (CS2)
-- [ ] Harmonic scoring refinement
-- [ ] Harmonic scoring integration refinement // not a clue how it is scored now
+
+---
+
+## HOW HARMONIC SCORING WORKS (Current Implementation)
+
+**Location:** analysis.js:587-651, scoring.js:221-222, harmonicAnalysis.js
+
+**harmonicClarityScore** (0 to ~2.5 points):
+- Based on `harmonicClarity` ratio (% of notes that imply clear chords)
+- ≥80% clarity → +2.0 pts
+- ≥60% clarity → +1.0 pts
+- ≥40% clarity → +0.5 pts
+- Bonus +0.5 if starts on tonic AND ends on dominant/tonic
+
+**In Overall Score** (scoring.js:221):
+- `clarityImpact = harmonicClarityScore * 4` → scaled to 0-10 range
+- Added to melodic factors in internal calculation
 
 ---
 
 ## CHANGELOG (What Claude Has Done)
 
-### 2026-01-31 (Latest)
+### 2026-02-01 (Latest)
+- **FIXED** ABC parsing - accidentals no longer carry through bars (was wrong)
+- **FIXED** P4 checkbox - now actually respects user setting
+- **REMOVED** useless "Mutation: Note N" field from tonal answer
+- **REVERTED** bad stretto score adjustment
+
+### 2026-01-31
+- **FIXED** viz areas - now full-height vertical bars instead of spanning between notes
 - **RESTORED** UnifiedCounterpointViz in App.jsx (was wrongly disabled)
 - **FIXED** getMeter error in IntervalTimeline.jsx:56 → meter already passed as prop
 - **FIXED** white screen #2: undefined `getMeter()` call in analysis.js:1155 → use `formatter.meter`

@@ -1126,7 +1126,6 @@ export default function App() {
               <DataRow
                 data={{
                   Type: results.tonalAnswer.answerType,
-                  Mutation: results.tonalAnswer.mutationPoint !== null ? `Note ${results.tonalAnswer.mutationPoint + 1}` : 'N/A',
                   Junction: `${results.tonalAnswer.junction.p} (${results.tonalAnswer.junction.q})`,
                 }}
               />

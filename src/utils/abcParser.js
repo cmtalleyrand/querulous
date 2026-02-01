@@ -211,19 +211,20 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
   // Clean up the note text - preserve bar lines for accidental reset, remove other non-note elements
   noteText = noteText.replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
 
+  // Determine if key signature uses flats (for display preference)
+  const keyUsesFlats = keySignature.some(s => s.endsWith('b'));
+
   const notes = [];
   let currentOnset = 0;
-  let activeAccidentals = {};
 
-  // Pattern matches bar lines, rests, OR notes - bar lines reset accidentals per ABC standard
+  // Pattern matches bar lines, rests, OR notes
   // Rests are 'z' (audible rest) or 'x' (invisible rest) followed by optional duration
   const pat = /(\|+:?|:\|+)|([zx])([\d]*\/?[\d]*)?|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
   let m;
 
   while ((m = pat.exec(noteText)) !== null) {
-    // Check if this is a bar line - reset accidentals
+    // Skip bar lines - they don't affect accidentals in ABC (accidentals don't carry through bars)
     if (m[1]) {
-      activeAccidentals = {};
       continue;
     }
 
@@ -257,26 +258,29 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
 
     const base = letter.toUpperCase();
     let accStr = '';
+    let usesFlat = false;
 
-    // Apply accidentals
+    // ABC accidentals: apply ONLY to the note they immediately precede
+    // Notes without explicit accidentals use KEY SIGNATURE only (no bar-carry)
     if (acc) {
       if (acc.includes('^')) {
         pitch += acc.length;
-        activeAccidentals[base] = acc.length;
         accStr = acc;
       } else if (acc.includes('_')) {
         pitch -= acc.length;
-        activeAccidentals[base] = -acc.length;
         accStr = acc;
+        usesFlat = true;
       } else if (acc === '=') {
-        activeAccidentals[base] = 0;
+        // Natural sign - explicitly override key signature for this note
         accStr = '=';
       }
-    } else if (base in activeAccidentals) {
-      pitch += activeAccidentals[base];
     } else {
+      // No explicit accidental - use key signature
       if (keySignature.includes(base + '#')) pitch += 1;
-      if (keySignature.includes(base + 'b')) pitch -= 1;
+      if (keySignature.includes(base + 'b')) {
+        pitch -= 1;
+        usesFlat = true;
+      }
     }
 
     // Parse duration
@@ -290,13 +294,17 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
       }
     }
 
+    // Use flat display if this note uses a flat (explicit or from key sig)
+    const noteUsesFlat = usesFlat || (keyUsesFlats && !accStr.includes('^'));
+
     notes.push(
       new NoteEvent(
         pitch,
         dur * 4,
         currentOnset,
         computeScaleDegree(pitch, tonic, mode),
-        accStr + letter + (octMod || '') + (durStr || '')
+        accStr + letter + (octMod || '') + (durStr || ''),
+        noteUsesFlat
       )
     );
     currentOnset += dur * 4;

@@ -1203,7 +1203,9 @@ export function testTonalAnswer(subject, mode, keyInfo, formatter) {
       observations.push({ type: 'info', description: m.description });
     }
     if (mutationPoint !== null) {
-      observations.push({ type: 'info', description: `Real transposition resumes at note ${mutationPoint + 1}` });
+      const mutationNote = subject[mutationPoint];
+      const beatPos = mutationNote && formatter ? formatter.formatBeat(mutationNote.onset) : `note ${mutationPoint + 1}`;
+      observations.push({ type: 'info', description: `Real transposition resumes at ${beatPos}` });
     }
   }
 

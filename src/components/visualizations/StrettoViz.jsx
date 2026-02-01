@@ -162,7 +162,7 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                     fill={colors.dux} rx={4}
                   />
                   <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -193,7 +193,7 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                     fill={colors.comes} rx={4}
                   />
                   <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -208,8 +208,9 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               // Use pitches from the interval point data (which correctly captures held notes)
               const y1 = pToY(pt.duxPitch);
               const y2 = pToY(pt.comesPitch);
-              const regionTop = Math.min(y1, y2) - noteHeight / 2;
-              const regionHeight = Math.abs(y2 - y1) + noteHeight;
+              // Full-height vertical bar instead of spanning between notes
+              const regionTop = headerHeight;
+              const regionHeight = h - headerHeight - 18;
               const midY = (y1 + y2) / 2;
 
               // Calculate region width (extend to next interval or use default)

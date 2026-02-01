@@ -317,7 +317,7 @@ export function UnifiedCounterpointViz({
                     rx={4}
                   />
                   <text x={x + noteWidth/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -338,7 +338,7 @@ export function UnifiedCounterpointViz({
                     opacity={0.85}
                   />
                   <text x={x + noteWidth/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -374,12 +374,12 @@ export function UnifiedCounterpointViz({
                   onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
                   onMouseLeave={() => setHighlightedOnset(null)}
                 >
-                  {/* Clickable region with semantic fill */}
+                  {/* Full-height vertical bar */}
                   <rect
                     x={x - 2}
-                    y={Math.min(y1, y2) - noteHeight/2}
+                    y={headerHeight}
                     width={regionWidth}
-                    height={Math.abs(y2 - y1) + noteHeight}
+                    height={h - headerHeight - 25}
                     fill={style.fill}
                     opacity={isSelected || isHighlighted ? 0.9 : 0.5}
                     rx={4}
