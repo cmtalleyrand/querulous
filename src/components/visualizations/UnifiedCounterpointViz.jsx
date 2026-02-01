@@ -4,14 +4,22 @@ import { Simultaneity } from '../../types';
 import { scoreDissonance } from '../../utils/dissonanceScoring';
 import { generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
 
-// Transposition options
+// Transposition options - includes octaves, fifths, fourths, sixths, and thirds
 const TRANSPOSITION_OPTIONS = [
   { value: 12, label: '+P8 (up octave)', shortLabel: '+8ve' },
+  { value: 9, label: '+M6 (up major 6th)', shortLabel: '+M6' },
+  { value: 8, label: '+m6 (up minor 6th)', shortLabel: '+m6' },
   { value: 7, label: '+P5 (up fifth)', shortLabel: '+5th' },
   { value: 5, label: '+P4 (up fourth)', shortLabel: '+4th' },
+  { value: 4, label: '+M3 (up major 3rd)', shortLabel: '+M3' },
+  { value: 3, label: '+m3 (up minor 3rd)', shortLabel: '+m3' },
   { value: 0, label: 'Original', shortLabel: 'orig' },
+  { value: -3, label: '-m3 (down minor 3rd)', shortLabel: '-m3' },
+  { value: -4, label: '-M3 (down major 3rd)', shortLabel: '-M3' },
   { value: -5, label: '-P4 (down fourth)', shortLabel: '-4th' },
   { value: -7, label: '-P5 (down fifth)', shortLabel: '-5th' },
+  { value: -8, label: '-m6 (down minor 6th)', shortLabel: '-m6' },
+  { value: -9, label: '-M6 (down major 6th)', shortLabel: '-M6' },
   { value: -12, label: '-P8 (down octave)', shortLabel: '-8ve' },
   { value: -19, label: '-P12 (down 12th)', shortLabel: '-12th' },
   { value: -24, label: '-P15 (down 2 octaves)', shortLabel: '-15th' },
@@ -516,7 +524,9 @@ export function UnifiedCounterpointViz({
                   <div style={{ backgroundColor: '#f8fafc', borderRadius: '6px', padding: '10px', fontSize: '12px' }}>
                     <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>Scoring Details:</div>
                     {pt.scoreDetails.map((detail, i) => (
-                      <div key={i} style={{ color: '#64748b', marginBottom: '2px' }}>{detail}</div>
+                      <div key={i} style={{ color: '#64748b', marginBottom: '2px' }}>
+                        {typeof detail === 'object' ? detail.text : detail}
+                      </div>
                     ))}
                   </div>
                 )}

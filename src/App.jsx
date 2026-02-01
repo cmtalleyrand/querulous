@@ -13,6 +13,7 @@ import {
   ABCBox,
   ScoreDashboard,
   IssuesSummary,
+  ChordAnalysisDisplay,
 } from './components';
 import {
   NOTE_TO_MIDI,
@@ -945,6 +946,12 @@ export default function App() {
                 }}
               />
               <ObservationList observations={results.harmonicImplication.observations} />
+              {results.harmonicImplication.chordAnalysis && (
+                <ChordAnalysisDisplay
+                  chordAnalysis={results.harmonicImplication.chordAnalysis}
+                  formatter={results.formatter}
+                />
+              )}
             </Section>
 
             {/* Sequences */}

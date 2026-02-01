@@ -15,13 +15,13 @@ export const VIZ_COLORS = {
   dissonantProblematic: '#dc2626',// Red-600 - problematic (score > -3)
   dissonantSevere: '#b91c1c',     // Red-700 - severe issues (score <= -3)
 
-  // Semi-transparent fills for regions
-  consonantFill: 'rgba(34, 197, 94, 0.35)',
-  perfectFill: 'rgba(59, 130, 246, 0.3)',
-  dissonantGoodFill: 'rgba(139, 92, 246, 0.35)',
-  dissonantMarginalFill: 'rgba(202, 138, 4, 0.35)',
-  dissonantBadFill: 'rgba(234, 88, 12, 0.4)',
-  dissonantSevereFill: 'rgba(220, 38, 38, 0.4)',
+  // Semi-transparent fills for regions (muted, more opaque)
+  consonantFill: 'rgba(74, 158, 98, 0.55)',
+  perfectFill: 'rgba(82, 120, 166, 0.50)',
+  dissonantGoodFill: 'rgba(130, 100, 180, 0.50)',
+  dissonantMarginalFill: 'rgba(178, 140, 60, 0.50)',
+  dissonantBadFill: 'rgba(180, 100, 50, 0.55)',
+  dissonantSevereFill: 'rgba(170, 70, 70, 0.55)',
 
   // Voice colors (for dux/comes, subject/CS)
   voiceDux: '#4f46e5',            // Indigo-600 - dux/subject
@@ -61,7 +61,7 @@ export function getIntervalStyle({ isConsonant, isPerfect, score = 0, category }
       return {
         color: '#0891b2',
         bg: '#cffafe',
-        fill: '#67e8f9',
+        fill: 'rgba(80, 160, 180, 0.50)',
         label: 'Preparation',
       };
     }
@@ -69,7 +69,7 @@ export function getIntervalStyle({ isConsonant, isPerfect, score = 0, category }
       return {
         color: '#059669',
         bg: '#a7f3d0',
-        fill: '#6ee7b7',
+        fill: 'rgba(60, 145, 100, 0.50)',
         label: 'Good resolution',
       };
     }
@@ -77,7 +77,7 @@ export function getIntervalStyle({ isConsonant, isPerfect, score = 0, category }
       return {
         color: '#ea580c',
         bg: '#fed7aa',
-        fill: '#fdba74',
+        fill: 'rgba(190, 130, 70, 0.50)',
         label: 'Poor resolution',
       };
     }

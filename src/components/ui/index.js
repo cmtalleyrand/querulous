@@ -5,3 +5,4 @@ export { Select } from './Select';
 export { ABCBox } from './ABCBox';
 export { InfoButton, HelpModal } from './InfoButton';
 export { IssuesSummary } from './IssuesSummary';
+export { ChordAnalysisDisplay } from './ChordAnalysisDisplay';
