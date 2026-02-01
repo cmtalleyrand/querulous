@@ -11,8 +11,11 @@
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|
 | Areas in viz | **FIXED** - now uses full-height vertical bars | [ ] |
-| UnifiedCounterpointViz | **RESTORED** - re-enabled in App.jsx | [ ] Confirm works |
-| Color scheme consistency | Used VIZ_COLORS in IntervalAnalysisViz | [ ] |
+| UnifiedCounterpointViz | **FIXED** - crash on click resolved | [ ] Confirm works |
+| Color scheme | **IMPROVED** - muted tones, 0.50-0.55 opacity | [ ] |
+| Voice selection | **WORKS** - Subject, Answer, CS1, CS2 selectable | [ ] |
+| Transposition intervals | **ADDED** - thirds and sixths (±m3, M3, m6, M6) | [ ] |
+| Harmonic analysis display | **ADDED** - ChordAnalysisDisplay in Harmonic Implication | [ ] |
 
 ### Scoring
 | Issue | Claude Check | User Check |
@@ -50,6 +53,10 @@
 ## CHANGELOG (What Claude Has Done)
 
 ### 2026-02-01 (Latest)
+- **FIXED** React error #31 - viz crash on click (object rendered as child)
+- **IMPROVED** viz colors - less garish, more opaque (0.50-0.55 alpha)
+- **ADDED** thirds and sixths to transposition options (±m3, ±M3, ±m6, ±M6)
+- **ADDED** ChordAnalysisDisplay - beat-by-beat harmonic analysis now shown to user
 - **FIXED** ABC parsing - accidentals no longer carry through bars (was wrong)
 - **FIXED** P4 checkbox - now actually respects user setting
 - **REMOVED** useless "Mutation: Note N" field from tonal answer
@@ -83,4 +90,4 @@
 - Harmonic analysis module (harmonicAnalysis.js)
 
 ---
-Last updated: 2026-01-31 (by Claude)
+Last updated: 2026-02-01 (by Claude)
