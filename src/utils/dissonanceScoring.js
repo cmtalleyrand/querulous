@@ -91,19 +91,16 @@ export function createAnalysisContext(options = {}) {
 }
 
 /**
- * Check if P4 should be treated as dissonant based on voice positions
- * In two-voice counterpoint, P4 against the bass is always dissonant.
+ * Check if P4 should be treated as dissonant based on user setting
+ * Default behavior: P4 is treated as consonant (unchecked checkbox)
+ * When checkbox is checked: P4 is treated as dissonant
  * @param {Simultaneity} sim - The simultaneity to check
  * @param {Object} ctx - Analysis context
  * @returns {boolean}
  */
 function isP4DissonantInContext(sim, ctx) {
-  // If user forced all P4s as dissonant, respect that
-  if (ctx.treatP4AsDissonant) return true;
-
-  // In two-voice counterpoint, the lower voice IS the bass
-  // P4 sounding against the bass is dissonant
-  return true; // In 2-voice texture, P4 is generally treated as dissonant
+  // Return based on user's checkbox setting
+  return ctx.treatP4AsDissonant === true;
 }
 
 /**

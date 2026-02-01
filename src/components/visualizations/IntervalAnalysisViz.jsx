@@ -304,7 +304,7 @@ export function IntervalAnalysisViz({
                     fill={voice1.color} rx={4} />
                   <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500"
                     style={{ pointerEvents: 'none' }}>
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -338,7 +338,7 @@ export function IntervalAnalysisViz({
                     fill={voice2.color} rx={4} opacity={0.9} />
                   <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500"
                     style={{ pointerEvents: 'none' }}>
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );

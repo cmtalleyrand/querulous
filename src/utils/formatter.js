@@ -148,9 +148,13 @@ export class BeatFormatter {
 
 /**
  * Get pitch name from MIDI number
+ * @param {number} midi - MIDI note number
+ * @param {boolean} preferFlats - If true, use flats (Bb, Eb, etc.) instead of sharps
  */
-export function pitchName(midi) {
-  const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+export function pitchName(midi, preferFlats = false) {
+  const sharpNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const flatNames = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+  const names = preferFlats ? flatNames : sharpNames;
   return names[midi % 12] + (Math.floor(midi / 12) - 1);
 }
 

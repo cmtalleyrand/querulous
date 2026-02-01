@@ -162,7 +162,7 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                     fill={colors.dux} rx={4}
                   />
                   <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -193,7 +193,7 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                     fill={colors.comes} rx={4}
                   />
                   <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );

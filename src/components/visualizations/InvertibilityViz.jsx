@@ -203,7 +203,7 @@ export function InvertibilityViz({
                   <rect x={x} y={y - noteHeight/2 + 1} width={width} height={noteHeight - 2}
                     fill={VIZ_COLORS.voiceDux} rx={3} />
                   <text x={x + width/2} y={y + 3} fontSize="9" fill="white" textAnchor="middle">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -219,7 +219,7 @@ export function InvertibilityViz({
                   <rect x={x} y={y - noteHeight/2 + 1} width={width} height={noteHeight - 2}
                     fill={VIZ_COLORS.voiceCSAbove} rx={3} opacity={viewMode === 'overlay' ? 0.7 : 1} />
                   <text x={x + width/2} y={y + 3} fontSize="9" fill="white" textAnchor="middle">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -237,7 +237,7 @@ export function InvertibilityViz({
                     strokeDasharray={viewMode === 'overlay' ? '3,2' : 'none'}
                     stroke={viewMode === 'overlay' ? VIZ_COLORS.voiceCSBelow : 'none'} />
                   <text x={x + width/2} y={y + 3} fontSize="9" fill={viewMode === 'overlay' ? '#92400e' : 'white'} textAnchor="middle">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );

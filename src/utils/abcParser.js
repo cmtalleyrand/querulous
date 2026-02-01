@@ -211,6 +211,9 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
   // Clean up the note text - preserve bar lines for accidental reset, remove other non-note elements
   noteText = noteText.replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
 
+  // Determine if key signature uses flats (for display preference)
+  const keyUsesFlats = keySignature.some(s => s.endsWith('b'));
+
   const notes = [];
   let currentOnset = 0;
   let activeAccidentals = {};
@@ -290,13 +293,17 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
       }
     }
 
+    // Prefer flats if key uses flats OR if this note was spelled with a flat
+    const noteUsesFlat = accStr.includes('_') || (keyUsesFlats && !accStr.includes('^'));
+
     notes.push(
       new NoteEvent(
         pitch,
         dur * 4,
         currentOnset,
         computeScaleDegree(pitch, tonic, mode),
-        accStr + letter + (octMod || '') + (durStr || '')
+        accStr + letter + (octMod || '') + (durStr || ''),
+        noteUsesFlat
       )
     );
     currentOnset += dur * 4;

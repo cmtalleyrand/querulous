@@ -317,7 +317,7 @@ export function UnifiedCounterpointViz({
                     rx={4}
                   />
                   <text x={x + noteWidth/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
@@ -338,7 +338,7 @@ export function UnifiedCounterpointViz({
                     opacity={0.85}
                   />
                   <text x={x + noteWidth/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-                    {pitchName(n.pitch).replace(/\d/, '')}
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );

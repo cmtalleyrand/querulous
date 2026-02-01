@@ -17,12 +17,13 @@ export class ScaleDegree {
  * Represents a single note event with pitch, duration, timing, and scale degree
  */
 export class NoteEvent {
-  constructor(pitch, duration, onset, scaleDegree, abcNote = '') {
+  constructor(pitch, duration, onset, scaleDegree, abcNote = '', preferFlats = false) {
     this.pitch = pitch;
     this.duration = duration;
     this.onset = onset;
     this.scaleDegree = scaleDegree;
     this.abcNote = abcNote;
+    this.preferFlats = preferFlats; // True if key signature uses flats or note was spelled with flat
   }
 }
 
