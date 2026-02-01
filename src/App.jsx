@@ -1126,13 +1126,6 @@ export default function App() {
               <DataRow
                 data={{
                   Type: results.tonalAnswer.answerType,
-                  Mutation: results.tonalAnswer.mutationPoint !== null
-                    ? (() => {
-                        const noteIdx = results.tonalAnswer.mutationPoint;
-                        const note = results.subject[noteIdx];
-                        return note ? results.formatter.formatBeat(note.onset) : `Note ${noteIdx + 1}`;
-                      })()
-                    : 'N/A',
                   Junction: `${results.tonalAnswer.junction.p} (${results.tonalAnswer.junction.q})`,
                 }}
               />
@@ -1224,11 +1217,7 @@ export default function App() {
                     const warningCount = s.warningCount || 0;
 
                     // Get the dissonance score for this stretto
-                    const rawScore = s.dissonanceAnalysis?.summary?.averageScore || 0;
-                    // Adjust display score: clean strettos get bonus, issues get penalty
-                    // This makes "clean" strettos visibly better even if raw avg is lower
-                    const issueAdjustment = s.clean ? 0.3 : (issueCount > 0 ? -0.15 * Math.min(issueCount, 3) : 0);
-                    const strettoScore = rawScore + issueAdjustment;
+                    const strettoScore = s.dissonanceAnalysis?.summary?.averageScore || 0;
 
                     // Gradation: based on score AND issues
                     let bgColor, borderColor, textColor, badge, scoreDisplay;
