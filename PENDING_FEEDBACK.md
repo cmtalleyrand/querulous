@@ -22,6 +22,9 @@
 | Invertibility double-count | **DONE** - removed separate penalty (scoring.js:600-602) | [x] User confirmed |
 | Sequences linked to scoring | **DONE** - 75% penalty reduction in sequences | [x] User confirmed |
 
+### Needs Clarification
+- [ ] Visualization issues with octave displacement - what specific issue?
+
 ### For Later
 - [ ] Second countersubject support (CS2)
 
@@ -46,7 +49,13 @@
 
 ## CHANGELOG (What Claude Has Done)
 
-### 2026-01-31 (Latest)
+### 2026-02-01 (Latest)
+- **FIXED** ABC parsing - accidentals no longer carry through bars (was wrong)
+- **FIXED** P4 checkbox - now actually respects user setting
+- **REMOVED** useless "Mutation: Note N" field from tonal answer
+- **REVERTED** bad stretto score adjustment
+
+### 2026-01-31
 - **FIXED** viz areas - now full-height vertical bars instead of spanning between notes
 - **RESTORED** UnifiedCounterpointViz in App.jsx (was wrongly disabled)
 - **FIXED** getMeter error in IntervalTimeline.jsx:56 → meter already passed as prop
