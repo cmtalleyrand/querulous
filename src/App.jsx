@@ -26,6 +26,7 @@ import {
   CS_POSITION_OPTIONS,
   TIME_SIGNATURE_OPTIONS,
   BeatFormatter,
+  pitchName,
   extractABCHeaders,
   parseABC,
   generateAnswerABC,
@@ -1033,7 +1034,7 @@ export default function App() {
                     fontSize: '12px',
                     color: '#0369a1',
                   }}>
-                    Click a sequence to highlight it in the visualization above. Sequences are shown with a golden glow in the Subject piano roll.
+                    Click a sequence to highlight it in the visualization above. Sequences are shown with a hatching pattern in the Subject piano roll.
                   </div>
                   {allSequences.map((voiceSeqs, voiceIdx) => (
                     <div key={voiceIdx} style={{ marginBottom: voiceIdx < allSequences.length - 1 ? '16px' : 0 }}>
@@ -1106,7 +1107,15 @@ export default function App() {
                               </span>
                             </div>
                             <div style={{ fontSize: '12px', color: '#78350f', marginBottom: '6px' }}>
-                              <strong>Notes {seq.startNote}–{seq.endNote}</strong> in {voiceSeqs.voice.toLowerCase()}
+                              <strong>
+                                {(() => {
+                                  const seqNotes = voiceSeqs.notes.slice(seq.startNote - 1, seq.endNote);
+                                  if (seqNotes.length <= 6) {
+                                    return seqNotes.map(n => pitchName(n.pitch, n.preferFlats).replace(/\d/, '')).join(' ');
+                                  }
+                                  return `${seqNotes.slice(0, 3).map(n => pitchName(n.pitch, n.preferFlats).replace(/\d/, '')).join(' ')} ... ${seqNotes.slice(-3).map(n => pitchName(n.pitch, n.preferFlats).replace(/\d/, '')).join(' ')}`;
+                                })()}
+                              </strong>
                               <span style={{ marginLeft: '8px', opacity: 0.7 }}>({seq.unitLength}-note pattern)</span>
                             </div>
                             <div style={{ fontFamily: 'monospace', fontSize: '11px', color: '#92400e', backgroundColor: 'rgba(255,255,255,0.5)', padding: '8px', borderRadius: '4px' }}>

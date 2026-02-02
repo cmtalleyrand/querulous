@@ -27,11 +27,11 @@ const TRANSPOSITION_OPTIONS = [
 
 /**
  * Unified Counterpoint Visualization
- * Combines voice comparison, invertibility analysis, and transposition testing
- * in a single flexible view using the stretto-style color scheme.
+ * Clean design matching StrettoViz - notes as colored rectangles,
+ * interval labels only on hover, minimal visual clutter.
  */
 export function UnifiedCounterpointViz({
-  voices,           // { subject: [], answer: [], cs1: [], cs2: [] }
+  voices,
   formatter,
   meter = [4, 4],
   defaultVoice1 = 'answer',
@@ -42,9 +42,8 @@ export function UnifiedCounterpointViz({
   const [voice1Key, setVoice1Key] = useState(defaultVoice1);
   const [voice2Key, setVoice2Key] = useState(defaultVoice2);
   const [transposition, setTransposition] = useState(defaultTransposition);
-  const [selectedBeat, setSelectedBeat] = useState(null);
+  const [selectedInterval, setSelectedInterval] = useState(null);
   const [highlightedOnset, setHighlightedOnset] = useState(null);
-  const [showDetails, setShowDetails] = useState(true);
 
   // Available voices for selection
   const availableVoices = useMemo(() => {
@@ -56,7 +55,6 @@ export function UnifiedCounterpointViz({
     return available;
   }, [voices]);
 
-  // Get selected voices
   const voice1 = voices[voice1Key];
   const voice2 = voices[voice2Key];
   const voice1Info = availableVoices.find(v => v.key === voice1Key);
@@ -66,13 +64,11 @@ export function UnifiedCounterpointViz({
   const analysis = useMemo(() => {
     if (!voice1?.length || !voice2?.length) return null;
 
-    // Apply transposition to voice 2
     const transposedVoice2 = voice2.map(n => ({
       ...n,
       pitch: n.pitch + transposition,
     }));
 
-    // Find all simultaneities
     const findSims = (v1, v2) => {
       const sims = [];
       for (const n1 of v1) {
@@ -92,7 +88,6 @@ export function UnifiedCounterpointViz({
 
     const sims = findSims(voice1, transposedVoice2);
 
-    // Score each simultaneity
     const intervalHistory = [];
     const intervalPoints = [];
     const beatMap = new Map();
@@ -115,7 +110,6 @@ export function UnifiedCounterpointViz({
           score: scoring.score,
           scoreDetails: scoring.details,
           type: scoring.type,
-          patterns: scoring.patterns,
         };
         beatMap.set(snapBeat, point);
         intervalPoints.push(point);
@@ -123,7 +117,6 @@ export function UnifiedCounterpointViz({
       }
     }
 
-    // Calculate pitch ranges
     const allPitches = [
       ...voice1.map(n => n.pitch),
       ...transposedVoice2.map(n => n.pitch),
@@ -133,11 +126,9 @@ export function UnifiedCounterpointViz({
       ...transposedVoice2.map(n => n.onset + n.duration)
     );
 
-    // Identify issues (negative scores on strong beats)
     const issues = intervalPoints.filter(p => !p.isConsonant && p.score < 0 && p.isStrong);
     const warnings = intervalPoints.filter(p => !p.isConsonant && p.score < 0 && !p.isStrong);
 
-    // Calculate aggregate score
     const dissonances = intervalPoints.filter(p => !p.isConsonant);
     const avgScore = dissonances.length > 0
       ? dissonances.reduce((sum, p) => sum + p.score, 0) / dissonances.length
@@ -146,7 +137,6 @@ export function UnifiedCounterpointViz({
     return {
       voice1,
       transposedVoice2,
-      sims,
       intervalPoints,
       beatMap,
       issues,
@@ -168,26 +158,31 @@ export function UnifiedCounterpointViz({
 
   const { minPitch, maxPitch, maxTime, intervalPoints, beatMap, issues, warnings, avgScore } = analysis;
   const pRange = maxPitch - minPitch;
-  const noteHeight = Math.max(14, Math.min(18, 300 / pRange));
-  const headerHeight = 36;
-  const h = pRange * noteHeight + headerHeight + 30;
-  const pixelsPerBeat = 60;
-  const w = Math.max(600, maxTime * pixelsPerBeat + 120);
+  const noteHeight = 18;
+  const headerHeight = 32;
+  const h = pRange * noteHeight + headerHeight + 20;
+  const pixelsPerBeat = 70;
+  const w = Math.max(500, maxTime * pixelsPerBeat + 100);
 
-  const tScale = (w - 100) / maxTime;
-  const pToY = (p) => h - 24 - (p - minPitch) * noteHeight;
-  const tToX = (t) => 70 + t * tScale;
+  const tScale = (w - 80) / maxTime;
+  const pToY = (p) => h - 20 - (p - minPitch) * noteHeight;
+  const tToX = (t) => 60 + t * tScale;
 
   const hasIssues = issues.length > 0;
   const hasWarnings = warnings.length > 0;
 
-  // Colors from stretto viz
   const colors = {
     bg: hasIssues ? VIZ_COLORS.issueBackground : hasWarnings ? VIZ_COLORS.warningBackground : VIZ_COLORS.cleanBackground,
     border: hasIssues ? VIZ_COLORS.issueBorder : hasWarnings ? VIZ_COLORS.warningBorder : VIZ_COLORS.cleanBorder,
+    highlight: VIZ_COLORS.highlight,
   };
 
   const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
+
+  const handleIntervalClick = (pt) => {
+    setSelectedInterval(selectedInterval?.onset === pt.onset ? null : pt);
+    setHighlightedOnset(getOnsetKey(pt.onset));
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -202,11 +197,8 @@ export function UnifiedCounterpointViz({
         borderRadius: '8px',
         border: '1px solid #e2e8f0',
       }}>
-        {/* Voice 1 selector */}
         <div>
-          <label style={{ display: 'block', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
-            Voice 1
-          </label>
+          <label style={{ display: 'block', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Voice 1</label>
           <select
             value={voice1Key}
             onChange={(e) => setVoice1Key(e.target.value)}
@@ -220,11 +212,8 @@ export function UnifiedCounterpointViz({
 
         <div style={{ fontSize: '16px', color: '#94a3b8', paddingBottom: '8px' }}>vs</div>
 
-        {/* Voice 2 selector */}
         <div>
-          <label style={{ display: 'block', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
-            Voice 2
-          </label>
+          <label style={{ display: 'block', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Voice 2</label>
           <select
             value={voice2Key}
             onChange={(e) => setVoice2Key(e.target.value)}
@@ -236,11 +225,8 @@ export function UnifiedCounterpointViz({
           </select>
         </div>
 
-        {/* Transposition */}
         <div>
-          <label style={{ display: 'block', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
-            Transpose Voice 2
-          </label>
+          <label style={{ display: 'block', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Transpose Voice 2</label>
           <select
             value={transposition}
             onChange={(e) => setTransposition(parseInt(e.target.value))}
@@ -252,7 +238,6 @@ export function UnifiedCounterpointViz({
           </select>
         </div>
 
-        {/* Score display */}
         <div style={{
           marginLeft: 'auto',
           padding: '8px 16px',
@@ -282,11 +267,11 @@ export function UnifiedCounterpointViz({
           <svg width={w} height={h} style={{ display: 'block' }}>
             {/* Header */}
             <rect x={0} y={0} width={w} height={headerHeight} fill="rgba(0,0,0,0.04)" />
-            <text x={16} y={24} fontSize="14" fontWeight="600" fill="#374151">
+            <text x={16} y={22} fontSize="14" fontWeight="600" fill="#374151">
               {voice1Info.label} vs {voice2Info.label}
               {transposition !== 0 && ` (${TRANSPOSITION_OPTIONS.find(o => o.value === transposition)?.shortLabel})`}
             </text>
-            <text x={w - 16} y={24} fontSize="12" fill="#6b7280" textAnchor="end">
+            <text x={w - 16} y={22} fontSize="12" fill="#6b7280" textAnchor="end">
               {hasIssues ? `${issues.length} issue${issues.length !== 1 ? 's' : ''}` :
                hasWarnings ? `${warnings.length} warning${warnings.length !== 1 ? 's' : ''}` : 'Clean'}
             </text>
@@ -294,37 +279,70 @@ export function UnifiedCounterpointViz({
             {/* Beat grid */}
             {(() => {
               const gridLines = generateGridLines(maxTime, meter, { showSubdivisions: false });
-              return gridLines.map((line, i) => (
-                <g key={`grid-${i}`}>
-                  <line
-                    x1={tToX(line.time)} y1={headerHeight}
-                    x2={tToX(line.time)} y2={h - 20}
-                    stroke={line.isDownbeat ? VIZ_COLORS.gridDownbeat : (line.isMainBeat ? VIZ_COLORS.gridMainBeat : VIZ_COLORS.gridSubdivision)}
-                    strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)}
-                  />
-                  {line.measureNum && (
-                    <text x={tToX(line.time)} y={h - 6} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
-                      m.{line.measureNum}
-                    </text>
-                  )}
-                </g>
-              ));
+              return gridLines.map((line, i) => {
+                const x = tToX(line.time);
+                return (
+                  <g key={`grid-${i}`}>
+                    <line
+                      x1={x} y1={headerHeight} x2={x} y2={h - 18}
+                      stroke={line.isDownbeat ? '#64748b' : (line.isMainBeat ? '#9ca3af' : '#e5e7eb')}
+                      strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)}
+                    />
+                    {line.measureNum ? (
+                      <text x={x} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
+                        m.{line.measureNum}
+                      </text>
+                    ) : line.beatNum ? (
+                      <text x={x} y={h - 4} fontSize="9" fill="#9ca3af" textAnchor="middle">
+                        {line.beatNum}
+                      </text>
+                    ) : null}
+                  </g>
+                );
+              });
+            })()}
+
+            {/* Voice labels */}
+            {(() => {
+              const v1AvgPitch = analysis.voice1.reduce((s, n) => s + n.pitch, 0) / analysis.voice1.length;
+              const v2AvgPitch = analysis.transposedVoice2.reduce((s, n) => s + n.pitch, 0) / analysis.transposedVoice2.length;
+              const v1Higher = v1AvgPitch > v2AvgPitch;
+              return (
+                <>
+                  <text x={12} y={pToY(maxPitch - 1) + 5} fontSize="11" fontWeight="600" fill={v1Higher ? voice1Info.color : voice2Info.color}>
+                    {v1Higher ? voice1Info.label : voice2Info.label} (upper)
+                  </text>
+                  <text x={12} y={pToY(minPitch + 1) + 5} fontSize="11" fontWeight="600" fill={v1Higher ? voice2Info.color : voice1Info.color}>
+                    {v1Higher ? voice2Info.label : voice1Info.label} (lower)
+                  </text>
+                </>
+              );
             })()}
 
             {/* Voice 1 notes */}
             {analysis.voice1.map((n, i) => {
               const x = tToX(n.onset);
               const y = pToY(n.pitch);
-              const noteWidth = Math.max(8, n.duration * tScale - 2);
+              const width = Math.max(8, n.duration * tScale - 3);
+              const isHighlighted = highlightedOnset !== null &&
+                intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
+                  n.onset <= pt.onset && pt.onset < n.onset + n.duration);
+
               return (
                 <g key={`v1-${i}`}>
+                  {isHighlighted && (
+                    <rect
+                      x={x - 4} y={y - noteHeight/2 - 3}
+                      width={width + 8} height={noteHeight + 6}
+                      fill={colors.highlight} rx={5} opacity={0.5}
+                    />
+                  )}
                   <rect
-                    x={x} y={y - noteHeight/2 + 1}
-                    width={noteWidth} height={noteHeight - 2}
-                    fill={voice1Info.color}
-                    rx={4}
+                    x={x} y={y - noteHeight/2 + 2}
+                    width={width} height={noteHeight - 4}
+                    fill={voice1Info.color} rx={4}
                   />
-                  <text x={x + noteWidth/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
+                  <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
                     {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
@@ -335,128 +353,127 @@ export function UnifiedCounterpointViz({
             {analysis.transposedVoice2.map((n, i) => {
               const x = tToX(n.onset);
               const y = pToY(n.pitch);
-              const noteWidth = Math.max(8, n.duration * tScale - 2);
+              const width = Math.max(8, n.duration * tScale - 3);
+              const isHighlighted = highlightedOnset !== null &&
+                intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
+                  n.onset <= pt.onset && pt.onset < n.onset + n.duration);
+
               return (
                 <g key={`v2-${i}`}>
+                  {isHighlighted && (
+                    <rect
+                      x={x - 4} y={y - noteHeight/2 - 3}
+                      width={width + 8} height={noteHeight + 6}
+                      fill={colors.highlight} rx={5} opacity={0.5}
+                    />
+                  )}
                   <rect
-                    x={x} y={y - noteHeight/2 + 1}
-                    width={noteWidth} height={noteHeight - 2}
-                    fill={voice2Info.color}
-                    rx={4}
-                    opacity={0.85}
+                    x={x} y={y - noteHeight/2 + 2}
+                    width={width} height={noteHeight - 4}
+                    fill={voice2Info.color} rx={4}
                   />
-                  <text x={x + noteWidth/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
+                  <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
                     {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
                   </text>
                 </g>
               );
             })}
 
-            {/* Interval markers and regions */}
+            {/* Interval regions - subtle, only show label on hover */}
             {intervalPoints.map((pt, i) => {
               const x = tToX(pt.onset);
+              const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
+              const isSelected = selectedInterval?.onset === pt.onset;
+
               const y1 = pToY(pt.v1Pitch);
               const y2 = pToY(pt.v2Pitch);
-              const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
-              const isSelected = selectedBeat === getOnsetKey(pt.onset);
+              const midY = (y1 + y2) / 2;
+
+              const nextPt = intervalPoints[i + 1];
+              const regionWidth = nextPt
+                ? Math.max(4, (nextPt.onset - pt.onset) * tScale - 2)
+                : Math.max(20, tScale * 0.5);
+
+              const isPerfect = [1, 5, 8].includes(pt.intervalClass);
               const style = getIntervalStyle({
                 isConsonant: pt.isConsonant,
-                isPerfect: [1, 5, 8].includes(pt.intervalClass),
-                score: pt.score,
+                isPerfect,
+                score: pt.score || 0,
                 category: pt.category,
               });
 
-              // Calculate region width
-              const nextPt = intervalPoints[i + 1];
-              const regionWidth = nextPt
-                ? Math.max(20, tToX(nextPt.onset) - x - 4)
-                : 30;
+              const label = pt.isConsonant
+                ? pt.intervalClass.toString()
+                : (pt.dissonanceLabel || '!');
 
               return (
                 <g
                   key={`int-${i}`}
                   style={{ cursor: 'pointer' }}
-                  onClick={() => {
-                    setSelectedBeat(isSelected ? null : getOnsetKey(pt.onset));
-                  }}
+                  onClick={() => handleIntervalClick(pt)}
                   onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
-                  onMouseLeave={() => setHighlightedOnset(null)}
+                  onMouseLeave={() => !isSelected && setHighlightedOnset(null)}
                 >
-                  {/* Full-height vertical bar */}
-                  <rect
-                    x={x - 2}
-                    y={headerHeight}
-                    width={regionWidth}
-                    height={h - headerHeight - 25}
-                    fill={style.fill}
-                    opacity={isSelected || isHighlighted ? 0.9 : 0.5}
-                    rx={4}
-                  />
+                  {/* Subtle region - only visible on hover/select for dissonances, or very faint for consonances */}
+                  {(isHighlighted || isSelected || !pt.isConsonant) && (
+                    <rect
+                      x={x}
+                      y={headerHeight}
+                      width={regionWidth}
+                      height={h - headerHeight - 18}
+                      fill={style.fill}
+                      opacity={isHighlighted || isSelected ? 0.7 : 0.15}
+                      rx={3}
+                    />
+                  )}
 
-                  {/* Interval label on hover/select */}
-                  {(isSelected || isHighlighted) && (
+                  {/* Show label only on hover/select */}
+                  {(isHighlighted || isSelected) && (
                     <g>
                       <rect
-                        x={x + regionWidth/2 - 24}
-                        y={(y1 + y2) / 2 - 12}
-                        width={48}
+                        x={x + regionWidth / 2 - 16}
+                        y={midY - 12}
+                        width={32}
                         height={24}
                         fill={style.bg}
                         stroke={style.color}
-                        strokeWidth={1.5}
+                        strokeWidth={1}
                         rx={4}
+                        opacity={0.95}
                       />
                       <text
-                        x={x + regionWidth/2}
-                        y={(y1 + y2) / 2 + 4}
-                        fontSize="11"
+                        x={x + regionWidth / 2}
+                        y={midY + 4}
+                        fontSize="12"
                         fontWeight="600"
                         fill={style.color}
                         textAnchor="middle"
                       >
-                        {pt.intervalName}
+                        {label}
                       </text>
-                    </g>
-                  )}
-
-                  {/* Score badge for dissonances */}
-                  {!pt.isConsonant && (
-                    <g>
-                      <circle
-                        cx={x + 8}
-                        cy={Math.min(y1, y2) - noteHeight/2 - 8}
-                        r={10}
-                        fill={style.color}
-                      />
-                      <text
-                        x={x + 8}
-                        y={Math.min(y1, y2) - noteHeight/2 - 4}
-                        fontSize="9"
-                        fill="white"
-                        textAnchor="middle"
-                        fontWeight="600"
-                      >
-                        {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(1)}
-                      </text>
+                      {/* Score indicator for dissonances */}
+                      {!pt.isConsonant && (
+                        <text
+                          x={x + regionWidth / 2}
+                          y={midY + 20}
+                          fontSize="9"
+                          fill={style.color}
+                          textAnchor="middle"
+                        >
+                          {(pt.score || 0) >= 0 ? '+' : ''}{(pt.score || 0).toFixed(1)}
+                        </text>
+                      )}
                     </g>
                   )}
                 </g>
               );
             })}
-
-            {/* Legend */}
-            <g transform={`translate(${w - 200}, ${headerHeight + 8})`}>
-              <rect x={0} y={0} width={10} height={10} fill={voice1Info.color} rx={2} />
-              <text x={14} y={8} fontSize="10" fill="#4b5563">{voice1Info.label}</text>
-              <rect x={80} y={0} width={10} height={10} fill={voice2Info.color} rx={2} />
-              <text x={94} y={8} fontSize="10" fill="#4b5563">{voice2Info.label}</text>
-            </g>
           </svg>
         </div>
       </div>
 
-      {/* Selected interval detail */}
-      {selectedBeat !== null && beatMap.get(selectedBeat) && (
+      {/* Selected interval detail panel */}
+      {selectedInterval && (
         <div style={{
           backgroundColor: '#fff',
           border: '1px solid #6366f1',
@@ -464,7 +481,7 @@ export function UnifiedCounterpointViz({
           padding: '14px',
         }}>
           {(() => {
-            const pt = beatMap.get(selectedBeat);
+            const pt = selectedInterval;
             const style = getIntervalStyle({
               isConsonant: pt.isConsonant,
               isPerfect: [1, 5, 8].includes(pt.intervalClass),
@@ -501,13 +518,12 @@ export function UnifiedCounterpointViz({
                       </span>
                     )}
                     <button
-                      onClick={() => setSelectedBeat(null)}
+                      onClick={() => { setSelectedInterval(null); setHighlightedOnset(null); }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}
                     >×</button>
                   </div>
                 </div>
 
-                {/* Pitch info */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '10px' }}>
                   <div style={{ padding: '8px 12px', backgroundColor: `${voice1Info.color}15`, borderRadius: '6px', borderLeft: `3px solid ${voice1Info.color}` }}>
                     <div style={{ fontSize: '10px', color: '#64748b' }}>{voice1Info.label}</div>
@@ -519,8 +535,7 @@ export function UnifiedCounterpointViz({
                   </div>
                 </div>
 
-                {/* Score details */}
-                {pt.scoreDetails && pt.scoreDetails.length > 0 && showDetails && (
+                {pt.scoreDetails && pt.scoreDetails.length > 0 && (
                   <div style={{ backgroundColor: '#f8fafc', borderRadius: '6px', padding: '10px', fontSize: '12px' }}>
                     <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>Scoring Details:</div>
                     {pt.scoreDetails.map((detail, i) => (
@@ -557,16 +572,13 @@ export function UnifiedCounterpointViz({
           {issues.map((issue, i) => (
             <div
               key={i}
-              onClick={() => {
-                setSelectedBeat(getOnsetKey(issue.onset));
-                setHighlightedOnset(getOnsetKey(issue.onset));
-              }}
+              onClick={() => handleIntervalClick(issue)}
               style={{
                 padding: '10px 14px',
                 borderBottom: i < issues.length - 1 ? `1px solid ${VIZ_COLORS.issueBackground}` : 'none',
                 fontSize: '13px',
                 cursor: 'pointer',
-                backgroundColor: selectedBeat === getOnsetKey(issue.onset) ? '#fef2f2' : 'transparent',
+                backgroundColor: selectedInterval?.onset === issue.onset ? '#fef2f2' : 'transparent',
               }}
             >
               <span style={{ color: VIZ_COLORS.dissonantProblematic, fontWeight: '600' }}>

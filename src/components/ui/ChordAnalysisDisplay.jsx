@@ -6,8 +6,13 @@ import { useState } from 'react';
 export function ChordAnalysisDisplay({ chordAnalysis, formatter }) {
   const [expanded, setExpanded] = useState(false);
 
+  // If no data, show a placeholder
   if (!chordAnalysis || !chordAnalysis.chords || chordAnalysis.chords.length === 0) {
-    return null;
+    return (
+      <div style={{ marginTop: '12px', padding: '8px 12px', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+        <span style={{ fontSize: '12px', color: '#64748b' }}>No beat-by-beat chord analysis available</span>
+      </div>
+    );
   }
 
   const { chords, summary } = chordAnalysis;

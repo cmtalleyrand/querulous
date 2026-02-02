@@ -5,12 +5,7 @@ import { generateGridLines } from '../../utils/vizConstants';
  * Piano Roll visualization component
  * Displays notes as colored rectangles on a pitch/time grid
  * Interactive: hover for tooltips, click for detailed info
- * @param {Array} voices - Array of voice objects with notes, color, label
- * @param {string} title - Optional title for the visualization
- * @param {Array} sequenceRanges - Optional array of {start, end} note index ranges that are part of sequences
- * @param {Object} activeSequenceRange - Currently selected sequence range {start, end} for highlighting
- * @param {Object} highlightedItem - Currently highlighted item from global state {onset, endOnset}
- * @param {Array} meter - Time signature [numerator, denominator]
+ * Uses hatching patterns to indicate sequences
  */
 export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRange = null, highlightedItem = null, meter = [4, 4] }) {
   const [hoveredNote, setHoveredNote] = useState(null);
@@ -27,7 +22,6 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
   const nH = Math.max(8, Math.min(16, 200 / pRange));
   const h = pRange * nH + 44;
 
-  // Dynamic width based on duration - minimum 40 pixels per beat for readability
   const minPixelsPerBeat = 40;
   const minWidth = 300;
   const maxWidth = 800;
@@ -55,9 +49,7 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
     return `${dur} beats`;
   };
 
-  // Check if a note index is part of a sequence
   const isNoteInSequence = (voiceIndex, noteIndex) => {
-    // Only check for first voice (subject) if sequenceRanges provided
     if (voiceIndex !== 0 || !sequenceRanges || sequenceRanges.length === 0) return false;
     for (const range of sequenceRanges) {
       if (noteIndex >= range.start && noteIndex <= range.end) {
@@ -67,20 +59,17 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
     return false;
   };
 
-  // Check if a note is in the currently active (selected) sequence range
   const isNoteInActiveSequence = (voiceIndex, noteIndex) => {
     if (voiceIndex !== 0 || !activeSequenceRange) return false;
     return noteIndex >= activeSequenceRange.start && noteIndex <= activeSequenceRange.end;
   };
 
-  // Check if a note falls within the highlighted beat range
   const isNoteHighlighted = (note) => {
     if (!highlightedItem) return false;
     const noteStart = note.onset;
     const noteEnd = note.onset + note.duration;
     const hlStart = highlightedItem.onset;
     const hlEnd = highlightedItem.endOnset !== undefined ? highlightedItem.endOnset : hlStart + 0.5;
-    // Check overlap
     return noteStart < hlEnd && noteEnd > hlStart;
   };
 
@@ -126,154 +115,180 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
           role="img"
           aria-label={title || 'Piano roll visualization'}
         >
-        {/* Beat grid lines - meter-aware */}
-        {(() => {
-          const gridLines = generateGridLines(maxT, meter, { showSubdivisions: false });
+          {/* Define hatching patterns */}
+          <defs>
+            {/* Diagonal hatching for sequences */}
+            <pattern id="seqHatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="6" stroke="#64748b" strokeWidth="1.5" />
+            </pattern>
+            {/* Denser hatching for active sequences */}
+            <pattern id="seqHatchActive" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="4" stroke="#374151" strokeWidth="2" />
+            </pattern>
+            {/* Cross-hatch for active sequences */}
+            <pattern id="seqHatchCross" patternUnits="userSpaceOnUse" width="6" height="6">
+              <line x1="0" y1="0" x2="6" y2="6" stroke="#374151" strokeWidth="1" />
+              <line x1="6" y1="0" x2="0" y2="6" stroke="#374151" strokeWidth="1" />
+            </pattern>
+          </defs>
 
-          return gridLines.map((line, i) => (
-            <line
-              key={i}
-              x1={tToX(line.time)}
-              y1={14}
-              x2={tToX(line.time)}
-              y2={h - 20}
-              stroke={line.isDownbeat ? '#9ca3af' : (line.isMainBeat ? '#bdbdbd' : '#eee')}
-              strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)}
-            />
-          ));
-        })()}
+          {/* Beat grid lines */}
+          {(() => {
+            const gridLines = generateGridLines(maxT, meter, { showSubdivisions: false });
+            return gridLines.map((line, i) => (
+              <line
+                key={i}
+                x1={tToX(line.time)}
+                y1={14}
+                x2={tToX(line.time)}
+                y2={h - 20}
+                stroke={line.isDownbeat ? '#9ca3af' : (line.isMainBeat ? '#bdbdbd' : '#eee')}
+                strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)}
+              />
+            ));
+          })()}
 
-        {/* Pitch labels and lines */}
-        {labels.map((l, i) => (
-          <g key={i}>
-            <line x1={46} y1={pToY(l.p)} x2={w - 6} y2={pToY(l.p)} stroke="#eee" strokeWidth={0.5} />
-            <text x={42} y={pToY(l.p) + 3} fontSize="8" fill="#9e9e9e" textAnchor="end">
-              {l.l}
-            </text>
-          </g>
-        ))}
-
-        {/* Note rectangles */}
-        {voices.map((v, vi) =>
-          v.notes.map((n, ni) => {
-            const isHovered = hoveredNote && hoveredNote.voiceIndex === vi && hoveredNote.noteIndex === ni;
-            const isSelected = selectedNote && selectedNote.voiceIndex === vi && selectedNote.noteIndex === ni;
-            const inSequence = isNoteInSequence(vi, ni);
-            const inActiveSequence = isNoteInActiveSequence(vi, ni);
-            const isHighlit = isNoteHighlighted(n);
-            const noteData = { ...n, voiceIndex: vi, noteIndex: ni, voiceLabel: v.label, voiceColor: v.color, inSequence };
-
-            const noteX = tToX(n.onset);
-            const noteY = pToY(n.pitch) - nH / 2 + 1;
-            const noteWidth = Math.max(2, n.duration * tScale - 1);
-            const noteHeight = nH - 2;
-
-            // Determine visual emphasis level
-            const emphasisLevel = inActiveSequence ? 'active' : inSequence ? 'sequence' : isHighlit ? 'highlight' : 'normal';
-
-            return (
-              <g key={`${vi}-${ni}`}>
-                {/* Background highlight for sequences or highlighted items */}
-                {(inSequence || isHighlit) && (
-                  <rect
-                    x={noteX - 3}
-                    y={noteY - 3}
-                    width={noteWidth + 6}
-                    height={noteHeight + 6}
-                    fill={inActiveSequence ? '#f97316' : inSequence ? '#fbbf24' : '#60a5fa'}
-                    rx={5}
-                    opacity={inActiveSequence ? 0.7 : inSequence ? 0.55 : 0.5}
-                  />
-                )}
-                {/* Active sequence gets an extra glow ring */}
-                {inActiveSequence && (
-                  <rect
-                    x={noteX - 5}
-                    y={noteY - 5}
-                    width={noteWidth + 10}
-                    height={noteHeight + 10}
-                    fill="none"
-                    stroke="#ea580c"
-                    strokeWidth={2}
-                    rx={6}
-                    opacity={0.8}
-                  />
-                )}
-                <rect
-                  x={noteX}
-                  y={noteY}
-                  width={noteWidth}
-                  height={noteHeight}
-                  fill={v.color}
-                  rx={2}
-                  opacity={v.opacity || 1}
-                  stroke={
-                    isSelected ? '#000' :
-                    isHovered ? '#666' :
-                    inActiveSequence ? '#c2410c' :
-                    inSequence ? '#d97706' :
-                    isHighlit ? '#2563eb' :
-                    'none'
-                  }
-                  strokeWidth={
-                    isSelected ? 2 :
-                    isHovered ? 1 :
-                    inActiveSequence ? 2.5 :
-                    inSequence ? 2 :
-                    isHighlit ? 1.5 :
-                    0
-                  }
-                  style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
-                  onMouseEnter={(e) => handleMouseEnter(noteData, e)}
-                  onMouseLeave={handleMouseLeave}
-                  onClick={() => handleClick(noteData)}
-                />
-              </g>
-            );
-          })
-        )}
-
-        {/* Legend */}
-        <g transform={`translate(${scrollWidth - 120}, 6)`}>
-          {voices.map((v, i) => (
-            <g key={i} transform={`translate(0, ${i * 14})`}>
-              <rect x={0} y={0} width={10} height={10} fill={v.color} rx={2} opacity={v.opacity || 1} />
-              <text x={14} y={8} fontSize="9" fill="#546e7a">
-                {v.label}
+          {/* Pitch labels and lines */}
+          {labels.map((l, i) => (
+            <g key={i}>
+              <line x1={46} y1={pToY(l.p)} x2={w - 6} y2={pToY(l.p)} stroke="#eee" strokeWidth={0.5} />
+              <text x={42} y={pToY(l.p) + 3} fontSize="8" fill="#9e9e9e" textAnchor="end">
+                {l.l}
               </text>
             </g>
           ))}
-          {/* Sequence legend if sequences present */}
-          {sequenceRanges && sequenceRanges.length > 0 && (
-            <g transform={`translate(0, ${voices.length * 14})`}>
-              <rect x={0} y={0} width={10} height={10} fill="#fbbf24" rx={2} stroke="#d97706" strokeWidth={1} />
-              <text x={14} y={8} fontSize="9" fill="#d97706">
-                Sequence
+
+          {/* Note rectangles */}
+          {voices.map((v, vi) =>
+            v.notes.map((n, ni) => {
+              const isHovered = hoveredNote && hoveredNote.voiceIndex === vi && hoveredNote.noteIndex === ni;
+              const isSelected = selectedNote && selectedNote.voiceIndex === vi && selectedNote.noteIndex === ni;
+              const inSequence = isNoteInSequence(vi, ni);
+              const inActiveSequence = isNoteInActiveSequence(vi, ni);
+              const isHighlit = isNoteHighlighted(n);
+              const noteData = { ...n, voiceIndex: vi, noteIndex: ni, voiceLabel: v.label, voiceColor: v.color, inSequence };
+
+              const noteX = tToX(n.onset);
+              const noteY = pToY(n.pitch) - nH / 2 + 1;
+              const noteWidth = Math.max(2, n.duration * tScale - 1);
+              const noteHeight = nH - 2;
+
+              return (
+                <g key={`${vi}-${ni}`}>
+                  {/* Highlight background for non-sequence highlights */}
+                  {isHighlit && !inSequence && (
+                    <rect
+                      x={noteX - 3}
+                      y={noteY - 3}
+                      width={noteWidth + 6}
+                      height={noteHeight + 6}
+                      fill="#60a5fa"
+                      rx={5}
+                      opacity={0.5}
+                    />
+                  )}
+                  {/* Hatching background for sequences */}
+                  {inSequence && (
+                    <rect
+                      x={noteX - 4}
+                      y={noteY - 4}
+                      width={noteWidth + 8}
+                      height={noteHeight + 8}
+                      fill={inActiveSequence ? "url(#seqHatchCross)" : "url(#seqHatch)"}
+                      rx={5}
+                      opacity={inActiveSequence ? 0.9 : 0.6}
+                    />
+                  )}
+                  {/* Active sequence border */}
+                  {inActiveSequence && (
+                    <rect
+                      x={noteX - 5}
+                      y={noteY - 5}
+                      width={noteWidth + 10}
+                      height={noteHeight + 10}
+                      fill="none"
+                      stroke="#1f2937"
+                      strokeWidth={2}
+                      rx={6}
+                      strokeDasharray="4,2"
+                    />
+                  )}
+                  {/* The actual note */}
+                  <rect
+                    x={noteX}
+                    y={noteY}
+                    width={noteWidth}
+                    height={noteHeight}
+                    fill={v.color}
+                    rx={2}
+                    opacity={v.opacity || 1}
+                    stroke={
+                      isSelected ? '#000' :
+                      isHovered ? '#666' :
+                      inActiveSequence ? '#1f2937' :
+                      inSequence ? '#475569' :
+                      isHighlit ? '#2563eb' :
+                      'none'
+                    }
+                    strokeWidth={
+                      isSelected ? 2 :
+                      isHovered ? 1 :
+                      inActiveSequence ? 2.5 :
+                      inSequence ? 2 :
+                      isHighlit ? 1.5 :
+                      0
+                    }
+                    style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+                    onMouseEnter={(e) => handleMouseEnter(noteData, e)}
+                    onMouseLeave={handleMouseLeave}
+                    onClick={() => handleClick(noteData)}
+                  />
+                </g>
+              );
+            })
+          )}
+
+          {/* Legend */}
+          <g transform={`translate(${scrollWidth - 120}, 6)`}>
+            {voices.map((v, i) => (
+              <g key={i} transform={`translate(0, ${i * 14})`}>
+                <rect x={0} y={0} width={10} height={10} fill={v.color} rx={2} opacity={v.opacity || 1} />
+                <text x={14} y={8} fontSize="9" fill="#546e7a">
+                  {v.label}
+                </text>
+              </g>
+            ))}
+            {/* Sequence legend with hatching */}
+            {sequenceRanges && sequenceRanges.length > 0 && (
+              <g transform={`translate(0, ${voices.length * 14})`}>
+                <rect x={0} y={0} width={10} height={10} fill="url(#seqHatch)" rx={2} stroke="#475569" strokeWidth={1} />
+                <text x={14} y={8} fontSize="9" fill="#475569">
+                  Sequence
+                </text>
+              </g>
+            )}
+          </g>
+
+          {/* Hover tooltip */}
+          {hoveredNote && (
+            <g transform={`translate(${tToX(hoveredNote.onset) + (hoveredNote.duration * tScale) / 2}, ${pToY(hoveredNote.pitch) - nH / 2 - 28})`}>
+              <rect
+                x={-45}
+                y={0}
+                width={90}
+                height={24}
+                fill="rgba(55, 71, 79, 0.95)"
+                rx={4}
+              />
+              <text x={0} y={10} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
+                {pitchToName(hoveredNote.pitch)}
+              </text>
+              <text x={0} y={20} fontSize="9" fill="#cfd8dc" textAnchor="middle">
+                {hoveredNote.scaleDegree ? `^${hoveredNote.scaleDegree.degree}` : ''} · {formatDuration(hoveredNote.duration)}
               </text>
             </g>
           )}
-        </g>
-
-        {/* Hover tooltip inside SVG */}
-        {hoveredNote && (
-          <g transform={`translate(${tToX(hoveredNote.onset) + (hoveredNote.duration * tScale) / 2}, ${pToY(hoveredNote.pitch) - nH / 2 - 28})`}>
-            <rect
-              x={-45}
-              y={0}
-              width={90}
-              height={24}
-              fill="rgba(55, 71, 79, 0.95)"
-              rx={4}
-            />
-            <text x={0} y={10} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
-              {pitchToName(hoveredNote.pitch)}
-            </text>
-            <text x={0} y={20} fontSize="9" fill="#cfd8dc" textAnchor="middle">
-              {hoveredNote.scaleDegree ? `^${hoveredNote.scaleDegree.degree}` : ''} · {formatDuration(hoveredNote.duration)}
-            </text>
-          </g>
-        )}
-      </svg>
+        </svg>
       </div>
 
       {/* Selected note detail panel */}
@@ -334,15 +349,10 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
               alignItems: 'center',
               gap: '6px',
             }}>
-              <span style={{
-                display: 'inline-block',
-                width: '12px',
-                height: '12px',
-                backgroundColor: '#fbbf24',
-                borderRadius: '2px',
-                border: '1px solid #d97706',
-              }} />
-              <span style={{ fontSize: '11px', color: '#d97706', fontWeight: '500' }}>
+              <svg width="12" height="12">
+                <rect width="12" height="12" fill="url(#seqHatch)" rx={2} stroke="#475569" strokeWidth={1} />
+              </svg>
+              <span style={{ fontSize: '11px', color: '#475569', fontWeight: '500' }}>
                 Part of melodic sequence (reduced motion penalties)
               </span>
             </div>
