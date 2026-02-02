@@ -633,58 +633,55 @@ export const calculateDoubleCounterpointScore = calculateInvertibilityScore;
 
 /**
  * Calculate Rhythmic Interplay score (base-zero)
- * Baseline 0 = moderate overlap (~40-60%)
- * Positive = good complementarity (some independence but not disruptive)
- * Negative = too similar (homorhythmic) OR too different (disruptive hocket)
  *
- * Note: Strong beat attacks are EXPECTED and normal. We don't penalize collisions.
- * Instead, we penalize lack of variety (all attacks on strong beats, none off-beat).
+ * Main metric: Solo onset ratio (% of onsets in only one voice)
+ * - Desirable baseline: 33-66%
+ * - Penalize: <20% (shadowing) or >80% (disjointed)
+ *
+ * Secondary: Strong beat simultaneity
+ * - Punish: >90%
+ * - Reward: <80%
  */
 export function calculateRhythmicInterplayScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0;
   const details = [];
-  const overlapRatio = result.overlapRatio || 0.5;
 
-  // Score based on overlap - both extremes are bad
-  // 0-15% = disruptive hocket (penalty)
-  // 15-30% = some independence but pushing it
-  // 30-60% = good complementarity (reward)
-  // 60-80% = moderate overlap (slight penalty)
-  // 80-100% = homorhythmic (strong penalty)
+  const soloRatio = result.soloOnsetRatio;
+  const strongBeatSim = result.strongBeatSimultaneity;
 
-  if (overlapRatio <= 0.15) {
-    // Too little overlap - disruptive, not complementary
-    internal = -10;
-    details.push({ factor: `Disruptive hocket-like rhythm (${Math.round(overlapRatio * 100)}% overlap)`, impact: -10 });
-  } else if (overlapRatio <= 0.3) {
-    // Some independence, slight caution
-    internal = 5;
-    details.push({ factor: `High independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: +5 });
-  } else if (overlapRatio <= 0.6) {
-    // Good complementarity - ideal range
-    internal = 10;
-    details.push({ factor: `Good rhythmic interplay (${Math.round(overlapRatio * 100)}% overlap)`, impact: +10 });
-  } else if (overlapRatio <= 0.8) {
-    // Moderate overlap - getting similar
-    internal = Math.round(-5 * (overlapRatio - 0.6) / 0.2);
-    details.push({ factor: `Similar rhythms (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
-  } else {
-    // Homorhythmic - voices too similar
-    internal = Math.round(-5 - 10 * (overlapRatio - 0.8) / 0.2);
-    details.push({ factor: `Homorhythmic (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
+  // Main metric: solo onset ratio
+  if (soloRatio !== undefined) {
+    if (soloRatio >= 0.33 && soloRatio <= 0.66) {
+      // Ideal range - good interlocking
+      internal += 10;
+      details.push({ factor: `${Math.round(soloRatio * 100)}% solo onsets (good interlocking)`, impact: +10 });
+    } else if (soloRatio < 0.20) {
+      // Too few solo onsets - voices shadow each other
+      internal -= 10;
+      details.push({ factor: `${Math.round(soloRatio * 100)}% solo onsets (shadowing)`, impact: -10 });
+    } else if (soloRatio > 0.80) {
+      // Too many solo onsets - voices rarely align
+      internal -= 10;
+      details.push({ factor: `${Math.round(soloRatio * 100)}% solo onsets (disjointed)`, impact: -10 });
+    } else {
+      // Between 20-33% or 66-80% - acceptable but not ideal
+      details.push({ factor: `${Math.round(soloRatio * 100)}% solo onsets`, impact: 0 });
+    }
   }
 
-  // Off-beat variety check: penalize if ALL attacks are on strong beats (no variety)
-  // Strong beat attacks are expected and normal - but some off-beat variety is good
-  const offBeatRatio = result.offBeatRatio || 0;
-  if (offBeatRatio === 0 && result.totalAttacks > 4) {
-    internal -= 5;
-    details.push({ factor: 'No off-beat attacks (lacks rhythmic variety)', impact: -5 });
-  } else if (offBeatRatio > 0 && offBeatRatio < 0.1) {
-    // Very few off-beat attacks
-    details.push({ factor: `${Math.round(offBeatRatio * 100)}% off-beat attacks`, impact: 0, type: 'info' });
+  // Secondary metric: strong beat simultaneity
+  if (strongBeatSim !== undefined) {
+    if (strongBeatSim > 0.90) {
+      // Too lockstep on strong beats
+      internal -= 5;
+      details.push({ factor: `${Math.round(strongBeatSim * 100)}% strong beat simultaneity (lockstep)`, impact: -5 });
+    } else if (strongBeatSim < 0.80) {
+      // Good independence on strong beats
+      internal += 5;
+      details.push({ factor: `${Math.round(strongBeatSim * 100)}% strong beat simultaneity (independent)`, impact: +5 });
+    }
   }
 
   return {

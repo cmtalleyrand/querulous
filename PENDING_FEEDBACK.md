@@ -12,10 +12,10 @@
 |-------|--------------|------------|
 | UnifiedCounterpointViz ugly | **REWROTE** - now matches StrettoViz clean style, intervals show on hover only | [ ] |
 | Sequence gold color | **REPLACED** - now uses hatching pattern instead | [ ] |
-| Sequence note numbers | **IMPROVED** - shows note names (F# E D C#) instead of "Notes 23-28" | [ ] |
+| Sequence note names | **FIXED** - shows ALL note names (removed truncation), not "Notes 23-28" | [ ] |
 | Voice selection | **WORKS** - Subject, Answer, CS1, CS2 selectable | [ ] |
 | Transposition intervals | **ADDED** - thirds and sixths (±m3, M3, m6, M6) | [ ] |
-| Harmonic analysis display | **ADDED** - ChordAnalysisDisplay in Harmonic Implication, shows placeholder if no data | [ ] |
+| Harmonic analysis display | **FIXED** - section no longer collapsed by default, shows placeholder if no data | [ ] |
 
 ### Scoring
 | Issue | Claude Check | User Check |
@@ -53,6 +53,8 @@
 ## CHANGELOG (What Claude Has Done)
 
 ### 2026-02-02 (Latest)
+- **FIXED** sequence truncation - now shows ALL note names (removed "..." truncation)
+- **FIXED** Harmonic Implication section - was collapsed by default, now visible
 - **REWROTE** UnifiedCounterpointViz to match StrettoViz clean style (no full-height bars everywhere, hover-only labels)
 - **REPLACED** gold sequence highlights with hatching patterns in PianoRoll
 - **IMPROVED** sequence display - shows note names (e.g., "F# E D C#") instead of "Notes 23-28"
@@ -96,4 +98,4 @@
 - Harmonic analysis module (harmonicAnalysis.js)
 
 ---
-Last updated: 2026-02-01 (by Claude)
+Last updated: 2026-02-02 (by Claude)

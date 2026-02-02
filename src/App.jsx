@@ -832,7 +832,7 @@ export default function App() {
                 <Section title="Counterpoint Analysis" helpKey="countersubject">
                   <UnifiedCounterpointViz
                     voices={{
-                      subject: results.subjectNotes,
+                      subject: results.subject,
                       answer: results.answerNotes,
                       cs1: results.countersubject,
                     }}
@@ -936,7 +936,7 @@ export default function App() {
             )}
 
             {/* Harmonic Implication */}
-            <Section title="Harmonic Implication" helpKey="harmonicImplication" defaultCollapsed={true}>
+            <Section title="Harmonic Implication" helpKey="harmonicImplication">
               <DataRow
                 data={{
                   Opening: `${results.harmonicImplication.opening.degree} ${results.harmonicImplication.opening.isTonicChordTone ? '(tonic)' : ''}`,
@@ -1108,13 +1108,7 @@ export default function App() {
                             </div>
                             <div style={{ fontSize: '12px', color: '#78350f', marginBottom: '6px' }}>
                               <strong>
-                                {(() => {
-                                  const seqNotes = voiceSeqs.notes.slice(seq.startNote - 1, seq.endNote);
-                                  if (seqNotes.length <= 6) {
-                                    return seqNotes.map(n => pitchName(n.pitch, n.preferFlats).replace(/\d/, '')).join(' ');
-                                  }
-                                  return `${seqNotes.slice(0, 3).map(n => pitchName(n.pitch, n.preferFlats).replace(/\d/, '')).join(' ')} ... ${seqNotes.slice(-3).map(n => pitchName(n.pitch, n.preferFlats).replace(/\d/, '')).join(' ')}`;
-                                })()}
+                                {voiceSeqs.notes.slice(seq.startNote - 1, seq.endNote).map(n => pitchName(n.pitch, n.preferFlats).replace(/\d/, '')).join(' ')}
                               </strong>
                               <span style={{ marginLeft: '8px', opacity: 0.7 }}>({seq.unitLength}-note pattern)</span>
                             </div>

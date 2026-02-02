@@ -18,6 +18,11 @@ export const KEY_SIGNATURES = {
   E: ['F#', 'C#', 'G#', 'D#'],
   B: ['F#', 'C#', 'G#', 'D#', 'A#'],
   'F#': ['F#', 'C#', 'G#', 'D#', 'A#', 'E#'],
+  'C#': ['F#', 'C#', 'G#', 'D#', 'A#', 'E#', 'B#'],
+  // Theoretical sharp keys (enharmonic equivalents)
+  'G#': ['F#', 'C#', 'G#', 'D#', 'A#', 'E#', 'B#', 'Fx'],
+  'D#': ['F#', 'C#', 'G#', 'D#', 'A#', 'E#', 'B#', 'Fx', 'Cx'],
+  'A#': ['F#', 'C#', 'G#', 'D#', 'A#', 'E#', 'B#', 'Fx', 'Cx', 'Gx'],
 
   // Major keys with flats
   F: ['Bb'],
@@ -26,6 +31,7 @@ export const KEY_SIGNATURES = {
   Ab: ['Bb', 'Eb', 'Ab', 'Db'],
   Db: ['Bb', 'Eb', 'Ab', 'Db', 'Gb'],
   Gb: ['Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'],
+  Cb: ['Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb', 'Fb'],
 
   // Minor keys with sharps
   Am: [],
@@ -34,6 +40,8 @@ export const KEY_SIGNATURES = {
   'F#m': ['F#', 'C#', 'G#'],
   'C#m': ['F#', 'C#', 'G#', 'D#'],
   'G#m': ['F#', 'C#', 'G#', 'D#', 'A#'],
+  'D#m': ['F#', 'C#', 'G#', 'D#', 'A#', 'E#'],
+  'A#m': ['F#', 'C#', 'G#', 'D#', 'A#', 'E#', 'B#'],
 
   // Minor keys with flats
   Dm: ['Bb'],
@@ -41,6 +49,8 @@ export const KEY_SIGNATURES = {
   Cm: ['Bb', 'Eb', 'Ab'],
   Fm: ['Bb', 'Eb', 'Ab', 'Db'],
   Bbm: ['Bb', 'Eb', 'Ab', 'Db', 'Gb'],
+  Ebm: ['Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb'],
+  Abm: ['Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb', 'Fb'],
 };
 
 /**
@@ -65,14 +75,17 @@ export const AVAILABLE_KEYS = [
   { value: 'C#', label: 'C#' },
   { value: 'Db', label: 'Db' },
   { value: 'D', label: 'D' },
+  { value: 'D#', label: 'D#' },
   { value: 'Eb', label: 'Eb' },
   { value: 'E', label: 'E' },
   { value: 'F', label: 'F' },
   { value: 'F#', label: 'F#' },
   { value: 'Gb', label: 'Gb' },
   { value: 'G', label: 'G' },
+  { value: 'G#', label: 'G#' },
   { value: 'Ab', label: 'Ab' },
   { value: 'A', label: 'A' },
+  { value: 'A#', label: 'A#' },
   { value: 'Bb', label: 'Bb' },
   { value: 'B', label: 'B' },
 ];

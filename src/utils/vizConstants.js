@@ -2,42 +2,42 @@
  * Shared visualization constants and utilities
  */
 
-// Unified semantic color scheme
+// Unified semantic color scheme - muted, professional palette
 export const VIZ_COLORS = {
-  // Interval quality colors (solid fills)
-  consonant: '#22c55e',           // Green-500 - imperfect consonances (3rds, 6ths)
-  perfectConsonant: '#3b82f6',    // Blue-500 - perfect consonances (unison, 5th, 8ve)
-  dissonantStrong: '#7c3aed',     // Violet-600 - well-handled dissonance (score >= 2)
-  dissonantGood: '#8b5cf6',       // Violet-500 - good dissonance handling (score >= 1)
-  dissonantAcceptable: '#a78bfa', // Violet-400 - acceptable (score >= 0)
-  dissonantMarginal: '#c026d3',   // Fuchsia-600 - marginal (score >= -1)
-  dissonantWeak: '#ea580c',       // Orange-600 - weak handling (score > -2)
-  dissonantProblematic: '#dc2626',// Red-600 - problematic (score > -3)
-  dissonantSevere: '#b91c1c',     // Red-700 - severe issues (score <= -3)
+  // Interval quality colors (muted, professional)
+  consonant: '#4ade80',           // Green-400 muted - imperfect consonances
+  perfectConsonant: '#60a5fa',    // Blue-400 muted - perfect consonances
+  dissonantStrong: '#a78bfa',     // Violet-400 - well-handled dissonance (score >= 2)
+  dissonantGood: '#c4b5fd',       // Violet-300 - good dissonance handling (score >= 1)
+  dissonantAcceptable: '#d8b4fe', // Violet-300 lighter - acceptable (score >= 0)
+  dissonantMarginal: '#e879f9',   // Fuchsia-400 - marginal (score >= -1)
+  dissonantWeak: '#fb923c',       // Orange-400 - weak handling (score > -2)
+  dissonantProblematic: '#f87171',// Red-400 - problematic (score > -3)
+  dissonantSevere: '#ef4444',     // Red-500 - severe issues (score <= -3)
 
-  // Semi-transparent fills for regions (muted, more opaque)
-  consonantFill: 'rgba(74, 158, 98, 0.55)',
-  perfectFill: 'rgba(82, 120, 166, 0.50)',
-  dissonantGoodFill: 'rgba(130, 100, 180, 0.50)',
-  dissonantMarginalFill: 'rgba(178, 140, 60, 0.50)',
-  dissonantBadFill: 'rgba(180, 100, 50, 0.55)',
-  dissonantSevereFill: 'rgba(170, 70, 70, 0.55)',
+  // Semi-transparent fills for regions (subtle, not garish)
+  consonantFill: 'rgba(74, 222, 128, 0.15)',
+  perfectFill: 'rgba(96, 165, 250, 0.15)',
+  dissonantGoodFill: 'rgba(167, 139, 250, 0.18)',
+  dissonantMarginalFill: 'rgba(232, 121, 249, 0.18)',
+  dissonantBadFill: 'rgba(251, 146, 60, 0.20)',
+  dissonantSevereFill: 'rgba(248, 113, 113, 0.22)',
 
-  // Voice colors (for dux/comes, subject/CS)
-  voiceDux: '#4f46e5',            // Indigo-600 - dux/subject
-  voiceComes: '#dc2626',          // Red-600 - comes/answer
-  voiceCSAbove: '#22c55e',        // Green-500 - countersubject above
+  // Voice colors (muted, distinct)
+  voiceDux: '#6366f1',            // Indigo-500 - dux/subject
+  voiceComes: '#f97316',          // Orange-500 - comes/answer (not red, too harsh)
+  voiceCSAbove: '#10b981',        // Emerald-500 - countersubject (softer green)
   voiceCSBelow: '#f59e0b',        // Amber-500 - countersubject below (inverted)
 
-  // UI state colors
+  // UI state colors - very subtle backgrounds
   issueBackground: '#fef2f2',
-  issueBorder: '#fca5a5',
+  issueBorder: '#fecaca',
   issueText: '#991b1b',
-  warningBackground: '#fffbeb',
-  warningBorder: '#fcd34d',
-  warningText: '#92400e',
+  warningBackground: '#fefce8',
+  warningBorder: '#fef08a',
+  warningText: '#854d0e',
   cleanBackground: '#f0fdf4',
-  cleanBorder: '#86efac',
+  cleanBorder: '#bbf7d0',
   cleanText: '#166534',
 
   // Grid colors
