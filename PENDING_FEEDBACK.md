@@ -10,9 +10,12 @@
 ### Visualization
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|
-| Areas in viz | **FIXED** - now uses full-height vertical bars | [ ] |
-| UnifiedCounterpointViz | **RESTORED** - re-enabled in App.jsx | [ ] Confirm works |
-| Color scheme consistency | Used VIZ_COLORS in IntervalAnalysisViz | [ ] |
+| UnifiedCounterpointViz ugly | **REWROTE** - now matches StrettoViz clean style, intervals show on hover only | [ ] |
+| Sequence gold color | **REPLACED** - now uses hatching pattern instead | [ ] |
+| Sequence note numbers | **IMPROVED** - shows note names (F# E D C#) instead of "Notes 23-28" | [ ] |
+| Voice selection | **WORKS** - Subject, Answer, CS1, CS2 selectable | [ ] |
+| Transposition intervals | **ADDED** - thirds and sixths (±m3, M3, m6, M6) | [ ] |
+| Harmonic analysis display | **ADDED** - ChordAnalysisDisplay in Harmonic Implication, shows placeholder if no data | [ ] |
 
 ### Scoring
 | Issue | Claude Check | User Check |
@@ -49,7 +52,17 @@
 
 ## CHANGELOG (What Claude Has Done)
 
-### 2026-02-01 (Latest)
+### 2026-02-02 (Latest)
+- **REWROTE** UnifiedCounterpointViz to match StrettoViz clean style (no full-height bars everywhere, hover-only labels)
+- **REPLACED** gold sequence highlights with hatching patterns in PianoRoll
+- **IMPROVED** sequence display - shows note names (e.g., "F# E D C#") instead of "Notes 23-28"
+- **FIXED** harmonic analysis display - shows placeholder when no data
+
+### 2026-02-01
+- **FIXED** React error #31 - viz crash on click (object rendered as child)
+- **IMPROVED** viz colors - less garish, more opaque (0.50-0.55 alpha)
+- **ADDED** thirds and sixths to transposition options (±m3, ±M3, ±m6, ±M6)
+- **ADDED** ChordAnalysisDisplay - beat-by-beat harmonic analysis now shown to user
 - **FIXED** ABC parsing - accidentals no longer carry through bars (was wrong)
 - **FIXED** P4 checkbox - now actually respects user setting
 - **REMOVED** useless "Mutation: Note N" field from tonal answer
@@ -83,4 +96,4 @@
 - Harmonic analysis module (harmonicAnalysis.js)
 
 ---
-Last updated: 2026-01-31 (by Claude)
+Last updated: 2026-02-01 (by Claude)
