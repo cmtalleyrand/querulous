@@ -495,7 +495,7 @@ export function UnifiedCounterpointViz({
       </div>
 
       {/* Selected interval detail panel */}
-      {selectedInterval && (
+      {selectedInterval && voice1Info && voice2Info && (
         <div style={{
           backgroundColor: '#fff',
           border: '1px solid #6366f1',
@@ -504,6 +504,7 @@ export function UnifiedCounterpointViz({
         }}>
           {(() => {
             const pt = selectedInterval;
+            if (!pt || pt.score === undefined) return null;
             const style = getIntervalStyle({
               isConsonant: pt.isConsonant,
               isPerfect: [1, 5, 8].includes(pt.intervalClass),
