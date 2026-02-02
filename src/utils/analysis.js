@@ -829,25 +829,104 @@ export function testRhythmicVariety(subject, formatter) {
 
 /**
  * Analyze rhythmic complementarity between subject and countersubject
- * Reports onset overlap ratio - user requested richer metric but
- * implementation was reverted pending proper specification.
+ *
+ * Main metric: Solo onset ratio - % of note onsets that occur in only one voice
+ * Measures the "interlocking" quality. Desirable: 33-66%
+ *
+ * Secondary metric: Strong beat simultaneity - % of strong beats with both voices attacking
+ * Measures structural lockstep. Punish >90%, reward <80%
  */
 export function testRhythmicComplementarity(subject, cs, meter) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
+  const beatsPerMeasure = meter[0];
+
+  // Get all onsets rounded for comparison
   const sOnsets = new Set(subject.map((n) => Math.round(n.onset * 100) / 100));
   const cOnsets = new Set(cs.map((n) => Math.round(n.onset * 100) / 100));
-  const shared = [...sOnsets].filter((o) => cOnsets.has(o));
-  const ratio = shared.length / Math.max(sOnsets.size, cOnsets.size);
+
+  // All unique onsets (union)
+  const allOnsets = new Set([...sOnsets, ...cOnsets]);
+
+  // Shared onsets (intersection)
+  const sharedOnsets = [...sOnsets].filter((o) => cOnsets.has(o));
+
+  // Solo onsets = onsets in only one voice
+  const soloOnsetCount = allOnsets.size - sharedOnsets.length;
+  const soloOnsetRatio = soloOnsetCount / allOnsets.size;
+
+  // Strong beat simultaneity
+  // Strong beats: beat 0 (downbeat) and beat 2 in 4/4
+  const isStrongBeat = (onset) => {
+    const beatInMeasure = onset % beatsPerMeasure;
+    return beatInMeasure < 0.1 || (beatsPerMeasure >= 4 && Math.abs(beatInMeasure - 2) < 0.1);
+  };
+
+  // Find all strong beats that have ANY note onset
+  const strongBeatsWithOnsets = new Set();
+  for (const onset of allOnsets) {
+    if (isStrongBeat(onset)) {
+      strongBeatsWithOnsets.add(Math.round(onset * 100) / 100);
+    }
+  }
+
+  // Count strong beats where BOTH voices attack
+  let strongBeatsBothAttack = 0;
+  for (const beat of strongBeatsWithOnsets) {
+    if (sOnsets.has(beat) && cOnsets.has(beat)) {
+      strongBeatsBothAttack++;
+    }
+  }
+
+  const strongBeatSimultaneity = strongBeatsWithOnsets.size > 0
+    ? strongBeatsBothAttack / strongBeatsWithOnsets.size
+    : 0;
 
   const observations = [];
-  // Just report the ratio - no judgment on what's "good" or "bad"
-  observations.push({
-    type: 'info',
-    description: `${Math.round(ratio * 100)}% of attacks coincide`,
-  });
 
-  return { overlapRatio: ratio, observations };
+  // Main metric assessment: solo onset ratio
+  // Desirable: 33-66%, penalize <20% or >80%
+  if (soloOnsetRatio < 0.20) {
+    observations.push({
+      type: 'consideration',
+      description: `Only ${Math.round(soloOnsetRatio * 100)}% solo attacks—voices shadow each other`,
+    });
+  } else if (soloOnsetRatio > 0.80) {
+    observations.push({
+      type: 'consideration',
+      description: `${Math.round(soloOnsetRatio * 100)}% solo attacks—voices rarely coincide`,
+    });
+  } else if (soloOnsetRatio >= 0.33 && soloOnsetRatio <= 0.66) {
+    observations.push({
+      type: 'strength',
+      description: `${Math.round(soloOnsetRatio * 100)}% solo attacks—good interlocking`,
+    });
+  } else {
+    observations.push({
+      type: 'info',
+      description: `${Math.round(soloOnsetRatio * 100)}% solo attacks`,
+    });
+  }
+
+  // Secondary metric: strong beat simultaneity
+  if (strongBeatSimultaneity > 0.90) {
+    observations.push({
+      type: 'consideration',
+      description: `${Math.round(strongBeatSimultaneity * 100)}% strong beats have simultaneous attacks`,
+    });
+  } else if (strongBeatSimultaneity < 0.80) {
+    observations.push({
+      type: 'strength',
+      description: `${Math.round(strongBeatSimultaneity * 100)}% strong beat simultaneity—rhythmic independence`,
+    });
+  }
+
+  return {
+    soloOnsetRatio,
+    strongBeatSimultaneity,
+    overlapRatio: 1 - soloOnsetRatio, // For backwards compatibility
+    observations,
+  };
 }
 
 /**

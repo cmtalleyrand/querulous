@@ -633,23 +633,60 @@ export const calculateDoubleCounterpointScore = calculateInvertibilityScore;
 
 /**
  * Calculate Rhythmic Interplay score (base-zero)
- * Currently reports overlap ratio without scoring - proper metric pending user specification.
+ *
+ * Main metric: Solo onset ratio (% of onsets in only one voice)
+ * - Desirable baseline: 33-66%
+ * - Penalize: <20% (shadowing) or >80% (disjointed)
+ *
+ * Secondary: Strong beat simultaneity
+ * - Punish: >90%
+ * - Reward: <80%
  */
 export function calculateRhythmicInterplayScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
-  const overlapRatio = result.overlapRatio || 0.5;
+  let internal = 0;
+  const details = [];
 
-  // Report only - no arbitrary scoring
-  const details = [{
-    factor: `${Math.round(overlapRatio * 100)}% onset overlap`,
-    impact: 0,
-    type: 'info',
-  }];
+  const soloRatio = result.soloOnsetRatio;
+  const strongBeatSim = result.strongBeatSimultaneity;
+
+  // Main metric: solo onset ratio
+  if (soloRatio !== undefined) {
+    if (soloRatio >= 0.33 && soloRatio <= 0.66) {
+      // Ideal range - good interlocking
+      internal += 10;
+      details.push({ factor: `${Math.round(soloRatio * 100)}% solo onsets (good interlocking)`, impact: +10 });
+    } else if (soloRatio < 0.20) {
+      // Too few solo onsets - voices shadow each other
+      internal -= 10;
+      details.push({ factor: `${Math.round(soloRatio * 100)}% solo onsets (shadowing)`, impact: -10 });
+    } else if (soloRatio > 0.80) {
+      // Too many solo onsets - voices rarely align
+      internal -= 10;
+      details.push({ factor: `${Math.round(soloRatio * 100)}% solo onsets (disjointed)`, impact: -10 });
+    } else {
+      // Between 20-33% or 66-80% - acceptable but not ideal
+      details.push({ factor: `${Math.round(soloRatio * 100)}% solo onsets`, impact: 0 });
+    }
+  }
+
+  // Secondary metric: strong beat simultaneity
+  if (strongBeatSim !== undefined) {
+    if (strongBeatSim > 0.90) {
+      // Too lockstep on strong beats
+      internal -= 5;
+      details.push({ factor: `${Math.round(strongBeatSim * 100)}% strong beat simultaneity (lockstep)`, impact: -5 });
+    } else if (strongBeatSim < 0.80) {
+      // Good independence on strong beats
+      internal += 5;
+      details.push({ factor: `${Math.round(strongBeatSim * 100)}% strong beat simultaneity (independent)`, impact: +5 });
+    }
+  }
 
   return {
-    score: 0,
-    internal: 0,
+    score: toDisplayScore(internal),
+    internal,
     details,
   };
 }
