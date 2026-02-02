@@ -832,7 +832,7 @@ export default function App() {
                 <Section title="Counterpoint Analysis" helpKey="countersubject">
                   <UnifiedCounterpointViz
                     voices={{
-                      subject: results.subjectNotes,
+                      subject: results.subject,
                       answer: results.answerNotes,
                       cs1: results.countersubject,
                     }}

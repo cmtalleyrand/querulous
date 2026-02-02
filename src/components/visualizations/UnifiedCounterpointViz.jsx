@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { scoreDissonance } from '../../utils/dissonanceScoring';
@@ -54,6 +54,28 @@ export function UnifiedCounterpointViz({
     if (voices.cs2?.length) available.push({ key: 'cs2', label: 'Countersubject 2', color: '#ec4899' });
     return available;
   }, [voices]);
+
+  // Reset voice selection if current selection becomes invalid
+  useEffect(() => {
+    const availableKeys = availableVoices.map(v => v.key);
+    if (availableKeys.length >= 2) {
+      // If voice1Key is not available, pick first available
+      if (!availableKeys.includes(voice1Key)) {
+        setVoice1Key(availableKeys[0]);
+      }
+      // If voice2Key is not available or same as voice1Key, pick different one
+      if (!availableKeys.includes(voice2Key) || voice2Key === voice1Key) {
+        const otherKey = availableKeys.find(k => k !== voice1Key);
+        if (otherKey) setVoice2Key(otherKey);
+      }
+    }
+  }, [availableVoices, voice1Key, voice2Key]);
+
+  // Reset selectedInterval when analysis inputs change
+  useEffect(() => {
+    setSelectedInterval(null);
+    setHighlightedOnset(null);
+  }, [voice1Key, voice2Key, transposition]);
 
   const voice1 = voices[voice1Key];
   const voice2 = voices[voice2Key];

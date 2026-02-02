@@ -633,58 +633,84 @@ export const calculateDoubleCounterpointScore = calculateInvertibilityScore;
 
 /**
  * Calculate Rhythmic Interplay score (base-zero)
- * Baseline 0 = moderate overlap (~40-60%)
- * Positive = good complementarity (some independence but not disruptive)
- * Negative = too similar (homorhythmic) OR too different (disruptive hocket)
+ * Uses composite independence metric that considers:
+ * - Onset overlap (shared attacks)
+ * - Duration independence (different note lengths even when starting together)
+ * - Motion during sustain (one voice moves while other holds)
+ * - Off-beat activity (rhythmic variety)
  *
- * Note: Strong beat attacks are EXPECTED and normal. We don't penalize collisions.
- * Instead, we penalize lack of variety (all attacks on strong beats, none off-beat).
+ * Note: High onset overlap (60%+) is NORMAL in Bach fugues. Independence comes from
+ * different durations, motion during sustains, and off-beat variety.
  */
 export function calculateRhythmicInterplayScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0;
   const details = [];
+
+  // Use composite independence score if available, fall back to overlap-based
+  const independence = result.independence;
   const overlapRatio = result.overlapRatio || 0.5;
 
-  // Score based on overlap - both extremes are bad
-  // 0-15% = disruptive hocket (penalty)
-  // 15-30% = some independence but pushing it
-  // 30-60% = good complementarity (reward)
-  // 60-80% = moderate overlap (slight penalty)
-  // 80-100% = homorhythmic (strong penalty)
+  if (independence !== undefined) {
+    // New nuanced scoring based on composite independence
+    // Independence range: 0-0.6+ typical
+    // >= 0.4 = good independence (reward)
+    // 0.25-0.4 = moderate (neutral to slight reward)
+    // < 0.25 = limited independence (penalty)
 
-  if (overlapRatio <= 0.15) {
-    // Too little overlap - disruptive, not complementary
-    internal = -10;
-    details.push({ factor: `Disruptive hocket-like rhythm (${Math.round(overlapRatio * 100)}% overlap)`, impact: -10 });
-  } else if (overlapRatio <= 0.3) {
-    // Some independence, slight caution
-    internal = 5;
-    details.push({ factor: `High independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: +5 });
-  } else if (overlapRatio <= 0.6) {
-    // Good complementarity - ideal range
-    internal = 10;
-    details.push({ factor: `Good rhythmic interplay (${Math.round(overlapRatio * 100)}% overlap)`, impact: +10 });
-  } else if (overlapRatio <= 0.8) {
-    // Moderate overlap - getting similar
-    internal = Math.round(-5 * (overlapRatio - 0.6) / 0.2);
-    details.push({ factor: `Similar rhythms (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
+    if (independence >= 0.4) {
+      internal = 10;
+      details.push({ factor: `Good rhythmic independence (${Math.round(independence * 100)}%)`, impact: +10 });
+    } else if (independence >= 0.3) {
+      internal = 5;
+      details.push({ factor: `Moderate independence (${Math.round(independence * 100)}%)`, impact: +5 });
+    } else if (independence >= 0.2) {
+      internal = 0;
+      details.push({ factor: `Limited independence (${Math.round(independence * 100)}%)`, impact: 0 });
+    } else {
+      internal = -5;
+      details.push({ factor: `Low independence (${Math.round(independence * 100)}%)—voices move together`, impact: -5 });
+    }
+
+    // Bonus details for specific factors
+    if (result.durationIndependence > 0.5 && overlapRatio > 0.5) {
+      details.push({
+        factor: `${Math.round(overlapRatio * 100)}% shared attacks but ${Math.round(result.durationIndependence * 100)}% have different durations`,
+        impact: 0,
+        type: 'info',
+      });
+    }
+
+    if (result.motionRatio > 0.25) {
+      internal += 3;
+      details.push({ factor: 'Frequent motion against sustained notes', impact: +3 });
+    }
   } else {
-    // Homorhythmic - voices too similar
-    internal = Math.round(-5 - 10 * (overlapRatio - 0.8) / 0.2);
-    details.push({ factor: `Homorhythmic (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
+    // Fallback to old overlap-only scoring (backwards compatibility)
+    if (overlapRatio <= 0.15) {
+      internal = -10;
+      details.push({ factor: `Disruptive hocket-like rhythm (${Math.round(overlapRatio * 100)}% overlap)`, impact: -10 });
+    } else if (overlapRatio <= 0.3) {
+      internal = 5;
+      details.push({ factor: `High independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: +5 });
+    } else if (overlapRatio <= 0.6) {
+      internal = 10;
+      details.push({ factor: `Good rhythmic interplay (${Math.round(overlapRatio * 100)}% overlap)`, impact: +10 });
+    } else if (overlapRatio <= 0.8) {
+      internal = Math.round(-5 * (overlapRatio - 0.6) / 0.2);
+      details.push({ factor: `Similar rhythms (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
+    } else {
+      internal = Math.round(-5 - 10 * (overlapRatio - 0.8) / 0.2);
+      details.push({ factor: `Homorhythmic (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
+    }
   }
 
-  // Off-beat variety check: penalize if ALL attacks are on strong beats (no variety)
-  // Strong beat attacks are expected and normal - but some off-beat variety is good
+  // Off-beat variety check (common to both paths)
   const offBeatRatio = result.offBeatRatio || 0;
-  if (offBeatRatio === 0 && result.totalAttacks > 4) {
+  if (offBeatRatio === 0 && (result.totalAttacks || 10) > 4) {
     internal -= 5;
     details.push({ factor: 'No off-beat attacks (lacks rhythmic variety)', impact: -5 });
-  } else if (offBeatRatio > 0 && offBeatRatio < 0.1) {
-    // Very few off-beat attacks
-    details.push({ factor: `${Math.round(offBeatRatio * 100)}% off-beat attacks`, impact: 0, type: 'info' });
   }
 
   return {
