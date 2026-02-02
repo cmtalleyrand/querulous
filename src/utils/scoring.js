@@ -633,89 +633,23 @@ export const calculateDoubleCounterpointScore = calculateInvertibilityScore;
 
 /**
  * Calculate Rhythmic Interplay score (base-zero)
- * Uses composite independence metric that considers:
- * - Onset overlap (shared attacks)
- * - Duration independence (different note lengths even when starting together)
- * - Motion during sustain (one voice moves while other holds)
- * - Off-beat activity (rhythmic variety)
- *
- * Note: High onset overlap (60%+) is NORMAL in Bach fugues. Independence comes from
- * different durations, motion during sustains, and off-beat variety.
+ * Currently reports overlap ratio without scoring - proper metric pending user specification.
  */
 export function calculateRhythmicInterplayScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
-  let internal = 0;
-  const details = [];
-
-  // Use composite independence score if available, fall back to overlap-based
-  const independence = result.independence;
   const overlapRatio = result.overlapRatio || 0.5;
 
-  if (independence !== undefined) {
-    // New nuanced scoring based on composite independence
-    // Independence range: 0-0.6+ typical
-    // >= 0.4 = good independence (reward)
-    // 0.25-0.4 = moderate (neutral to slight reward)
-    // < 0.25 = limited independence (penalty)
-
-    if (independence >= 0.4) {
-      internal = 10;
-      details.push({ factor: `Good rhythmic independence (${Math.round(independence * 100)}%)`, impact: +10 });
-    } else if (independence >= 0.3) {
-      internal = 5;
-      details.push({ factor: `Moderate independence (${Math.round(independence * 100)}%)`, impact: +5 });
-    } else if (independence >= 0.2) {
-      internal = 0;
-      details.push({ factor: `Limited independence (${Math.round(independence * 100)}%)`, impact: 0 });
-    } else {
-      internal = -5;
-      details.push({ factor: `Low independence (${Math.round(independence * 100)}%)—voices move together`, impact: -5 });
-    }
-
-    // Bonus details for specific factors
-    if (result.durationIndependence > 0.5 && overlapRatio > 0.5) {
-      details.push({
-        factor: `${Math.round(overlapRatio * 100)}% shared attacks but ${Math.round(result.durationIndependence * 100)}% have different durations`,
-        impact: 0,
-        type: 'info',
-      });
-    }
-
-    if (result.motionRatio > 0.25) {
-      internal += 3;
-      details.push({ factor: 'Frequent motion against sustained notes', impact: +3 });
-    }
-  } else {
-    // Fallback to old overlap-only scoring (backwards compatibility)
-    if (overlapRatio <= 0.15) {
-      internal = -10;
-      details.push({ factor: `Disruptive hocket-like rhythm (${Math.round(overlapRatio * 100)}% overlap)`, impact: -10 });
-    } else if (overlapRatio <= 0.3) {
-      internal = 5;
-      details.push({ factor: `High independence (${Math.round(overlapRatio * 100)}% overlap)`, impact: +5 });
-    } else if (overlapRatio <= 0.6) {
-      internal = 10;
-      details.push({ factor: `Good rhythmic interplay (${Math.round(overlapRatio * 100)}% overlap)`, impact: +10 });
-    } else if (overlapRatio <= 0.8) {
-      internal = Math.round(-5 * (overlapRatio - 0.6) / 0.2);
-      details.push({ factor: `Similar rhythms (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
-    } else {
-      internal = Math.round(-5 - 10 * (overlapRatio - 0.8) / 0.2);
-      details.push({ factor: `Homorhythmic (${Math.round(overlapRatio * 100)}% overlap)`, impact: internal });
-    }
-  }
-
-  // Off-beat variety check (common to both paths)
-  const offBeatRatio = result.offBeatRatio || 0;
-  if (offBeatRatio === 0 && (result.totalAttacks || 10) > 4) {
-    internal -= 5;
-    details.push({ factor: 'No off-beat attacks (lacks rhythmic variety)', impact: -5 });
-  }
+  // Report only - no arbitrary scoring
+  const details = [{
+    factor: `${Math.round(overlapRatio * 100)}% onset overlap`,
+    impact: 0,
+    type: 'info',
+  }];
 
   return {
-    score: toDisplayScore(internal),
-    internal,
+    score: 0,
+    internal: 0,
     details,
   };
 }

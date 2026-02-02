@@ -829,139 +829,25 @@ export function testRhythmicVariety(subject, formatter) {
 
 /**
  * Analyze rhythmic complementarity between subject and countersubject
- * Uses multiple metrics beyond simple onset overlap:
- * 1. Onset overlap ratio - % of attacks that coincide (baseline metric)
- * 2. Duration independence - when notes start together, do they end at different times?
- * 3. Motion during sustain - does one voice move while the other holds?
- * 4. Off-beat activity - notes on weak beats show rhythmic variety
+ * Reports onset overlap ratio - user requested richer metric but
+ * implementation was reverted pending proper specification.
  */
 export function testRhythmicComplementarity(subject, cs, meter) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
-  const beatsPerMeasure = meter[0];
-
-  // 1. Onset overlap ratio (original metric)
   const sOnsets = new Set(subject.map((n) => Math.round(n.onset * 100) / 100));
   const cOnsets = new Set(cs.map((n) => Math.round(n.onset * 100) / 100));
   const shared = [...sOnsets].filter((o) => cOnsets.has(o));
-  const onsetOverlapRatio = shared.length / Math.max(sOnsets.size, cOnsets.size);
-
-  // 2. Duration independence - for notes that start together, how often do they end at different times?
-  let sharedStartCount = 0;
-  let differentEndCount = 0;
-  for (const sNote of subject) {
-    for (const cNote of cs) {
-      const sStart = Math.round(sNote.onset * 100) / 100;
-      const cStart = Math.round(cNote.onset * 100) / 100;
-      if (sStart === cStart) {
-        sharedStartCount++;
-        const sEnd = Math.round((sNote.onset + sNote.duration) * 100) / 100;
-        const cEnd = Math.round((cNote.onset + cNote.duration) * 100) / 100;
-        if (Math.abs(sEnd - cEnd) > 0.1) {
-          differentEndCount++;
-        }
-      }
-    }
-  }
-  const durationIndependence = sharedStartCount > 0 ? differentEndCount / sharedStartCount : 1;
-
-  // 3. Motion during sustain - count how often one voice moves while the other holds
-  let motionDuringSustain = 0;
-  // Check subject notes during CS sustains
-  for (const cNote of cs) {
-    const cStart = cNote.onset;
-    const cEnd = cNote.onset + cNote.duration;
-    for (const sNote of subject) {
-      // Subject note starts DURING (not at start of) CS note
-      if (sNote.onset > cStart + 0.05 && sNote.onset < cEnd - 0.05) {
-        motionDuringSustain++;
-      }
-    }
-  }
-  // Check CS notes during subject sustains
-  for (const sNote of subject) {
-    const sStart = sNote.onset;
-    const sEnd = sNote.onset + sNote.duration;
-    for (const cNote of cs) {
-      // CS note starts DURING (not at start of) subject note
-      if (cNote.onset > sStart + 0.05 && cNote.onset < sEnd - 0.05) {
-        motionDuringSustain++;
-      }
-    }
-  }
-  const totalNotes = subject.length + cs.length;
-  const motionRatio = totalNotes > 0 ? motionDuringSustain / totalNotes : 0;
-
-  // 4. Off-beat activity - what % of notes fall on weak beats?
-  const isStrongBeat = (onset) => {
-    const beatInMeasure = onset % beatsPerMeasure;
-    // Beat 0 (downbeat) and beat 2 (in 4/4) are strong
-    return beatInMeasure < 0.1 || (beatsPerMeasure >= 4 && Math.abs(beatInMeasure - 2) < 0.1);
-  };
-  const allNotes = [...subject, ...cs];
-  const offBeatNotes = allNotes.filter(n => !isStrongBeat(n.onset));
-  const offBeatRatio = allNotes.length > 0 ? offBeatNotes.length / allNotes.length : 0;
-
-  // 5. Rhythmic variety - count distinct durations used
-  const sDurations = new Set(subject.map(n => Math.round(n.duration * 100) / 100));
-  const cDurations = new Set(cs.map(n => Math.round(n.duration * 100) / 100));
-  const totalDistinctDurations = new Set([...sDurations, ...cDurations]).size;
-  const varietyScore = Math.min(totalDistinctDurations / 4, 1); // Max out at 4 distinct durations
-
-  // Composite independence score (0-1, higher = more independent)
-  // Weight factors based on musical significance
-  const independence = (
-    (1 - onsetOverlapRatio) * 0.20 +  // Some credit for staggered attacks
-    durationIndependence * 0.25 +      // Different durations when starting together
-    Math.min(motionRatio, 0.5) * 0.30 + // Motion during sustain (capped)
-    offBeatRatio * 0.15 +              // Off-beat activity
-    varietyScore * 0.10                 // Rhythmic variety
-  );
+  const ratio = shared.length / Math.max(sOnsets.size, cOnsets.size);
 
   const observations = [];
+  // Just report the ratio - no judgment on what's "good" or "bad"
+  observations.push({
+    type: 'info',
+    description: `${Math.round(ratio * 100)}% of attacks coincide`,
+  });
 
-  // Nuanced assessment based on composite score, not just onset overlap
-  if (independence >= 0.4) {
-    observations.push({
-      type: 'strength',
-      description: `Good rhythmic independence (${Math.round(independence * 100)}%)`,
-    });
-  } else if (independence >= 0.25) {
-    observations.push({
-      type: 'info',
-      description: `Moderate rhythmic independence (${Math.round(independence * 100)}%)`,
-    });
-  } else {
-    observations.push({
-      type: 'consideration',
-      description: `Limited rhythmic independence (${Math.round(independence * 100)}%)—voices move together`,
-    });
-  }
-
-  // Additional specific observations
-  if (onsetOverlapRatio > 0.6 && durationIndependence > 0.5) {
-    observations.push({
-      type: 'info',
-      description: `${Math.round(onsetOverlapRatio * 100)}% shared attacks, but ${Math.round(durationIndependence * 100)}% have different durations`,
-    });
-  }
-
-  if (motionRatio > 0.3) {
-    observations.push({
-      type: 'strength',
-      description: 'Frequent motion against sustained notes',
-    });
-  }
-
-  return {
-    overlapRatio: onsetOverlapRatio, // Keep for backwards compatibility
-    independence,
-    durationIndependence,
-    motionRatio,
-    offBeatRatio,
-    varietyScore,
-    observations,
-  };
+  return { overlapRatio: ratio, observations };
 }
 
 /**
