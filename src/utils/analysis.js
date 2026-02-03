@@ -836,7 +836,7 @@ export function testRhythmicVariety(subject, formatter) {
  * Secondary metric: Strong beat simultaneity - % of strong beats with both voices attacking
  * Measures structural lockstep. Punish >90%, reward <80%
  */
-export function testRhythmicComplementarity(subject, cs, meter) {
+export function testRhythmicComplementarity(subject, cs, meter = [4, 4]) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
   const beatsPerMeasure = meter[0];
