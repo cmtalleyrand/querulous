@@ -197,16 +197,14 @@ export function metricWeight(onset, meter = [4, 4]) {
 
     // Start of other main beats
     if (Math.abs(posInMainBeat) < 0.05) {
-      // In 6/8: beat 2 (second main beat) is secondary accent
-      if (mainBeats === 2) return 0.75;
-      // In 12/8: beat 3 (middle) gets more weight
+      // 12/8: 4 beats - Strong (1), Medium (3), Weak (2, 4)
       if (mainBeats === 4) {
-        if (mainBeatNum === 2) return 0.75;
-        return 0.6;
+        if (mainBeatNum === 2) return 0.75; // Beat 3 is medium
+        return 0.5; // Beats 2, 4 are weak
       }
-      // In 9/8: other main beats
-      if (mainBeats === 3) return 0.65;
-      return 0.6;
+      // 6/8: 2 beats - Strong (1), Weak (2) - NO medium
+      // 9/8: 3 beats - Strong (1), Weak (2, 3) - NO medium
+      return 0.5;
     }
 
     // Subdivisions within the main beat (2nd and 3rd eighth of the triplet)

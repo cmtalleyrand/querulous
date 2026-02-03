@@ -1,8 +1,8 @@
 # Pending Feedback Log
 
-## IMPORTANT: TIME SIGNATURE & NOTATION RULES
+## IMPORTANT: TIME SIGNATURE & NOTATION RULES (Implemented in formatter.js:metricWeight)
 
-### Beat Weights by Time Signature
+### Beat Weights by Time Signature (IMPLEMENTED)
 | Time Sig | Beats | Strong | Medium | Weak |
 |----------|-------|--------|--------|------|
 | 4/4      | 4     | Beat 1 | Beat 3 | Beats 2, 4 |
