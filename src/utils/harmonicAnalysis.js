@@ -324,6 +324,9 @@ function formatChordType(type) {
  * @returns {Object} Harmonic analysis results
  */
 export function analyzeHarmonicImplication(notes, meter, tonic = 0) {
+  if (!meter || !Array.isArray(meter) || meter.length < 2) {
+    throw new Error(`analyzeHarmonicImplication: meter is invalid (${JSON.stringify(meter)}). Must pass [numerator, denominator] array.`);
+  }
   if (!notes || notes.length === 0) {
     return { chords: [], summary: { error: 'No notes' } };
   }

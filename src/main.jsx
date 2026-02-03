@@ -21,7 +21,7 @@ ${error?.stack || 'No stack trace'}
       <p style="margin-top:20px">Check browser console (F12) for more details.</p>
     </div>
   `;
-  return false; // Let it propagate to console too
+  return false;
 };
 
 // Catch unhandled promise rejections
