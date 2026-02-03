@@ -12,7 +12,10 @@
  * - In 3/4: 1 measure = 3 quarter notes = 3 internal units
  */
 export class BeatFormatter {
-  constructor(defaultNoteLength = 1 / 8, meter = [4, 4]) {
+  constructor(defaultNoteLength = 1 / 8, meter) {
+    if (!meter || !Array.isArray(meter) || meter.length < 2) {
+      throw new Error(`BeatFormatter: meter is invalid (${JSON.stringify(meter)}). Must pass [numerator, denominator] array.`);
+    }
     this.meter = meter;
     this.numerator = meter[0];
     this.denominator = meter[1];
@@ -169,7 +172,10 @@ export function pitchName(midi, preferFlats = false) {
  * - 3/4: measure = 3 internal units (3 quarter notes)
  * - 2/2: measure = 4 internal units (2 half notes = 4 quarter notes)
  */
-export function metricWeight(onset, meter = [4, 4]) {
+export function metricWeight(onset, meter) {
+  if (!meter || !Array.isArray(meter) || meter.length < 2) {
+    throw new Error(`metricWeight: meter is invalid (${JSON.stringify(meter)}). Must pass [numerator, denominator] array.`);
+  }
   const numerator = meter[0];
   const denominator = meter[1];
 
