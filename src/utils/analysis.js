@@ -247,11 +247,6 @@ export function analyzeDissonances(sims, v1Notes, v2Notes, formatter) {
  * @param {number[]} meter - Time signature [numerator, denominator]
  */
 export function findSimultaneities(v1, v2, meter) {
-  if (!meter || !Array.isArray(meter) || meter.length < 2) {
-    console.error('[BUG] findSimultaneities called without valid meter:', meter);
-    console.error('Call stack:', new Error().stack);
-    meter = [4, 4]; // Temporary fallback - check console to find the actual bug
-  }
   const sims = [];
 
   for (const n1 of v1) {
@@ -841,12 +836,7 @@ export function testRhythmicVariety(subject, formatter) {
  * Secondary metric: Strong beat simultaneity - % of strong beats with both voices attacking
  * Measures structural lockstep. Punish >90%, reward <80%
  */
-export function testRhythmicComplementarity(subject, cs, meter) {
-  if (!meter || !Array.isArray(meter) || meter.length < 2) {
-    console.error('[BUG] testRhythmicComplementarity called without valid meter:', meter);
-    console.error('Call stack:', new Error().stack);
-    meter = [4, 4]; // Temporary fallback - check console to find the actual bug
-  }
+export function testRhythmicComplementarity(subject, cs, meter = [4, 4]) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
   const beatsPerMeasure = meter[0];
@@ -1318,8 +1308,6 @@ export function testTonalAnswer(subject, mode, keyInfo, formatter) {
 export function testDoubleCounterpoint(subject, cs, formatter) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
-  const meter = formatter.meter;
-
   const analyze = (sims, v1, v2, name) => {
     let thirds = 0,
       sixths = 0,
@@ -1371,11 +1359,11 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
     };
   };
 
-  const origSims = findSimultaneities(subject, cs, meter);
+  const origSims = findSimultaneities(subject, cs);
   const orig = analyze(origSims, subject, cs, 'CS above');
 
   const csInv = cs.map((n) => new NoteEvent(n.pitch - 12, n.duration, n.onset, n.scaleDegree, n.abcNote));
-  const invSims = findSimultaneities(subject, csInv, meter);
+  const invSims = findSimultaneities(subject, csInv);
   const inv = analyze(invSims, subject, csInv, 'CS below');
 
   const observations = [];
@@ -1446,8 +1434,6 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
 export function testModulatoryRobustness(subject, cs, formatter) {
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
-  const meter = formatter.meter;
-
   const answer = subject.map(
     (n) =>
       new NoteEvent(
@@ -1459,7 +1445,7 @@ export function testModulatoryRobustness(subject, cs, formatter) {
       )
   );
 
-  const sims = findSimultaneities(answer, cs, meter);
+  const sims = findSimultaneities(answer, cs);
   const violations = checkParallelPerfects(sims, formatter);
   const observations = [];
 

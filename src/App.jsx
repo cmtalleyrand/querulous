@@ -362,8 +362,8 @@ export default function App() {
         res.rhythmicComplementarity = testRhythmicComplementarity(subject, shiftedCs, meter);
         res.contourIndependence = testContourIndependence(subject, shiftedCs, formatter);
         res.modulatoryRobustness = testModulatoryRobustness(subject, shiftedCs, formatter);
-        res.subjectCsSims = findSimultaneities(subject, shiftedCs, meter);
-        res.answerCsSims = findSimultaneities(answerNotes, shiftedCs, meter);
+        res.subjectCsSims = findSimultaneities(subject, shiftedCs);
+        res.answerCsSims = findSimultaneities(answerNotes, shiftedCs);
       }
 
       // Calculate scores
