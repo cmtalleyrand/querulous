@@ -248,9 +248,7 @@ export function analyzeDissonances(sims, v1Notes, v2Notes, formatter) {
  */
 export function findSimultaneities(v1, v2, meter) {
   if (!meter || !Array.isArray(meter) || meter.length < 2) {
-    console.error('[BUG] findSimultaneities called without valid meter:', meter);
-    console.error('Stack:', new Error().stack);
-    meter = [4, 4]; // Fallback to prevent crash
+    throw new Error(`findSimultaneities: meter is invalid (${JSON.stringify(meter)}). Caller must pass valid [numerator, denominator] array.`);
   }
   const sims = [];
 
@@ -843,9 +841,7 @@ export function testRhythmicVariety(subject, formatter) {
  */
 export function testRhythmicComplementarity(subject, cs, meter) {
   if (!meter || !Array.isArray(meter) || meter.length < 2) {
-    console.error('[BUG] testRhythmicComplementarity called without valid meter:', meter);
-    console.error('Stack:', new Error().stack);
-    meter = [4, 4]; // Fallback to prevent crash
+    throw new Error(`testRhythmicComplementarity: meter is invalid (${JSON.stringify(meter)}). Caller must pass valid [numerator, denominator] array.`);
   }
   if (!subject.length || !cs.length) return { error: 'Empty' };
 

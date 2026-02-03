@@ -10,6 +10,9 @@ import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants';
  * @returns {Array<{measure: number, expected: number, actual: number, message: string}>}
  */
 export function validateABCTiming(abcText, meter, defaultNoteLength = 1/8) {
+  if (!meter || !Array.isArray(meter) || meter.length < 2) {
+    throw new Error(`validateABCTiming: meter is invalid (${JSON.stringify(meter)}). Must pass [numerator, denominator] array.`);
+  }
   const warnings = [];
   const measureDuration = (meter[0] * 4) / meter[1]; // Duration in quarter notes
 
@@ -351,7 +354,10 @@ export function midiToABC(pitch, keySignature) {
  * @param {number[]} meter - Time signature as [numerator, denominator]
  * @param {number[]} noteLengthFraction - Note length as [numerator, denominator] fraction
  */
-export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLength, meter = [4, 4], noteLengthFraction = null) {
+export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLength, meter, noteLengthFraction = null) {
+  if (!meter || !Array.isArray(meter) || meter.length < 2) {
+    throw new Error(`generateAnswerABC: meter is invalid (${JSON.stringify(meter)}). Must pass [numerator, denominator] array.`);
+  }
   const { tonic, keySignature, mode } = keyInfo;
   const { tonalMotions, mutationPoint } = answerData;
 
@@ -460,7 +466,10 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
  * @param {number[]} meter - Time signature as [numerator, denominator]
  * @param {number[]} noteLengthFraction - Note length as [numerator, denominator] fraction
  */
-export function formatSubjectABC(subject, keyInfo, defaultNoteLength, meter = [4, 4], noteLengthFraction = null) {
+export function formatSubjectABC(subject, keyInfo, defaultNoteLength, meter, noteLengthFraction = null) {
+  if (!meter || !Array.isArray(meter) || meter.length < 2) {
+    throw new Error(`formatSubjectABC: meter is invalid (${JSON.stringify(meter)}). Must pass [numerator, denominator] array.`);
+  }
   const { key, mode } = keyInfo;
 
   let modeSuffix = ['natural_minor', 'harmonic_minor'].includes(mode)
