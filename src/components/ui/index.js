@@ -6,3 +6,4 @@ export { ABCBox } from './ABCBox';
 export { InfoButton, HelpModal } from './InfoButton';
 export { IssuesSummary } from './IssuesSummary';
 export { ChordAnalysisDisplay } from './ChordAnalysisDisplay';
+export { CounterpointScoreDisplay } from './CounterpointScoreDisplay';

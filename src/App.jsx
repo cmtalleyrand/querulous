@@ -14,6 +14,7 @@ import {
   ScoreDashboard,
   IssuesSummary,
   ChordAnalysisDisplay,
+  CounterpointScoreDisplay,
 } from './components';
 import {
   NOTE_TO_MIDI,
@@ -1461,7 +1462,7 @@ export default function App() {
                   Countersubject Analysis
                 </h2>
 
-                <Section title="Double Counterpoint (Invertibility)" helpKey="doubleCounterpoint">
+                <Section title="Subject + Countersubject" helpKey="doubleCounterpoint">
                   <InvertibilityViz
                     subject={results.subject}
                     cs={results.countersubject}
@@ -1469,6 +1470,11 @@ export default function App() {
                     originalIssues={results.doubleCounterpoint.original.issues || []}
                     invertedIssues={results.doubleCounterpoint.inverted.issues || []}
                     meter={results.meter}
+                  />
+                  <CounterpointScoreDisplay
+                    detailedScoring={results.doubleCounterpoint.original.detailedScoring}
+                    formatter={results.formatter}
+                    title="S+CS Dissonance Score (CS above)"
                   />
                   <div style={{ marginTop: '12px' }}>
                     <DataRow
@@ -1510,17 +1516,38 @@ export default function App() {
                   />
                 </Section>
 
-                <Section title="Answer vs Countersubject" helpKey="modulatoryRobustness" defaultCollapsed={true}>
+                <Section title="Answer + Countersubject" helpKey="modulatoryRobustness">
                   <p style={{ fontSize: '12px', color: '#546e7a', marginBottom: '8px' }}>
-                    When the subject becomes the answer (transposed to dominant), how well does the CS combine with it?
+                    In a fugue, the answer (subject transposed to dominant) also appears with the countersubject.
                   </p>
-                  {results.modulatoryRobustness.intervalProfile && (
-                    <DataRow
-                      data={{
-                        'Consonant on strong beats': `${results.modulatoryRobustness.intervalProfile.consonant} (${results.modulatoryRobustness.intervalProfile.thirds} 3rds, ${results.modulatoryRobustness.intervalProfile.sixths} 6ths, ${results.modulatoryRobustness.intervalProfile.perfects} perfect)`,
-                        'Dissonant on strong beats': results.modulatoryRobustness.intervalProfile.dissonant,
+                  {results.answerNotes && results.countersubject && (
+                    <UnifiedCounterpointViz
+                      voices={{
+                        answer: results.answerNotes,
+                        cs1: results.countersubject,
                       }}
+                      formatter={results.formatter}
+                      meter={results.meter}
+                      defaultVoice1="answer"
+                      defaultVoice2="cs1"
+                      defaultTransposition={0}
+                      title="Answer + CS Analysis"
                     />
+                  )}
+                  <CounterpointScoreDisplay
+                    detailedScoring={results.modulatoryRobustness.detailedScoring}
+                    formatter={results.formatter}
+                    title="A+CS Dissonance Score"
+                  />
+                  {results.modulatoryRobustness.intervalProfile && (
+                    <div style={{ marginTop: '12px' }}>
+                      <DataRow
+                        data={{
+                          'Consonant on strong beats': `${results.modulatoryRobustness.intervalProfile.consonant} (${results.modulatoryRobustness.intervalProfile.thirds} 3rds, ${results.modulatoryRobustness.intervalProfile.sixths} 6ths, ${results.modulatoryRobustness.intervalProfile.perfects} perfect)`,
+                          'Dissonant on strong beats': results.modulatoryRobustness.intervalProfile.dissonant,
+                        }}
+                      />
+                    </div>
                   )}
                   <ObservationList observations={results.modulatoryRobustness.observations} />
                 </Section>
