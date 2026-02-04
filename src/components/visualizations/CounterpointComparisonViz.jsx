@@ -129,6 +129,10 @@ export function CounterpointComparisonViz({
       if (!beatMap.has(snapBeat)) {
         const scoring = scoreDissonance(sim, sims, i, intervalHistory);
 
+        // Calculate motion from previous interval
+        const v1Motion = prevPoint ? sim.voice1Note.pitch - prevPoint.v1Pitch : 0;
+        const v2Motion = prevPoint ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
+
         // Check for parallel 5ths/8ves
         const point = {
           onset: sim.onset,
@@ -142,9 +146,18 @@ export function CounterpointComparisonViz({
           score: scoring.score,
           scoreDetails: scoring.details,
           type: scoring.type,
-          isResolved: scoring.isResolved !== false, // Default to true if not specified
+          isResolved: scoring.isResolved !== false,
           isParallel: false,
           isRepeated: sim.interval.class === 1 || sim.interval.class === 0,
+          // Previous interval info for detail panel
+          prevInterval: prevPoint ? {
+            intervalName: prevPoint.intervalName,
+            intervalClass: prevPoint.intervalClass,
+            v1Pitch: prevPoint.v1Pitch,
+            v2Pitch: prevPoint.v2Pitch,
+          } : null,
+          v1Motion,
+          v2Motion,
         };
 
         // Check for parallel motion with previous interval
@@ -475,54 +488,55 @@ export function CounterpointComparisonViz({
           )}
         </div>
 
-        {/* Score and issue count */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', alignItems: 'center' }}>
+        {/* Score and issue count - compact */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
           {/* Issue count with delta indicator */}
           <div style={{
-            padding: '6px 12px',
-            borderRadius: '6px',
+            padding: '4px 10px',
+            borderRadius: '4px',
             backgroundColor: hasIssues ? '#fef2f2' : hasWarnings ? '#fefce8' : '#f0fdf4',
             border: `1px solid ${hasIssues ? '#fecaca' : hasWarnings ? '#fde047' : '#bbf7d0'}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
           }}>
-            <div style={{ fontSize: '10px', color: '#64748b' }}>Issues</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Issues:</span>
+            <span style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              color: hasIssues ? '#dc2626' : hasWarnings ? '#ca8a04' : '#16a34a',
+            }}>
+              {issues.length}
+            </span>
+            {issueCountDelta !== 0 && (
               <span style={{
-                fontSize: '16px',
-                fontWeight: '700',
-                color: hasIssues ? '#dc2626' : hasWarnings ? '#ca8a04' : '#16a34a',
+                fontSize: '10px',
+                fontWeight: '600',
+                color: issueCountDelta > 0 ? '#dc2626' : '#16a34a',
               }}>
-                {issues.length}
+                ({issueCountDelta > 0 ? '+' : ''}{issueCountDelta})
               </span>
-              {issueCountDelta !== 0 && (
-                <span style={{
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  color: issueCountDelta > 0 ? '#dc2626' : '#16a34a',
-                  backgroundColor: issueCountDelta > 0 ? '#fee2e2' : '#dcfce7',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                }}>
-                  {issueCountDelta > 0 ? '+' : ''}{issueCountDelta}
-                </span>
-              )}
-            </div>
+            )}
           </div>
 
-          {/* Average score */}
+          {/* Average score - compact */}
           <div style={{
-            padding: '6px 12px',
-            borderRadius: '8px',
+            padding: '4px 10px',
+            borderRadius: '4px',
             backgroundColor: avgScore >= 0.5 ? '#dcfce7' : avgScore >= 0 ? '#fef9c3' : '#fee2e2',
             border: `1px solid ${avgScore >= 0.5 ? '#86efac' : avgScore >= 0 ? '#fde047' : '#fca5a5'}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
           }}>
-            <div style={{ fontSize: '10px', color: '#64748b' }}>Avg Score</div>
-            <div style={{
-              fontSize: '16px',
-              fontWeight: '700',
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Avg:</span>
+            <span style={{
+              fontSize: '12px',
+              fontWeight: '600',
               color: avgScore >= 0.5 ? '#16a34a' : avgScore >= 0 ? '#ca8a04' : '#dc2626',
             }}>
               {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
-            </div>
+            </span>
           </div>
         </div>
       </div>
@@ -800,13 +814,13 @@ export function CounterpointComparisonViz({
         </div>
       </div>
 
-      {/* Selected interval detail panel */}
+      {/* Selected interval detail panel - comprehensive */}
       {selectedInterval && (
         <div style={{
           backgroundColor: '#fff',
-          border: '1px solid #6366f1',
+          border: '1px solid #e2e8f0',
           borderRadius: '8px',
-          padding: '14px',
+          overflow: 'hidden',
         }}>
           {(() => {
             const pt = selectedInterval;
@@ -821,90 +835,191 @@ export function CounterpointComparisonViz({
               isResolved: pt.isResolved,
               isParallel: pt.isParallel,
             });
+
+            // Format motion as interval name
+            const formatMotion = (semitones) => {
+              if (semitones === 0) return '—';
+              const dir = semitones > 0 ? '↑' : '↓';
+              const abs = Math.abs(semitones);
+              if (abs === 1) return `${dir}m2`;
+              if (abs === 2) return `${dir}M2`;
+              if (abs === 3) return `${dir}m3`;
+              if (abs === 4) return `${dir}M3`;
+              if (abs === 5) return `${dir}P4`;
+              if (abs === 6) return `${dir}TT`;
+              if (abs === 7) return `${dir}P5`;
+              if (abs >= 12) return `${dir}${abs}st`;
+              return `${dir}${abs}st`;
+            };
+
             return (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <span style={{ fontWeight: '600', color: '#1f2937' }}>
+                {/* Header */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '10px 14px',
+                  backgroundColor: '#f8fafc',
+                  borderBottom: '1px solid #e2e8f0',
+                }}>
+                  <span style={{ fontWeight: '600', fontSize: '13px', color: '#1f2937' }}>
                     {formatter?.formatBeat(pt.onset) || `Beat ${pt.onset + 1}`}
                   </span>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <span style={{
-                      padding: '4px 10px',
+                      padding: '3px 8px',
                       backgroundColor: style.bg,
                       color: style.color,
-                      borderRadius: '6px',
-                      fontSize: '13px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
                       fontWeight: '600',
-                      border: style.borderStyle === 'dashed' ? `2px dashed ${style.color}` : `1px solid ${style.color}`,
                     }}>
                       {pt.intervalName} — {style.label}
                     </span>
                     {pt.isParallel && (
-                      <span style={{
-                        padding: '4px 10px',
-                        backgroundColor: '#fef2f2',
-                        color: '#dc2626',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                      }}>
-                        Parallel motion!
+                      <span style={{ padding: '3px 8px', backgroundColor: '#fef2f2', color: '#dc2626', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>
+                        Parallel!
                       </span>
                     )}
                     {!pt.isResolved && !pt.isConsonant && (
-                      <span style={{
-                        padding: '4px 10px',
-                        backgroundColor: '#fef3c7',
-                        color: '#b45309',
-                        borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: '600',
-                      }}>
+                      <span style={{ padding: '3px 8px', backgroundColor: '#fef3c7', color: '#b45309', borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>
                         Unresolved
                       </span>
                     )}
                     {!pt.isConsonant && (
                       <span style={{
-                        padding: '4px 10px',
+                        padding: '3px 8px',
                         backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
                         color: pt.score >= 0 ? '#16a34a' : '#dc2626',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        fontWeight: '700',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: '600',
                       }}>
                         {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
                       </span>
                     )}
                     <button
                       onClick={() => { setSelectedInterval(null); setHighlightedOnset(null); }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}
-                    >
-                      ×
-                    </button>
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#9ca3af', marginLeft: '4px' }}
+                    >×</button>
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '10px' }}>
-                  <div style={{ padding: '8px 12px', backgroundColor: `${voice1Color}15`, borderRadius: '6px', borderLeft: `3px solid ${voice1Color}` }}>
-                    <div style={{ fontSize: '10px', color: '#64748b' }}>{voice1Label}</div>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: voice1Color }}>{pitchName(pt.v1Pitch)}</div>
-                  </div>
-                  <div style={{ padding: '8px 12px', backgroundColor: `${voice2Color}15`, borderRadius: '6px', borderLeft: `3px solid ${voice2Color}` }}>
-                    <div style={{ fontSize: '10px', color: '#64748b' }}>{voice2Label}</div>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: voice2Color }}>{pitchName(pt.v2Pitch)}</div>
-                  </div>
-                </div>
-
-                {pt.scoreDetails && pt.scoreDetails.length > 0 && (
-                  <div style={{ backgroundColor: '#f8fafc', borderRadius: '6px', padding: '10px', fontSize: '12px' }}>
-                    <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>Scoring Details:</div>
-                    {pt.scoreDetails.map((detail, i) => (
-                      <div key={i} style={{ color: '#64748b', marginBottom: '2px' }}>
-                        {typeof detail === 'object' ? detail.text : detail}
+                <div style={{ padding: '12px 14px' }}>
+                  {/* Motion from previous interval */}
+                  {pt.prevInterval && (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto 1fr',
+                      gap: '8px',
+                      alignItems: 'center',
+                      marginBottom: '12px',
+                      padding: '10px',
+                      backgroundColor: '#f1f5f9',
+                      borderRadius: '6px',
+                    }}>
+                      {/* Previous interval */}
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>Previous</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#475569' }}>{pt.prevInterval.intervalName}</div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                          {pitchName(pt.prevInterval.v1Pitch)} / {pitchName(pt.prevInterval.v2Pitch)}
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+
+                      {/* Motion arrow */}
+                      <div style={{ textAlign: 'center', padding: '0 8px' }}>
+                        <div style={{ fontSize: '16px', color: '#6366f1' }}>→</div>
+                        <div style={{ fontSize: '9px', color: '#64748b', marginTop: '2px' }}>
+                          {voice1Label}: {formatMotion(pt.v1Motion)}
+                        </div>
+                        <div style={{ fontSize: '9px', color: '#64748b' }}>
+                          {voice2Label}: {formatMotion(pt.v2Motion)}
+                        </div>
+                      </div>
+
+                      {/* Current interval */}
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '2px' }}>Current</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: style.color }}>{pt.intervalName}</div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                          {pitchName(pt.v1Pitch)} / {pitchName(pt.v2Pitch)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Current notes (if no previous) */}
+                  {!pt.prevInterval && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '12px' }}>
+                      <div style={{ padding: '8px 10px', backgroundColor: `${voice1Color}10`, borderRadius: '4px', borderLeft: `3px solid ${voice1Color}` }}>
+                        <div style={{ fontSize: '10px', color: '#64748b' }}>{voice1Label}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: voice1Color }}>{pitchName(pt.v1Pitch)}</div>
+                      </div>
+                      <div style={{ padding: '8px 10px', backgroundColor: `${voice2Color}10`, borderRadius: '4px', borderLeft: `3px solid ${voice2Color}` }}>
+                        <div style={{ fontSize: '10px', color: '#64748b' }}>{voice2Label}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: voice2Color }}>{pitchName(pt.v2Pitch)}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Score breakdown - always show for dissonances */}
+                  {!pt.isConsonant && pt.scoreDetails && pt.scoreDetails.length > 0 && (
+                    <div style={{
+                      backgroundColor: '#fafafa',
+                      borderRadius: '6px',
+                      padding: '10px',
+                      border: '1px solid #e5e7eb',
+                    }}>
+                      <div style={{ fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                        Score Breakdown
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        {pt.scoreDetails.map((detail, i) => {
+                          const text = typeof detail === 'object' ? detail.text : detail;
+                          return (
+                            <div key={i} style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              fontSize: '11px',
+                              padding: '2px 0',
+                              borderBottom: i < pt.scoreDetails.length - 1 ? '1px solid #f3f4f6' : 'none',
+                            }}>
+                              <span style={{ color: '#64748b', flex: 1 }}>{text}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{
+                        marginTop: '8px',
+                        paddingTop: '6px',
+                        borderTop: '1px solid #e5e7eb',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}>
+                        <span style={{ fontSize: '11px', fontWeight: '600', color: '#475569' }}>Total</span>
+                        <span style={{
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                        }}>
+                          {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Type indicator for consonances */}
+                  {pt.isConsonant && (
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                      {isPerfect ? 'Perfect consonance' : 'Imperfect consonance'}
+                      {pt.isRepeated && ' (repeated pitch class)'}
+                    </div>
+                  )}
+                </div>
               </>
             );
           })()}

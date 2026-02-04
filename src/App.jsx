@@ -1462,31 +1462,6 @@ export default function App() {
                   Countersubject Analysis
                 </h2>
 
-                <Section title="Subject + Countersubject" helpKey="doubleCounterpoint">
-                  <InvertibilityViz
-                    subject={results.subject}
-                    cs={results.countersubject}
-                    formatter={results.formatter}
-                    originalIssues={results.doubleCounterpoint.original.issues || []}
-                    invertedIssues={results.doubleCounterpoint.inverted.issues || []}
-                    meter={results.meter}
-                  />
-                  <CounterpointScoreDisplay
-                    detailedScoring={results.doubleCounterpoint.original.detailedScoring}
-                    formatter={results.formatter}
-                    title="S+CS Dissonance Score (CS above)"
-                  />
-                  <div style={{ marginTop: '12px' }}>
-                    <DataRow
-                      data={{
-                        'Original (CS above)': `${results.doubleCounterpoint.original.thirds} 3rds, ${results.doubleCounterpoint.original.sixths} 6ths, ${results.doubleCounterpoint.original.perfects} perfect`,
-                        'Inverted (CS below)': `${results.doubleCounterpoint.inverted.thirds} 3rds, ${results.doubleCounterpoint.inverted.sixths} 6ths, ${results.doubleCounterpoint.inverted.perfects} perfect`,
-                      }}
-                    />
-                  </div>
-                  <ObservationList observations={results.doubleCounterpoint.observations} />
-                </Section>
-
                 <Section title="Rhythmic Complementarity" helpKey="rhythmicComplementarity" defaultCollapsed={true}>
                   <DataRow
                     data={{
@@ -1514,42 +1489,6 @@ export default function App() {
                       })),
                     ]}
                   />
-                </Section>
-
-                <Section title="Answer + Countersubject" helpKey="modulatoryRobustness">
-                  <p style={{ fontSize: '12px', color: '#546e7a', marginBottom: '8px' }}>
-                    In a fugue, the answer (subject transposed to dominant) also appears with the countersubject.
-                  </p>
-                  {results.answerNotes && results.countersubject && (
-                    <UnifiedCounterpointViz
-                      voices={{
-                        answer: results.answerNotes,
-                        cs1: results.countersubject,
-                      }}
-                      formatter={results.formatter}
-                      meter={results.meter}
-                      defaultVoice1="answer"
-                      defaultVoice2="cs1"
-                      defaultTransposition={0}
-                      title="Answer + CS Analysis"
-                    />
-                  )}
-                  <CounterpointScoreDisplay
-                    detailedScoring={results.modulatoryRobustness.detailedScoring}
-                    formatter={results.formatter}
-                    title="A+CS Dissonance Score"
-                  />
-                  {results.modulatoryRobustness.intervalProfile && (
-                    <div style={{ marginTop: '12px' }}>
-                      <DataRow
-                        data={{
-                          'Consonant on strong beats': `${results.modulatoryRobustness.intervalProfile.consonant} (${results.modulatoryRobustness.intervalProfile.thirds} 3rds, ${results.modulatoryRobustness.intervalProfile.sixths} 6ths, ${results.modulatoryRobustness.intervalProfile.perfects} perfect)`,
-                          'Dissonant on strong beats': results.modulatoryRobustness.intervalProfile.dissonant,
-                        }}
-                      />
-                    </div>
-                  )}
-                  <ObservationList observations={results.modulatoryRobustness.observations} />
                 </Section>
               </>
             )}
