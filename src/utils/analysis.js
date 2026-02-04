@@ -862,10 +862,10 @@ export function testRhythmicComplementarity(subject, cs, meter) {
   const soloOnsetRatio = soloOnsetCount / allOnsets.size;
 
   // Strong beat simultaneity
-  // Strong beats: beat 0 (downbeat) and beat 2 in 4/4
+  // Strong beats = downbeat (weight 1.0) and medium-strong beats (weight 0.75)
+  // Uses metricWeight function for proper handling of all time signatures
   const isStrongBeat = (onset) => {
-    const beatInMeasure = onset % beatsPerMeasure;
-    return beatInMeasure < 0.1 || (beatsPerMeasure >= 4 && Math.abs(beatInMeasure - 2) < 0.1);
+    return metricWeight(onset, meter) >= 0.75;
   };
 
   // Find all strong beats that have ANY note onset

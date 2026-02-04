@@ -1,5 +1,32 @@
 # Pending Feedback Log
 
+## IMPORTANT: TIME SIGNATURE & NOTATION RULES (Implemented in formatter.js:metricWeight)
+
+### Beat Weights by Time Signature (IMPLEMENTED)
+| Time Sig | Beats | Strong | Medium | Weak |
+|----------|-------|--------|--------|------|
+| 4/4      | 4     | Beat 1 | Beat 3 | Beats 2, 4 |
+| 12/8     | 4 (compound) | Beat 1 | Beat 3 | Beats 2, 4 |
+| 6/8      | 2 (dotted quarters) | Beat 1 | — | Beat 2 |
+| 9/8      | 3 (dotted quarters) | Beat 1 | — | Beats 2, 3 |
+| Other    | No medium-strong beats | | | |
+
+### Time Notation Format
+`M{measure}.B{beat}.{subdivision}.{fraction}`
+
+- M = measure number
+- B = beat number
+- Subdivision = which subdivision of the beat (e.g., which 8th)
+- Fraction = position within subdivision
+
+**Example:** `M3.B3.3.5` = midpoint of the 3rd eighth of the 3rd beat of the 3rd measure
+
+### "On the Beat" Definition
+- "On the beat" = attack at the beat ONSET (the start)
+- NOT just anywhere during the beat
+
+---
+
 ## CRITICAL - App Issues
 | Issue | Claude Check | User Check |
 |-------|--------------|------------|

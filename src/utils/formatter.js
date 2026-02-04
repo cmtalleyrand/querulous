@@ -56,42 +56,48 @@ export class BeatFormatter {
   }
 
   /**
-   * Format a beat position as "m.X beat Y" with proper subdivision handling
+   * Format a beat position as M{measure}.B{beat}.{subdivision}.{fraction}
+   * Example: M3.B3.3.5 = midpoint of the 3rd eighth of the 3rd beat of the 3rd measure
+   *
+   * Subdivision is which subdivision of the beat (e.g., which 8th)
+   * Fraction is position within that subdivision (0-9, where 5 is midpoint)
    */
   formatBeat(beatPosition) {
     const measure = Math.floor(beatPosition / this.internalUnitsPerMeasure) + 1;
     const posInMeasureUnits = beatPosition % this.internalUnitsPerMeasure;
     const posInBeats = posInMeasureUnits / this.internalUnitsPerBeat;
 
-    if (this.isCompound) {
-      // For compound meters, show beat and subdivision within the triplet group
-      const mainBeat = Math.floor(posInBeats) + 1;
-      const subInBeat = (posInBeats - Math.floor(posInBeats)) * 3; // 0, 1, or 2
+    const beat = Math.floor(posInBeats) + 1;
+    const fractionOfBeat = posInBeats - Math.floor(posInBeats);
 
-      let subStr = '';
-      if (Math.abs(subInBeat - 1) < 0.15) subStr = '⅓';
-      else if (Math.abs(subInBeat - 2) < 0.15) subStr = '⅔';
-      else if (subInBeat > 0.05) subStr = `+${(subInBeat / 3).toFixed(2)}`;
+    // Determine subdivisions per beat based on meter
+    // In simple meters: typically 2 eighths per quarter beat
+    // In compound meters: 3 eighths per dotted quarter beat
+    const subsPerBeat = this.isCompound ? 3 : 2;
 
-      const beatStr = subStr ? `${mainBeat}${subStr}` : `${mainBeat}`;
-      return measure === 1 ? `beat ${beatStr}` : `m.${measure} beat ${beatStr}`;
+    // Which subdivision within the beat (1-indexed)
+    const subPosition = fractionOfBeat * subsPerBeat;
+    const subdivision = Math.floor(subPosition) + 1;
+
+    // Fraction within that subdivision (0-9 scale, 5 = midpoint)
+    const fractionInSub = (subPosition - Math.floor(subPosition)) * 10;
+    const fractionDigit = Math.round(fractionInSub);
+
+    // Build the string
+    // If exactly on the beat, show M{m}.B{b}
+    // If on a subdivision, show M{m}.B{b}.{s}
+    // If between subdivisions, show M{m}.B{b}.{s}.{f}
+
+    if (fractionOfBeat < 0.01) {
+      // Exactly on the beat
+      return `M${measure}.B${beat}`;
+    } else if (fractionDigit === 0 || fractionDigit === 10) {
+      // Exactly on a subdivision
+      const actualSub = fractionDigit === 10 ? subdivision + 1 : subdivision;
+      return `M${measure}.B${beat}.${actualSub}`;
     } else {
-      // Simple meters
-      const wholeBeat = Math.floor(posInBeats) + 1;
-      const fraction = posInBeats - Math.floor(posInBeats);
-
-      let sub = '';
-      if (fraction > 0.01) {
-        if (Math.abs(fraction - 0.5) < 0.05) sub = '½';
-        else if (Math.abs(fraction - 0.25) < 0.05) sub = '¼';
-        else if (Math.abs(fraction - 0.75) < 0.05) sub = '¾';
-        else if (Math.abs(fraction - 0.333) < 0.05) sub = '⅓';
-        else if (Math.abs(fraction - 0.667) < 0.05) sub = '⅔';
-        else sub = `+${fraction.toFixed(2)}`;
-      }
-
-      const beatStr = sub ? `${wholeBeat}${sub}` : `${wholeBeat}`;
-      return measure === 1 ? `beat ${beatStr}` : `m.${measure} beat ${beatStr}`;
+      // Between subdivisions
+      return `M${measure}.B${beat}.${subdivision}.${fractionDigit}`;
     }
   }
 
@@ -203,16 +209,14 @@ export function metricWeight(onset, meter) {
 
     // Start of other main beats
     if (Math.abs(posInMainBeat) < 0.05) {
-      // In 6/8: beat 2 (second main beat) is secondary accent
-      if (mainBeats === 2) return 0.75;
-      // In 12/8: beat 3 (middle) gets more weight
+      // 12/8: 4 beats - Strong (1), Medium (3), Weak (2, 4)
       if (mainBeats === 4) {
-        if (mainBeatNum === 2) return 0.75;
-        return 0.6;
+        if (mainBeatNum === 2) return 0.75; // Beat 3 is medium
+        return 0.5; // Beats 2, 4 are weak
       }
-      // In 9/8: other main beats
-      if (mainBeats === 3) return 0.65;
-      return 0.6;
+      // 6/8: 2 beats - Strong (1), Weak (2) - NO medium
+      // 9/8: 3 beats - Strong (1), Weak (2, 3) - NO medium
+      return 0.5;
     }
 
     // Subdivisions within the main beat (2nd and 3rd eighth of the triplet)

@@ -272,11 +272,11 @@ High contrary motion (over 35%) indicates good voice independence. High parallel
   },
 
   modulatoryRobustness: {
-    title: 'Transposition Stability',
-    brief: 'How well the countersubject functions against the answer.',
-    detailed: `The countersubject first appears against the subject in the tonic. But it also accompanies the answer, which is in the dominant.
+    title: 'Answer vs Countersubject',
+    brief: 'Testing how well the countersubject combines with the answer.',
+    detailed: `The countersubject first appears against the subject in the tonic. But in a fugue, it also accompanies the answer, which is in the dominant.
 
-This analysis transposes the subject up a fifth (simulating the answer) and tests the countersubject against it:
+This analysis creates the answer (subject transposed up a 5th) and tests the countersubject against it:
 
 • Consonance percentage on strong beats
 • Parallel perfect interval violations
@@ -404,7 +404,7 @@ VOICE COMBINATION (with countersubject):
 • Voice Independence (0.9) - contour differentiation
   Baseline: average motion variety. +12 high contrary, -12 high parallel.
 
-• Transposition Stability (1.0) - CS against dominant-level answer
+• Answer vs Countersubject (1.0) - CS against dominant-level answer
   Baseline: acceptable counterpoint. Based on dissonance analysis vs the answer.
 
 SCORE INTERPRETATION (base-zero):
