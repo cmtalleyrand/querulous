@@ -150,21 +150,23 @@ export function ChordAnalysisDisplay({ chordAnalysis, formatter }) {
             ))}
           </div>
 
-          {/* Legend */}
+          {/* Legend and explanation */}
           <div style={{
             marginTop: '12px',
             paddingTop: '8px',
             borderTop: '1px solid #e2e8f0',
             fontSize: '11px',
             color: '#6b7280',
-            display: 'flex',
-            gap: '16px',
           }}>
-            <span>Confidence: </span>
-            <span style={{ color: '#059669' }}>■ High (80%+)</span>
-            <span style={{ color: '#0891b2' }}>■ Good (60%+)</span>
-            <span style={{ color: '#d97706' }}>■ Fair (40%+)</span>
-            <span style={{ color: '#9ca3af' }}>■ Low/None</span>
+            <div style={{ marginBottom: '6px', fontStyle: 'italic' }}>
+              Confidence = % of notes at that beat matching the chord (e.g., 3/4 notes = 75%)
+            </div>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <span style={{ color: '#059669' }}>■ High (80%+)</span>
+              <span style={{ color: '#0891b2' }}>■ Good (60%+)</span>
+              <span style={{ color: '#d97706' }}>■ Fair (40%+)</span>
+              <span style={{ color: '#9ca3af' }}>■ Low/None</span>
+            </div>
           </div>
         </div>
       )}

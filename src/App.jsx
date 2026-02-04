@@ -1510,9 +1510,9 @@ export default function App() {
                   />
                 </Section>
 
-                <Section title="Modulatory Robustness" helpKey="modulatoryRobustness" defaultCollapsed={true}>
+                <Section title="Answer vs Countersubject" helpKey="modulatoryRobustness" defaultCollapsed={true}>
                   <p style={{ fontSize: '12px', color: '#546e7a', marginBottom: '8px' }}>
-                    How well does the countersubject work against the answer?
+                    When the subject becomes the answer (transposed to dominant), how well does the CS combine with it?
                   </p>
                   {results.modulatoryRobustness.intervalProfile && (
                     <DataRow
