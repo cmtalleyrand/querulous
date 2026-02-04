@@ -201,7 +201,8 @@ export function UnifiedCounterpointViz({
 
   const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
 
-  const handleIntervalClick = (pt) => {
+  const handleIntervalClick = (pt, event) => {
+    if (event) event.preventDefault(); // Prevent double-firing on touch devices
     setSelectedInterval(selectedInterval?.onset === pt.onset ? null : pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
   };
@@ -432,7 +433,8 @@ export function UnifiedCounterpointViz({
                 <g
                   key={`int-${i}`}
                   style={{ cursor: 'pointer' }}
-                  onClick={() => handleIntervalClick(pt)}
+                  onClick={(e) => handleIntervalClick(pt, e)}
+                  onTouchStart={(e) => handleIntervalClick(pt, e)}
                   onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
                   onMouseLeave={() => !isSelected && setHighlightedOnset(null)}
                 >
@@ -595,7 +597,8 @@ export function UnifiedCounterpointViz({
           {issues.map((issue, i) => (
             <div
               key={i}
-              onClick={() => handleIntervalClick(issue)}
+              onClick={(e) => handleIntervalClick(issue, e)}
+              onTouchStart={(e) => handleIntervalClick(issue, e)}
               style={{
                 padding: '10px 14px',
                 borderBottom: i < issues.length - 1 ? `1px solid ${VIZ_COLORS.issueBackground}` : 'none',

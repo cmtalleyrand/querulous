@@ -61,7 +61,8 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
   };
 
   // Handle issue click - highlight the interval
-  const handleIssueClick = (issue) => {
+  const handleIssueClick = (issue, event) => {
+    if (event) event.preventDefault(); // Prevent double-firing on touch devices
     const key = getOnsetKey(issue.onset);
     setHighlightedOnset(highlightedOnset === key ? null : key);
     const pt = getIntervalAt(issue.onset);
@@ -69,7 +70,8 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
   };
 
   // Handle interval click in SVG
-  const handleIntervalClick = (pt) => {
+  const handleIntervalClick = (pt, event) => {
+    if (event) event.preventDefault(); // Prevent double-firing on touch devices
     setSelectedInterval(selectedInterval?.onset === pt.onset ? null : pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
   };
@@ -239,7 +241,8 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                 <g
                   key={`int-${i}`}
                   style={{ cursor: 'pointer' }}
-                  onClick={() => handleIntervalClick(pt)}
+                  onClick={(e) => handleIntervalClick(pt, e)}
+                  onTouchStart={(e) => handleIntervalClick(pt, e)}
                   onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
                   onMouseLeave={() => !isSelected && setHighlightedOnset(null)}
                 >
@@ -325,7 +328,8 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
             return (
               <div
                 key={`issue-${i}`}
-                onClick={() => handleIssueClick(issue)}
+                onClick={(e) => handleIssueClick(issue, e)}
+                onTouchStart={(e) => handleIssueClick(issue, e)}
                 style={{
                   padding: '10px 12px',
                   borderBottom: i < issues.length - 1 || warnings.length > 0 ? '1px solid #f3f4f6' : 'none',
@@ -363,7 +367,8 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
             return (
               <div
                 key={`warn-${i}`}
-                onClick={() => handleIssueClick(warn)}
+                onClick={(e) => handleIssueClick(warn, e)}
+                onTouchStart={(e) => handleIssueClick(warn, e)}
                 style={{
                   padding: '10px 12px',
                   borderBottom: i < warnings.length - 1 ? '1px solid #f3f4f6' : 'none',
