@@ -6,6 +6,7 @@ import {
   IntervalAnalysisViz,
   InvertibilityViz,
   UnifiedCounterpointViz,
+  CounterpointComparisonViz,
   Section,
   ObservationList,
   DataRow,
@@ -829,9 +830,9 @@ export default function App() {
             {/* Countersubject Sections */}
             {results.countersubject && (
               <>
-                {/* Voice Comparison - unified view with transposition testing */}
-                <Section title="Counterpoint Analysis" helpKey="countersubject">
-                  <UnifiedCounterpointViz
+                {/* Voice Comparison - unified view with tabs and transposition testing */}
+                <Section title="Counterpoint Comparison" helpKey="countersubject">
+                  <CounterpointComparisonViz
                     voices={{
                       subject: results.subject,
                       answer: results.answerNotes,
@@ -839,9 +840,8 @@ export default function App() {
                     }}
                     formatter={results.formatter}
                     meter={results.meter}
-                    defaultVoice1="answer"
-                    defaultVoice2="cs1"
-                    title="Voice Comparison"
+                    sequences={results.sequences}
+                    title="Counterpoint Comparison"
                   />
                 </Section>
 

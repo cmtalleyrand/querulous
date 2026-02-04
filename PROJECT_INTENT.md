@@ -132,6 +132,60 @@ Broken information (wrong measure numbers, incorrect labels, bad data) is worse 
 
 ---
 
+---
+
+## Visualization Interaction Specification (Clarified)
+
+### Default Visibility (No Interaction Required)
+
+1. **Always visible**: Notes as colored rectangles + colored vertical regions for EVERY interval
+2. **Subtle by default**: Interval regions are semi-transparent, not overwhelming
+3. **Prominent for problems**: Parallel 5ths/8ves, unresolved dissonances, badly resolved dissonances get brighter/more saturated indicators
+4. **Sequences**: Show detected sequences with a distinct border around the notes
+
+### Click/Tap Behavior
+
+- **Click interval region OR note**: Opens detail panel below visualization
+- **Click issue in list**: Scrolls to interval, highlights it, AND auto-opens detail panel
+- **Hover**: Shows interval label (number) on the region
+
+### Color Scheme (Semantic)
+
+#### Consonances
+- **Perfect consonances** (P1, P5, P8): Blue-green (`#2dd4bf` teal family)
+- **Imperfect consonances** (3rds, 6ths): Yellow-green (`#84cc16` lime family)
+- **Repeated intervals** (same pitch class): Greyer version of imperfect (`#a3a3a3` neutral)
+
+#### Dissonances
+- **Color gradient by score**: Well-handled (violet `#a78bfa`) → Problematic (red `#f87171`)
+- **Resolution status indicated by**:
+  - Solid border = properly resolved to consonance
+  - Dashed border = unresolved or poorly resolved
+  - Saturation: Resolved dissonances appear more saturated/vibrant
+
+#### Problem Indicators
+- **Parallel 5ths/8ves**: Bright red with thick border
+- **Unresolved dissonances**: Dashed border, lower saturation
+- **Badly resolved**: Warning orange with dashed border
+
+### Combined Counterpoint Visualization
+
+#### Structure
+- **Single panel with tabs**: Subject+CS, Answer+CS, Answer+Subject
+- **Or overlay mode**: All voices shown simultaneously with distinct colors
+
+#### Displacement Controls
+- **+/- buttons**: Adjust by semitone (small) and octave (large)
+- **Named interval display**: Shows current transposition as interval name (e.g., "P5 up", "m3 down")
+- **Real-time rescoring**: Issues recalculate on every change
+
+#### Issues List Behavior
+- **Full recalculation** on transposition change
+- **Comparison display**: "Was X issues → Now Y issues" with +/- indicator
+- **Animated transition** optional for showing which issues appeared/disappeared
+
+---
+
 ## Out of Scope (Not Goals)
 
 - Traditional music notation rendering (we use piano roll)
