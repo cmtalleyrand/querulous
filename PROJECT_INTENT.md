@@ -149,6 +149,19 @@ Broken information (wrong measure numbers, incorrect labels, bad data) is worse 
 - **Click issue in list**: Scrolls to interval, highlights it, AND auto-opens detail panel
 - **Hover**: Shows interval label (number) on the region
 
+### Detail Panel Requirements
+
+The detail panel must show comprehensive information for each interval, laid out attractively:
+
+1. **Notes involved**: Both pitches displayed clearly with voice labels
+2. **Previous interval**: The interval that preceded this one
+3. **Voice motion**: How much each voice moved (e.g., "↑m3", "↓P5") from previous to current
+4. **Current interval**: The current interval with quality assessment
+5. **Score breakdown**: For dissonances, show each scoring factor (entry, beat strength, exit, etc.) with its contribution to the total score
+6. **Problem indicators**: Clear badges for parallel motion, unresolved dissonances, etc.
+
+Layout should be compact but readable, with the motion from previous → current shown visually.
+
 ### Color Scheme (Semantic)
 
 #### Consonances
