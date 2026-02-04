@@ -56,43 +56,41 @@ export class BeatFormatter {
   }
 
   /**
-   * Format a beat position as "m.X beat Y" with proper subdivision handling
+   * Format a beat position as M{measure}.B{beat}.{subdivision}.{fraction}
+   * Examples:
+   *   M3.B3 = beat 3 of measure 3
+   *   M3.B3.2 = 2nd subdivision of beat 3, measure 3
+   *   M3.B3.2.5 = midpoint of 2nd subdivision of beat 3, measure 3
    */
   formatBeat(beatPosition) {
     const measure = Math.floor(beatPosition / this.internalUnitsPerMeasure) + 1;
     const posInMeasureUnits = beatPosition % this.internalUnitsPerMeasure;
     const posInBeats = posInMeasureUnits / this.internalUnitsPerBeat;
 
-    if (this.isCompound) {
-      // For compound meters, show beat and subdivision within the triplet group
-      const mainBeat = Math.floor(posInBeats) + 1;
-      const subInBeat = (posInBeats - Math.floor(posInBeats)) * 3; // 0, 1, or 2
+    const wholeBeat = Math.floor(posInBeats) + 1;
+    const beatFraction = posInBeats - Math.floor(posInBeats);
 
-      let subStr = '';
-      if (Math.abs(subInBeat - 1) < 0.15) subStr = '⅓';
-      else if (Math.abs(subInBeat - 2) < 0.15) subStr = '⅔';
-      else if (subInBeat > 0.05) subStr = `+${(subInBeat / 3).toFixed(2)}`;
+    // Determine subdivision (1-based: 1st eighth, 2nd eighth, etc.)
+    const subdivisionsPerBeat = this.isCompound ? 3 : 2;
+    const subdivisionFraction = beatFraction * subdivisionsPerBeat;
+    const subdivision = Math.floor(subdivisionFraction) + 1;
+    const subFraction = subdivisionFraction - Math.floor(subdivisionFraction);
 
-      const beatStr = subStr ? `${mainBeat}${subStr}` : `${mainBeat}`;
-      return measure === 1 ? `beat ${beatStr}` : `m.${measure} beat ${beatStr}`;
-    } else {
-      // Simple meters
-      const wholeBeat = Math.floor(posInBeats) + 1;
-      const fraction = posInBeats - Math.floor(posInBeats);
+    // Build the format string
+    let result = `M${measure}.B${wholeBeat}`;
 
-      let sub = '';
-      if (fraction > 0.01) {
-        if (Math.abs(fraction - 0.5) < 0.05) sub = '½';
-        else if (Math.abs(fraction - 0.25) < 0.05) sub = '¼';
-        else if (Math.abs(fraction - 0.75) < 0.05) sub = '¾';
-        else if (Math.abs(fraction - 0.333) < 0.05) sub = '⅓';
-        else if (Math.abs(fraction - 0.667) < 0.05) sub = '⅔';
-        else sub = `+${fraction.toFixed(2)}`;
+    // Add subdivision if not on the beat
+    if (beatFraction > 0.01) {
+      result += `.${subdivision}`;
+      // Add fraction within subdivision if present
+      if (subFraction > 0.01) {
+        // Round to avoid floating point issues
+        const displayFraction = Math.round(subFraction * 100) / 100;
+        result += `.${displayFraction.toString().substring(2)}`; // Remove "0."
       }
-
-      const beatStr = sub ? `${wholeBeat}${sub}` : `${wholeBeat}`;
-      return measure === 1 ? `beat ${beatStr}` : `m.${measure} beat ${beatStr}`;
     }
+
+    return result;
   }
 
   /**

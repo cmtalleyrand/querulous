@@ -90,7 +90,8 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
     setHoveredNote(null);
   };
 
-  const handleClick = (note) => {
+  const handleClick = (note, event) => {
+    if (event) event.preventDefault();
     setSelectedNote(selectedNote === note ? null : note);
   };
 
@@ -241,7 +242,8 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
                     style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
                     onMouseEnter={(e) => handleMouseEnter(noteData, e)}
                     onMouseLeave={handleMouseLeave}
-                    onClick={() => handleClick(noteData)}
+                    onClick={(e) => handleClick(noteData, e)}
+                    onTouchStart={(e) => handleClick(noteData, e)}
                   />
                 </g>
               );
