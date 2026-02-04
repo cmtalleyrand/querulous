@@ -1,0 +1,1054 @@
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { pitchName, metricWeight } from '../../utils/formatter';
+import { Simultaneity } from '../../types';
+import { scoreDissonance } from '../../utils/dissonanceScoring';
+import {
+  generateGridLines,
+  VIZ_COLORS,
+  getIntervalStyle,
+  getIntervalName,
+  isParallelFifthOrOctave,
+} from '../../utils/vizConstants';
+
+// Tab definitions for comparison modes
+const COMPARISON_TABS = [
+  { key: 'subject_cs', label: 'Subject + CS', v1: 'subject', v2: 'cs1' },
+  { key: 'answer_cs', label: 'Answer + CS', v1: 'answer', v2: 'cs1' },
+  { key: 'answer_subject', label: 'Answer + Subject', v1: 'answer', v2: 'subject' },
+];
+
+/**
+ * Counterpoint Comparison Visualization
+ * Features:
+ * - Tabbed view for S+CS, A+CS, A+S comparisons
+ * - Semitone/octave displacement controls with named intervals
+ * - Always-visible interval regions (subtle) with prominent problem indicators
+ * - Click on note or interval to show detail panel
+ * - Resolution status via border style and saturation
+ * - Sequence highlighting with borders
+ * - Issue count comparison on transposition change
+ */
+export function CounterpointComparisonViz({
+  voices,
+  formatter,
+  meter = [4, 4],
+  sequences = {},
+}) {
+  const [activeTab, setActiveTab] = useState('subject_cs');
+  const [transposition, setTransposition] = useState(0);
+  const [previousIssueCount, setPreviousIssueCount] = useState(null);
+  const [selectedInterval, setSelectedInterval] = useState(null);
+  const [highlightedOnset, setHighlightedOnset] = useState(null);
+  const containerRef = useRef(null);
+
+  // Get current tab config
+  const tabConfig = COMPARISON_TABS.find(t => t.key === activeTab) || COMPARISON_TABS[0];
+
+  // Available tabs based on available voices
+  const availableTabs = useMemo(() => {
+    return COMPARISON_TABS.filter(tab => {
+      const v1 = voices[tab.v1];
+      const v2 = voices[tab.v2];
+      return v1?.length > 0 && v2?.length > 0;
+    });
+  }, [voices]);
+
+  // Reset to first available tab if current is invalid
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.find(t => t.key === activeTab)) {
+      setActiveTab(availableTabs[0].key);
+    }
+  }, [availableTabs, activeTab]);
+
+  // Reset selection when tab or transposition changes
+  useEffect(() => {
+    setSelectedInterval(null);
+    setHighlightedOnset(null);
+  }, [activeTab, transposition]);
+
+  // Voice data
+  const voice1 = voices[tabConfig.v1];
+  const voice2 = voices[tabConfig.v2];
+
+  // Get voice colors
+  const getVoiceColor = (key) => {
+    switch (key) {
+      case 'subject': return VIZ_COLORS.voiceSubject;
+      case 'answer': return VIZ_COLORS.voiceAnswer;
+      case 'cs1': return VIZ_COLORS.voiceCS;
+      default: return '#6b7280';
+    }
+  };
+
+  const getVoiceLabel = (key) => {
+    switch (key) {
+      case 'subject': return 'Subject';
+      case 'answer': return 'Answer';
+      case 'cs1': return 'Countersubject';
+      default: return key;
+    }
+  };
+
+  // Analysis with transposition
+  const analysis = useMemo(() => {
+    if (!voice1?.length || !voice2?.length) return null;
+
+    const transposedVoice2 = voice2.map(n => ({
+      ...n,
+      pitch: n.pitch + transposition,
+    }));
+
+    const findSims = (v1, v2) => {
+      const sims = [];
+      for (const n1 of v1) {
+        const s1 = n1.onset;
+        const e1 = n1.onset + n1.duration;
+        for (const n2 of v2) {
+          const s2 = n2.onset;
+          const e2 = n2.onset + n2.duration;
+          if (s1 < e2 && s2 < e1) {
+            const start = Math.max(s1, s2);
+            sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
+          }
+        }
+      }
+      return sims.sort((a, b) => a.onset - b.onset);
+    };
+
+    const sims = findSims(voice1, transposedVoice2);
+
+    const intervalHistory = [];
+    const intervalPoints = [];
+    const beatMap = new Map();
+
+    let prevPoint = null;
+    for (let i = 0; i < sims.length; i++) {
+      const sim = sims[i];
+      const snapBeat = Math.round(sim.onset * 4) / 4;
+
+      if (!beatMap.has(snapBeat)) {
+        const scoring = scoreDissonance(sim, sims, i, intervalHistory);
+
+        // Check for parallel 5ths/8ves
+        const point = {
+          onset: sim.onset,
+          v1Pitch: sim.voice1Note.pitch,
+          v2Pitch: sim.voice2Note.pitch,
+          intervalClass: sim.interval.class,
+          intervalName: sim.interval.toString(),
+          isConsonant: scoring.isConsonant,
+          isStrong: sim.metricWeight >= 0.75,
+          category: scoring.category || 'consonant_normal',
+          score: scoring.score,
+          scoreDetails: scoring.details,
+          type: scoring.type,
+          isResolved: scoring.isResolved !== false, // Default to true if not specified
+          isParallel: false,
+          isRepeated: sim.interval.class === 1 || sim.interval.class === 0,
+        };
+
+        // Check for parallel motion with previous interval
+        if (prevPoint) {
+          point.isParallel = isParallelFifthOrOctave(prevPoint, point);
+        }
+
+        beatMap.set(snapBeat, point);
+        intervalPoints.push(point);
+        intervalHistory.push(sim.interval.class);
+        prevPoint = point;
+      }
+    }
+
+    const allPitches = [
+      ...voice1.map(n => n.pitch),
+      ...transposedVoice2.map(n => n.pitch),
+    ];
+    const maxTime = Math.max(
+      ...voice1.map(n => n.onset + n.duration),
+      ...transposedVoice2.map(n => n.onset + n.duration)
+    );
+
+    // Issues: strong-beat dissonances with bad scores, unresolved dissonances, parallel 5ths/8ves
+    const issues = intervalPoints.filter(p =>
+      p.isParallel ||
+      (!p.isConsonant && p.score < 0 && p.isStrong) ||
+      (!p.isConsonant && !p.isResolved)
+    );
+    const warnings = intervalPoints.filter(p =>
+      !p.isConsonant && p.score < 0 && !p.isStrong && p.isResolved && !issues.includes(p)
+    );
+
+    const dissonances = intervalPoints.filter(p => !p.isConsonant);
+    const avgScore = dissonances.length > 0
+      ? dissonances.reduce((sum, p) => sum + p.score, 0) / dissonances.length
+      : 0;
+
+    return {
+      voice1,
+      transposedVoice2,
+      intervalPoints,
+      beatMap,
+      issues,
+      warnings,
+      avgScore,
+      minPitch: Math.min(...allPitches) - 2,
+      maxPitch: Math.max(...allPitches) + 2,
+      maxTime,
+    };
+  }, [voice1, voice2, transposition, meter]);
+
+  // Track issue count changes
+  useEffect(() => {
+    if (analysis) {
+      setPreviousIssueCount(prev => {
+        if (prev === null) return analysis.issues.length;
+        return prev;
+      });
+    }
+  }, [analysis]);
+
+  // Update previous issue count after a delay
+  useEffect(() => {
+    if (analysis && previousIssueCount !== null && previousIssueCount !== analysis.issues.length) {
+      const timer = setTimeout(() => {
+        setPreviousIssueCount(analysis.issues.length);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [analysis, previousIssueCount]);
+
+  // Reset previous issue count when tab changes
+  useEffect(() => {
+    setPreviousIssueCount(null);
+  }, [activeTab]);
+
+  // Displacement handlers
+  const adjustTransposition = useCallback((delta) => {
+    setTransposition(prev => {
+      // Store previous issue count before change
+      if (analysis) {
+        setPreviousIssueCount(analysis.issues.length);
+      }
+      return prev + delta;
+    });
+  }, [analysis]);
+
+  // Interaction handlers
+  const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
+
+  const handleIntervalClick = useCallback((pt, event) => {
+    if (event) event.preventDefault();
+    setSelectedInterval(prev => prev?.onset === pt.onset ? null : pt);
+    setHighlightedOnset(getOnsetKey(pt.onset));
+  }, []);
+
+  const handleNoteClick = useCallback((note, voiceKey, event) => {
+    if (event) event.preventDefault();
+    if (!analysis) return;
+
+    // Find interval that overlaps with this note
+    const overlappingInterval = analysis.intervalPoints.find(pt => {
+      const noteEnd = note.onset + note.duration;
+      return pt.onset >= note.onset && pt.onset < noteEnd;
+    });
+
+    if (overlappingInterval) {
+      setSelectedInterval(overlappingInterval);
+      setHighlightedOnset(getOnsetKey(overlappingInterval.onset));
+    }
+  }, [analysis]);
+
+  const handleIssueClick = useCallback((issue, event) => {
+    if (event) event.preventDefault();
+    setSelectedInterval(issue);
+    setHighlightedOnset(getOnsetKey(issue.onset));
+    // Scroll to the interval in the visualization
+    if (containerRef.current) {
+      const scrollContainer = containerRef.current.querySelector('[data-scroll-container]');
+      if (scrollContainer) {
+        const targetX = 60 + issue.onset * 70 - scrollContainer.clientWidth / 2;
+        scrollContainer.scrollTo({ left: Math.max(0, targetX), behavior: 'smooth' });
+      }
+    }
+  }, []);
+
+  // Check if note is in a sequence
+  const isNoteInSequence = (note, voiceKey) => {
+    const voiceSequences = sequences[voiceKey];
+    if (!voiceSequences?.noteRanges) return false;
+    return voiceSequences.noteRanges.some(range =>
+      note.onset >= range.start && note.onset < range.end
+    );
+  };
+
+  if (!analysis) {
+    return (
+      <div style={{ padding: '16px', color: '#6b7280', fontStyle: 'italic' }}>
+        Insufficient voice data for comparison
+      </div>
+    );
+  }
+
+  const { minPitch, maxPitch, maxTime, intervalPoints, issues, warnings, avgScore } = analysis;
+  const pRange = maxPitch - minPitch;
+  const noteHeight = 18;
+  const headerHeight = 32;
+  const h = pRange * noteHeight + headerHeight + 20;
+  const pixelsPerBeat = 70;
+  const w = Math.max(500, maxTime * pixelsPerBeat + 100);
+
+  const tScale = (w - 80) / maxTime;
+  const pToY = (p) => h - 20 - (p - minPitch) * noteHeight;
+  const tToX = (t) => 60 + t * tScale;
+
+  const hasIssues = issues.length > 0;
+  const hasWarnings = warnings.length > 0;
+  const voice1Color = getVoiceColor(tabConfig.v1);
+  const voice2Color = getVoiceColor(tabConfig.v2);
+  const voice1Label = getVoiceLabel(tabConfig.v1);
+  const voice2Label = getVoiceLabel(tabConfig.v2);
+
+  const colors = {
+    bg: hasIssues ? VIZ_COLORS.issueBackground : hasWarnings ? VIZ_COLORS.warningBackground : VIZ_COLORS.cleanBackground,
+    border: hasIssues ? VIZ_COLORS.issueBorder : hasWarnings ? VIZ_COLORS.warningBorder : VIZ_COLORS.cleanBorder,
+    highlight: VIZ_COLORS.highlight,
+  };
+
+  // Issue count change indicator
+  const issueCountDelta = previousIssueCount !== null ? analysis.issues.length - previousIssueCount : 0;
+
+  return (
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex',
+        gap: '4px',
+        padding: '4px',
+        backgroundColor: '#f1f5f9',
+        borderRadius: '8px',
+        width: 'fit-content',
+      }}>
+        {availableTabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              padding: '8px 16px',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: activeTab === tab.key ? '600' : '400',
+              backgroundColor: activeTab === tab.key ? '#fff' : 'transparent',
+              color: activeTab === tab.key ? '#1f2937' : '#64748b',
+              boxShadow: activeTab === tab.key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Controls row */}
+      <div style={{
+        display: 'flex',
+        gap: '16px',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        padding: '12px 16px',
+        backgroundColor: '#f8fafc',
+        borderRadius: '8px',
+        border: '1px solid #e2e8f0',
+      }}>
+        {/* Displacement controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '12px', color: '#64748b' }}>Displace {voice2Label}:</span>
+
+          {/* Octave down */}
+          <button
+            onClick={() => adjustTransposition(-12)}
+            style={{
+              padding: '4px 8px',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              backgroundColor: '#fff',
+              cursor: 'pointer',
+              fontSize: '11px',
+              color: '#374151',
+            }}
+            title="Down octave"
+          >
+            -8ve
+          </button>
+
+          {/* Semitone down */}
+          <button
+            onClick={() => adjustTransposition(-1)}
+            style={{
+              padding: '4px 10px',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              backgroundColor: '#fff',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: '600',
+              color: '#374151',
+            }}
+            title="Down semitone"
+          >
+            -
+          </button>
+
+          {/* Current transposition display */}
+          <div style={{
+            padding: '6px 12px',
+            backgroundColor: transposition === 0 ? '#f1f5f9' : '#e0e7ff',
+            borderRadius: '6px',
+            minWidth: '80px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>
+              {getIntervalName(transposition)}
+            </div>
+            {transposition !== 0 && (
+              <div style={{ fontSize: '10px', color: '#64748b' }}>
+                {transposition > 0 ? '+' : ''}{transposition} semitones
+              </div>
+            )}
+          </div>
+
+          {/* Semitone up */}
+          <button
+            onClick={() => adjustTransposition(1)}
+            style={{
+              padding: '4px 10px',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              backgroundColor: '#fff',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: '600',
+              color: '#374151',
+            }}
+            title="Up semitone"
+          >
+            +
+          </button>
+
+          {/* Octave up */}
+          <button
+            onClick={() => adjustTransposition(12)}
+            style={{
+              padding: '4px 8px',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              backgroundColor: '#fff',
+              cursor: 'pointer',
+              fontSize: '11px',
+              color: '#374151',
+            }}
+            title="Up octave"
+          >
+            +8ve
+          </button>
+
+          {/* Reset button */}
+          {transposition !== 0 && (
+            <button
+              onClick={() => {
+                setPreviousIssueCount(analysis.issues.length);
+                setTransposition(0);
+              }}
+              style={{
+                padding: '4px 8px',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                backgroundColor: '#fff',
+                cursor: 'pointer',
+                fontSize: '11px',
+                color: '#6b7280',
+              }}
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
+        {/* Score and issue count */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {/* Issue count with delta indicator */}
+          <div style={{
+            padding: '6px 12px',
+            borderRadius: '6px',
+            backgroundColor: hasIssues ? '#fef2f2' : hasWarnings ? '#fefce8' : '#f0fdf4',
+            border: `1px solid ${hasIssues ? '#fecaca' : hasWarnings ? '#fde047' : '#bbf7d0'}`,
+          }}>
+            <div style={{ fontSize: '10px', color: '#64748b' }}>Issues</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{
+                fontSize: '16px',
+                fontWeight: '700',
+                color: hasIssues ? '#dc2626' : hasWarnings ? '#ca8a04' : '#16a34a',
+              }}>
+                {issues.length}
+              </span>
+              {issueCountDelta !== 0 && (
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: issueCountDelta > 0 ? '#dc2626' : '#16a34a',
+                  backgroundColor: issueCountDelta > 0 ? '#fee2e2' : '#dcfce7',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                }}>
+                  {issueCountDelta > 0 ? '+' : ''}{issueCountDelta}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Average score */}
+          <div style={{
+            padding: '6px 12px',
+            borderRadius: '8px',
+            backgroundColor: avgScore >= 0.5 ? '#dcfce7' : avgScore >= 0 ? '#fef9c3' : '#fee2e2',
+            border: `1px solid ${avgScore >= 0.5 ? '#86efac' : avgScore >= 0 ? '#fde047' : '#fca5a5'}`,
+          }}>
+            <div style={{ fontSize: '10px', color: '#64748b' }}>Avg Score</div>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: '700',
+              color: avgScore >= 0.5 ? '#16a34a' : avgScore >= 0 ? '#ca8a04' : '#dc2626',
+            }}>
+              {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main visualization */}
+      <div style={{
+        border: `2px solid ${colors.border}`,
+        borderRadius: '8px',
+        overflow: 'hidden',
+        backgroundColor: colors.bg,
+      }}>
+        <div data-scroll-container style={{ overflowX: 'auto' }}>
+          <svg width={w} height={h} style={{ display: 'block' }}>
+            {/* Header */}
+            <rect x={0} y={0} width={w} height={headerHeight} fill="rgba(0,0,0,0.04)" />
+            <text x={16} y={22} fontSize="14" fontWeight="600" fill="#374151">
+              {voice1Label} vs {voice2Label}
+              {transposition !== 0 && ` (${getIntervalName(transposition)})`}
+            </text>
+
+            {/* Beat grid */}
+            {(() => {
+              const gridLines = generateGridLines(maxTime, meter, { showSubdivisions: false });
+              return gridLines.map((line, i) => {
+                const x = tToX(line.time);
+                return (
+                  <g key={`grid-${i}`}>
+                    <line
+                      x1={x} y1={headerHeight} x2={x} y2={h - 18}
+                      stroke={line.isDownbeat ? '#64748b' : (line.isMainBeat ? '#9ca3af' : '#e5e7eb')}
+                      strokeWidth={line.isDownbeat ? 1.5 : (line.isMainBeat ? 0.75 : 0.5)}
+                    />
+                    {line.measureNum ? (
+                      <text x={x} y={h - 4} fontSize="11" fill="#475569" textAnchor="middle" fontWeight="600">
+                        m.{line.measureNum}
+                      </text>
+                    ) : line.beatNum ? (
+                      <text x={x} y={h - 4} fontSize="9" fill="#9ca3af" textAnchor="middle">
+                        {line.beatNum}
+                      </text>
+                    ) : null}
+                  </g>
+                );
+              });
+            })()}
+
+            {/* Voice labels */}
+            {(() => {
+              const v1AvgPitch = analysis.voice1.reduce((s, n) => s + n.pitch, 0) / analysis.voice1.length;
+              const v2AvgPitch = analysis.transposedVoice2.reduce((s, n) => s + n.pitch, 0) / analysis.transposedVoice2.length;
+              const v1Higher = v1AvgPitch > v2AvgPitch;
+              return (
+                <>
+                  <text x={12} y={pToY(maxPitch - 1) + 5} fontSize="11" fontWeight="600" fill={v1Higher ? voice1Color : voice2Color}>
+                    {v1Higher ? voice1Label : voice2Label} (upper)
+                  </text>
+                  <text x={12} y={pToY(minPitch + 1) + 5} fontSize="11" fontWeight="600" fill={v1Higher ? voice2Color : voice1Color}>
+                    {v1Higher ? voice2Label : voice1Label} (lower)
+                  </text>
+                </>
+              );
+            })()}
+
+            {/* ALWAYS VISIBLE interval regions - subtle by default, prominent for problems */}
+            {intervalPoints.map((pt, i) => {
+              const x = tToX(pt.onset);
+              const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
+              const isSelected = selectedInterval?.onset === pt.onset;
+
+              const nextPt = intervalPoints[i + 1];
+              const regionWidth = nextPt
+                ? Math.max(4, (nextPt.onset - pt.onset) * tScale - 2)
+                : Math.max(20, tScale * 0.5);
+
+              const isPerfect = [1, 5, 8, 0].includes(pt.intervalClass);
+              const style = getIntervalStyle({
+                isConsonant: pt.isConsonant,
+                isPerfect,
+                score: pt.score || 0,
+                category: pt.category,
+                isRepeated: pt.isRepeated,
+                isResolved: pt.isResolved,
+                isParallel: pt.isParallel,
+              });
+
+              // Determine opacity based on state and type
+              let regionOpacity = style.opacity || 0.5;
+              if (isHighlighted || isSelected) {
+                regionOpacity = Math.min(1, regionOpacity + 0.3);
+              }
+              if (pt.isParallel || (!pt.isConsonant && !pt.isResolved)) {
+                regionOpacity = Math.max(regionOpacity, 0.7);
+              }
+
+              return (
+                <g
+                  key={`int-${i}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => handleIntervalClick(pt, e)}
+                  onTouchStart={(e) => handleIntervalClick(pt, e)}
+                  onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
+                  onMouseLeave={() => !isSelected && setHighlightedOnset(null)}
+                >
+                  {/* Always visible region */}
+                  <rect
+                    x={x}
+                    y={headerHeight}
+                    width={regionWidth}
+                    height={h - headerHeight - 18}
+                    fill={style.fill}
+                    opacity={regionOpacity}
+                    rx={3}
+                    stroke={style.color}
+                    strokeWidth={style.borderWidth || 1}
+                    strokeDasharray={style.borderStyle === 'dashed' ? '4,3' : undefined}
+                    strokeOpacity={0.6}
+                  />
+
+                  {/* Show label on hover/select */}
+                  {(isHighlighted || isSelected) && (
+                    <g>
+                      <rect
+                        x={x + regionWidth / 2 - 18}
+                        y={(pToY(pt.v1Pitch) + pToY(pt.v2Pitch)) / 2 - 14}
+                        width={36}
+                        height={28}
+                        fill={style.bg}
+                        stroke={style.color}
+                        strokeWidth={1.5}
+                        rx={4}
+                        opacity={0.95}
+                      />
+                      <text
+                        x={x + regionWidth / 2}
+                        y={(pToY(pt.v1Pitch) + pToY(pt.v2Pitch)) / 2 + 2}
+                        fontSize="12"
+                        fontWeight="600"
+                        fill={style.color}
+                        textAnchor="middle"
+                      >
+                        {pt.intervalClass}
+                      </text>
+                      {!pt.isConsonant && (
+                        <text
+                          x={x + regionWidth / 2}
+                          y={(pToY(pt.v1Pitch) + pToY(pt.v2Pitch)) / 2 + 14}
+                          fontSize="9"
+                          fill={style.color}
+                          textAnchor="middle"
+                        >
+                          {(pt.score || 0) >= 0 ? '+' : ''}{(pt.score || 0).toFixed(1)}
+                        </text>
+                      )}
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Voice 1 notes */}
+            {analysis.voice1.map((n, i) => {
+              const x = tToX(n.onset);
+              const y = pToY(n.pitch);
+              const width = Math.max(8, n.duration * tScale - 3);
+              const isHighlighted = highlightedOnset !== null &&
+                intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
+                  n.onset <= pt.onset && pt.onset < n.onset + n.duration);
+              const inSequence = isNoteInSequence(n, tabConfig.v1);
+
+              return (
+                <g
+                  key={`v1-${i}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => handleNoteClick(n, tabConfig.v1, e)}
+                  onTouchStart={(e) => handleNoteClick(n, tabConfig.v1, e)}
+                >
+                  {isHighlighted && (
+                    <rect
+                      x={x - 4} y={y - noteHeight/2 - 3}
+                      width={width + 8} height={noteHeight + 6}
+                      fill={colors.highlight} rx={5} opacity={0.5}
+                    />
+                  )}
+                  <rect
+                    x={x} y={y - noteHeight/2 + 2}
+                    width={width} height={noteHeight - 4}
+                    fill={voice1Color} rx={4}
+                    stroke={inSequence ? VIZ_COLORS.sequenceBorder : undefined}
+                    strokeWidth={inSequence ? 2 : 0}
+                    strokeDasharray={inSequence ? '3,2' : undefined}
+                  />
+                  <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Voice 2 notes (transposed) */}
+            {analysis.transposedVoice2.map((n, i) => {
+              const x = tToX(n.onset);
+              const y = pToY(n.pitch);
+              const width = Math.max(8, n.duration * tScale - 3);
+              const isHighlighted = highlightedOnset !== null &&
+                intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
+                  n.onset <= pt.onset && pt.onset < n.onset + n.duration);
+              const inSequence = isNoteInSequence(voices[tabConfig.v2][i], tabConfig.v2);
+
+              return (
+                <g
+                  key={`v2-${i}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => handleNoteClick(n, tabConfig.v2, e)}
+                  onTouchStart={(e) => handleNoteClick(n, tabConfig.v2, e)}
+                >
+                  {isHighlighted && (
+                    <rect
+                      x={x - 4} y={y - noteHeight/2 - 3}
+                      width={width + 8} height={noteHeight + 6}
+                      fill={colors.highlight} rx={5} opacity={0.5}
+                    />
+                  )}
+                  <rect
+                    x={x} y={y - noteHeight/2 + 2}
+                    width={width} height={noteHeight - 4}
+                    fill={voice2Color} rx={4}
+                    stroke={inSequence ? VIZ_COLORS.sequenceBorder : undefined}
+                    strokeWidth={inSequence ? 2 : 0}
+                    strokeDasharray={inSequence ? '3,2' : undefined}
+                  />
+                  <text x={x + width/2} y={y + 4} fontSize="10" fill="white" textAnchor="middle" fontWeight="500">
+                    {pitchName(n.pitch, n.preferFlats).replace(/\d/, '')}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{
+        display: 'flex',
+        gap: '16px',
+        flexWrap: 'wrap',
+        fontSize: '11px',
+        color: '#64748b',
+        padding: '8px 12px',
+        backgroundColor: '#f8fafc',
+        borderRadius: '6px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ width: '12px', height: '12px', backgroundColor: VIZ_COLORS.perfectConsonant, borderRadius: '2px', opacity: 0.6 }} />
+          <span>Perfect (P1, P5, P8)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ width: '12px', height: '12px', backgroundColor: VIZ_COLORS.imperfectConsonant, borderRadius: '2px', opacity: 0.6 }} />
+          <span>Imperfect (3rds, 6ths)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ width: '12px', height: '12px', backgroundColor: VIZ_COLORS.dissonantGood, borderRadius: '2px', opacity: 0.7 }} />
+          <span>Dissonance (well-handled)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ width: '12px', height: '12px', backgroundColor: VIZ_COLORS.dissonantProblematic, borderRadius: '2px', opacity: 0.7, border: '2px dashed #f87171' }} />
+          <span>Dissonance (problematic)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ width: '12px', height: '12px', backgroundColor: VIZ_COLORS.parallelFifthsOctaves, borderRadius: '2px', opacity: 0.8 }} />
+          <span>Parallel 5th/8ve</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ width: '12px', height: '12px', border: `2px dashed ${VIZ_COLORS.sequenceBorder}`, borderRadius: '2px' }} />
+          <span>In sequence</span>
+        </div>
+      </div>
+
+      {/* Selected interval detail panel */}
+      {selectedInterval && (
+        <div style={{
+          backgroundColor: '#fff',
+          border: '1px solid #6366f1',
+          borderRadius: '8px',
+          padding: '14px',
+        }}>
+          {(() => {
+            const pt = selectedInterval;
+            if (!pt || pt.score === undefined) return null;
+            const isPerfect = [1, 5, 8, 0].includes(pt.intervalClass);
+            const style = getIntervalStyle({
+              isConsonant: pt.isConsonant,
+              isPerfect,
+              score: pt.score,
+              category: pt.category,
+              isRepeated: pt.isRepeated,
+              isResolved: pt.isResolved,
+              isParallel: pt.isParallel,
+            });
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontWeight: '600', color: '#1f2937' }}>
+                    {formatter?.formatBeat(pt.onset) || `Beat ${pt.onset + 1}`}
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{
+                      padding: '4px 10px',
+                      backgroundColor: style.bg,
+                      color: style.color,
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      border: style.borderStyle === 'dashed' ? `2px dashed ${style.color}` : `1px solid ${style.color}`,
+                    }}>
+                      {pt.intervalName} — {style.label}
+                    </span>
+                    {pt.isParallel && (
+                      <span style={{
+                        padding: '4px 10px',
+                        backgroundColor: '#fef2f2',
+                        color: '#dc2626',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                      }}>
+                        Parallel motion!
+                      </span>
+                    )}
+                    {!pt.isResolved && !pt.isConsonant && (
+                      <span style={{
+                        padding: '4px 10px',
+                        backgroundColor: '#fef3c7',
+                        color: '#b45309',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                      }}>
+                        Unresolved
+                      </span>
+                    )}
+                    {!pt.isConsonant && (
+                      <span style={{
+                        padding: '4px 10px',
+                        backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
+                        color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        fontWeight: '700',
+                      }}>
+                        {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => { setSelectedInterval(null); setHighlightedOnset(null); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#9ca3af' }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '10px' }}>
+                  <div style={{ padding: '8px 12px', backgroundColor: `${voice1Color}15`, borderRadius: '6px', borderLeft: `3px solid ${voice1Color}` }}>
+                    <div style={{ fontSize: '10px', color: '#64748b' }}>{voice1Label}</div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: voice1Color }}>{pitchName(pt.v1Pitch)}</div>
+                  </div>
+                  <div style={{ padding: '8px 12px', backgroundColor: `${voice2Color}15`, borderRadius: '6px', borderLeft: `3px solid ${voice2Color}` }}>
+                    <div style={{ fontSize: '10px', color: '#64748b' }}>{voice2Label}</div>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: voice2Color }}>{pitchName(pt.v2Pitch)}</div>
+                  </div>
+                </div>
+
+                {pt.scoreDetails && pt.scoreDetails.length > 0 && (
+                  <div style={{ backgroundColor: '#f8fafc', borderRadius: '6px', padding: '10px', fontSize: '12px' }}>
+                    <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>Scoring Details:</div>
+                    {pt.scoreDetails.map((detail, i) => (
+                      <div key={i} style={{ color: '#64748b', marginBottom: '2px' }}>
+                        {typeof detail === 'object' ? detail.text : detail}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Issues list */}
+      {issues.length > 0 && (
+        <div style={{
+          backgroundColor: '#fff',
+          border: `1px solid ${VIZ_COLORS.issueBorder}`,
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: VIZ_COLORS.issueBackground,
+            borderBottom: `1px solid ${VIZ_COLORS.issueBorder}`,
+            fontWeight: '600',
+            fontSize: '13px',
+            color: VIZ_COLORS.issueText,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <span>Issues ({issues.length})</span>
+            {issueCountDelta !== 0 && (
+              <span style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                backgroundColor: issueCountDelta > 0 ? '#fecaca' : '#bbf7d0',
+                color: issueCountDelta > 0 ? '#dc2626' : '#16a34a',
+              }}>
+                Was {previousIssueCount} → Now {issues.length}
+              </span>
+            )}
+          </div>
+          {issues.map((issue, i) => (
+            <div
+              key={i}
+              onClick={(e) => handleIssueClick(issue, e)}
+              onTouchStart={(e) => handleIssueClick(issue, e)}
+              style={{
+                padding: '10px 14px',
+                borderBottom: i < issues.length - 1 ? `1px solid ${VIZ_COLORS.issueBackground}` : 'none',
+                fontSize: '13px',
+                cursor: 'pointer',
+                backgroundColor: selectedInterval?.onset === issue.onset ? '#fef2f2' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span style={{ color: VIZ_COLORS.dissonantProblematic, fontWeight: '600' }}>
+                {formatter?.formatBeat(issue.onset) || `Beat ${issue.onset + 1}`}:
+              </span>
+              <span>{issue.intervalName}</span>
+              {issue.isParallel && (
+                <span style={{
+                  padding: '2px 6px',
+                  backgroundColor: '#fef2f2',
+                  color: '#dc2626',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                }}>
+                  Parallel
+                </span>
+              )}
+              {!issue.isResolved && !issue.isConsonant && (
+                <span style={{
+                  padding: '2px 6px',
+                  backgroundColor: '#fef3c7',
+                  color: '#b45309',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                }}>
+                  Unresolved
+                </span>
+              )}
+              <span style={{ marginLeft: 'auto', color: '#dc2626', fontWeight: '600' }}>
+                ({issue.score.toFixed(2)})
+              </span>
+              {issue.type && (
+                <span style={{ color: '#6b7280', fontSize: '12px' }}>
+                  — {issue.type}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Warnings list */}
+      {warnings.length > 0 && (
+        <div style={{
+          backgroundColor: '#fff',
+          border: `1px solid ${VIZ_COLORS.warningBorder}`,
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: VIZ_COLORS.warningBackground,
+            borderBottom: `1px solid ${VIZ_COLORS.warningBorder}`,
+            fontWeight: '600',
+            fontSize: '13px',
+            color: VIZ_COLORS.warningText,
+          }}>
+            Warnings ({warnings.length})
+          </div>
+          {warnings.slice(0, 5).map((warn, i) => (
+            <div
+              key={i}
+              onClick={(e) => handleIssueClick(warn, e)}
+              onTouchStart={(e) => handleIssueClick(warn, e)}
+              style={{
+                padding: '8px 14px',
+                borderBottom: i < Math.min(warnings.length - 1, 4) ? `1px solid ${VIZ_COLORS.warningBackground}` : 'none',
+                fontSize: '12px',
+                cursor: 'pointer',
+                backgroundColor: selectedInterval?.onset === warn.onset ? '#fefce8' : 'transparent',
+              }}
+            >
+              <span style={{ color: VIZ_COLORS.warningText, fontWeight: '600' }}>
+                {formatter?.formatBeat(warn.onset) || `Beat ${warn.onset + 1}`}:
+              </span>
+              <span style={{ marginLeft: '8px' }}>{warn.intervalName}</span>
+              <span style={{ marginLeft: '8px', color: '#ca8a04' }}>
+                ({warn.score.toFixed(2)})
+              </span>
+            </div>
+          ))}
+          {warnings.length > 5 && (
+            <div style={{ padding: '8px 14px', fontSize: '11px', color: '#6b7280', fontStyle: 'italic' }}>
+              +{warnings.length - 5} more warnings
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default CounterpointComparisonViz;
