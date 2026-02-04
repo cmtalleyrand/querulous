@@ -468,6 +468,79 @@ export function InvertibilityViz({
           </div>
         </div>
       </div>
+
+      {/* Clickable issue list */}
+      {(originalIssues.length > 0 || invertedIssues.length > 0) && (
+        <div style={{
+          marginTop: '12px',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '8px 12px',
+            backgroundColor: '#f9fafb',
+            borderBottom: '1px solid #e5e7eb',
+            fontSize: '12px',
+            fontWeight: '600',
+            color: '#374151',
+          }}>
+            Issues (click to highlight):
+          </div>
+
+          {originalIssues.map((issue, i) => (
+            <div
+              key={`orig-${i}`}
+              onClick={() => setSelectedBeat(selectedBeat === issue.onset ? null : issue.onset)}
+              onTouchStart={(e) => { e.preventDefault(); setSelectedBeat(selectedBeat === issue.onset ? null : issue.onset); }}
+              style={{
+                padding: '8px 12px',
+                borderBottom: (i < originalIssues.length - 1 || invertedIssues.length > 0) ? '1px solid #f3f4f6' : 'none',
+                cursor: 'pointer',
+                backgroundColor: selectedBeat === issue.onset ? '#dbeafe' : 'white',
+                fontSize: '12px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = selectedBeat === issue.onset ? '#dbeafe' : '#f9fafb'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedBeat === issue.onset ? '#dbeafe' : 'white'}
+            >
+              <span style={{
+                padding: '2px 6px',
+                backgroundColor: '#dbeafe',
+                borderRadius: '3px',
+                fontSize: '10px',
+                marginRight: '8px',
+              }}>Original</span>
+              {issue.description}
+            </div>
+          ))}
+
+          {invertedIssues.map((issue, i) => (
+            <div
+              key={`inv-${i}`}
+              onClick={() => setSelectedBeat(selectedBeat === issue.onset ? null : issue.onset)}
+              onTouchStart={(e) => { e.preventDefault(); setSelectedBeat(selectedBeat === issue.onset ? null : issue.onset); }}
+              style={{
+                padding: '8px 12px',
+                borderBottom: i < invertedIssues.length - 1 ? '1px solid #f3f4f6' : 'none',
+                cursor: 'pointer',
+                backgroundColor: selectedBeat === issue.onset ? '#fef2f2' : 'white',
+                fontSize: '12px',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = selectedBeat === issue.onset ? '#fef2f2' : '#f9fafb'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedBeat === issue.onset ? '#fef2f2' : 'white'}
+            >
+              <span style={{
+                padding: '2px 6px',
+                backgroundColor: '#fecaca',
+                borderRadius: '3px',
+                fontSize: '10px',
+                marginRight: '8px',
+              }}>Inverted</span>
+              {issue.description}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
