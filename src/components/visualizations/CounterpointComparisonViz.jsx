@@ -265,9 +265,15 @@ export function CounterpointComparisonViz({
           }
         }
 
+        // Calculate duration of this simultaneity (overlap of both notes)
+        const v1End = sim.voice1Note.onset + sim.voice1Note.duration;
+        const v2End = sim.voice2Note.onset + sim.voice2Note.duration;
+        const simDuration = Math.min(v1End, v2End) - sim.onset;
+
         // Check for parallel 5ths/8ves
         const point = {
           onset: sim.onset,
+          duration: simDuration, // Duration of this simultaneity for weighted scoring
           v1Pitch: sim.voice1Note.pitch,
           v2Pitch: sim.voice2Note.pitch,
           intervalClass: sim.interval.class,
@@ -303,8 +309,9 @@ export function CounterpointComparisonViz({
           point.scoreDetails.unshift(restInfo);
         }
 
-        // Check for parallel motion with previous interval (not if re-entry)
-        if (prevPoint && !isReentry) {
+        // Check for parallel motion with previous interval
+        // ANY rest breaks the parallel chain (not just long re-entry rests)
+        if (prevPoint && !hadRest) {
           point.isParallel = isParallelFifthOrOctave(prevPoint, point);
           if (point.isParallel) {
             point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} detected`);
@@ -339,20 +346,116 @@ export function CounterpointComparisonViz({
     );
 
     const dissonances = intervalPoints.filter(p => !p.isConsonant);
-    const totalDissonanceScore = dissonances.reduce((sum, p) => sum + p.score, 0);
-    const avgScore = dissonances.length > 0 ? totalDissonanceScore / dissonances.length : 0;
+    const consonances = intervalPoints.filter(p => p.isConsonant);
+
+    // Calculate comprehensive aggregate score
+    // Factors: consonance quality, motion quality, resolution quality, penalties
+    // All weighted by duration
+    let totalWeightedScore = 0;
+    let totalDuration = 0;
+
+    // Score breakdown components for transparency
+    let consonanceContribution = 0;
+    let dissonanceContribution = 0;
+    let resolutionBonus = 0;
+    let resolutionPenalty = 0;
+    let parallelPenalty = 0;
+    let repetitionPenalty = 0;
+    let motionBonus = 0;
+
+    for (const pt of intervalPoints) {
+      // Use note duration as weight (quarter note = 1.0)
+      const dur = Math.max(0.25, pt.duration || 0.25); // Default to quarter beat minimum
+      totalDuration += dur;
+
+      if (pt.isConsonant) {
+        // Consonances: imperfect better than perfect
+        const isImperfect = [3, 6].includes(pt.intervalClass); // 3rds, 6ths
+        const isPerfect = [1, 5].includes(pt.intervalClass); // unison/octave, 5ths
+        const isP4 = pt.intervalClass === 4;
+
+        // Base consonance score
+        let baseScore;
+        if (isImperfect) {
+          baseScore = 0.5; // Imperfect consonances - best variety
+        } else if (pt.intervalClass === 5) {
+          baseScore = 0.3; // P5 - good but less variety
+        } else if (isP4) {
+          baseScore = 0.25; // P4 - contextually consonant
+        } else {
+          baseScore = 0.2; // Unison/octave - functional but less interesting
+        }
+
+        // Good resolution bonus
+        if (pt.category === 'consonant_good_resolution') {
+          resolutionBonus += 0.5 * dur;
+          baseScore += 0.3;
+        }
+
+        // Bad resolution penalty
+        if (pt.category === 'consonant_bad_resolution') {
+          resolutionPenalty += 0.3 * dur;
+          baseScore -= 0.2;
+        }
+
+        // Repetition penalty
+        if (pt.isRepeated) {
+          repetitionPenalty += 0.25 * dur;
+          baseScore -= 0.15;
+        }
+
+        consonanceContribution += baseScore * dur;
+        totalWeightedScore += baseScore * dur;
+      } else {
+        // Dissonances: use the detailed scoring from scoreDissonance()
+        const dissScore = pt.score || 0;
+        dissonanceContribution += dissScore * dur;
+        totalWeightedScore += dissScore * dur;
+      }
+
+      // Parallel 5ths/8ves - significant penalty
+      if (pt.isParallel) {
+        parallelPenalty += 1.0 * dur;
+        totalWeightedScore -= 1.0 * dur;
+      }
+
+      // Motion bonus: stepwise motion is good, leaps are riskier
+      // Small bonus for stepwise motion (2 semitones or less)
+      if (pt.v1Motion !== undefined && pt.v2Motion !== undefined) {
+        const v1Step = Math.abs(pt.v1Motion) <= 2 && pt.v1Motion !== 0;
+        const v2Step = Math.abs(pt.v2Motion) <= 2 && pt.v2Motion !== 0;
+        if (v1Step && v2Step) {
+          motionBonus += 0.1 * dur;
+          totalWeightedScore += 0.1 * dur;
+        }
+      }
+    }
+
+    // Normalize to per-quarter-note average
+    const avgScore = totalDuration > 0 ? totalWeightedScore / totalDuration : 0;
 
     // Build aggregate score breakdown for transparency
     const scoreBreakdown = {
       totalIntervals: intervalPoints.length,
-      consonances: intervalPoints.filter(p => p.isConsonant).length,
+      consonances: consonances.length,
       dissonances: dissonances.length,
       repeatedIntervals: intervalPoints.filter(p => p.isRepeated).length,
       parallelIssues: intervalPoints.filter(p => p.isParallel).length,
       unresolvedDissonances: dissonances.filter(p => !p.isResolved).length,
       strongBeatDissonances: dissonances.filter(p => p.isStrong).length,
-      totalDissonanceScore,
-      avgDissonanceScore: avgScore,
+      // Comprehensive breakdown
+      totalDuration: totalDuration.toFixed(2),
+      totalWeightedScore: totalWeightedScore.toFixed(2),
+      factors: {
+        consonanceContribution: consonanceContribution.toFixed(2),
+        dissonanceContribution: dissonanceContribution.toFixed(2),
+        resolutionBonus: resolutionBonus.toFixed(2),
+        resolutionPenalty: (-resolutionPenalty).toFixed(2),
+        parallelPenalty: (-parallelPenalty).toFixed(2),
+        repetitionPenalty: (-repetitionPenalty).toFixed(2),
+        motionBonus: motionBonus.toFixed(2),
+      },
+      avgScore: avgScore.toFixed(2),
       // Individual dissonance scores for detailed view
       dissonanceScores: dissonances.map(d => ({
         onset: d.onset,
@@ -702,7 +805,7 @@ export function CounterpointComparisonViz({
             alignItems: 'center',
             gap: '6px',
           }}>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>Avg:</span>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Score:</span>
             <span style={{
               fontSize: '12px',
               fontWeight: '600',
@@ -1441,7 +1544,7 @@ export function CounterpointComparisonViz({
               backgroundColor: avgScore >= 0.5 ? '#dcfce7' : avgScore >= 0 ? '#fef9c3' : '#fee2e2',
               color: avgScore >= 0.5 ? '#16a34a' : avgScore >= 0 ? '#ca8a04' : '#dc2626',
             }}>
-              Avg: {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
+              Score: {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
             </span>
           </div>
           <div style={{ padding: '12px 14px' }}>
@@ -1495,7 +1598,7 @@ export function CounterpointComparisonViz({
               </ul>
             </div>
 
-            {/* Aggregate calculation */}
+            {/* Comprehensive score breakdown */}
             <div style={{
               backgroundColor: '#faf5ff',
               borderRadius: '6px',
@@ -1503,26 +1606,74 @@ export function CounterpointComparisonViz({
               fontSize: '11px',
               color: '#5b21b6',
             }}>
-              <div style={{ fontWeight: '600', marginBottom: '6px' }}>Average dissonance handling quality:</div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span>Sum of all dissonance scores:</span>
-                <strong style={{ color: analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '#16a34a' : '#dc2626' }}>
-                  {analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '+' : ''}{analysis.scoreBreakdown.totalDissonanceScore.toFixed(2)}
-                </strong>
-                <span>÷</span>
-                <strong>{analysis.scoreBreakdown.dissonances} dissonances</strong>
-                <span>=</span>
+              <div style={{ fontWeight: '600', marginBottom: '8px' }}>Comprehensive Score Breakdown:</div>
+              {analysis.scoreBreakdown.factors && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Consonance quality:</span>
+                    <strong style={{ color: '#16a34a' }}>+{analysis.scoreBreakdown.factors.consonanceContribution}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Dissonance handling:</span>
+                    <strong style={{ color: parseFloat(analysis.scoreBreakdown.factors.dissonanceContribution) >= 0 ? '#16a34a' : '#dc2626' }}>
+                      {parseFloat(analysis.scoreBreakdown.factors.dissonanceContribution) >= 0 ? '+' : ''}{analysis.scoreBreakdown.factors.dissonanceContribution}
+                    </strong>
+                  </div>
+                  {parseFloat(analysis.scoreBreakdown.factors.resolutionBonus) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Good resolutions:</span>
+                      <strong style={{ color: '#16a34a' }}>+{analysis.scoreBreakdown.factors.resolutionBonus}</strong>
+                    </div>
+                  )}
+                  {parseFloat(analysis.scoreBreakdown.factors.resolutionPenalty) < 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Leap resolutions:</span>
+                      <strong style={{ color: '#dc2626' }}>{analysis.scoreBreakdown.factors.resolutionPenalty}</strong>
+                    </div>
+                  )}
+                  {parseFloat(analysis.scoreBreakdown.factors.parallelPenalty) < 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Parallel 5ths/8ves:</span>
+                      <strong style={{ color: '#dc2626' }}>{analysis.scoreBreakdown.factors.parallelPenalty}</strong>
+                    </div>
+                  )}
+                  {parseFloat(analysis.scoreBreakdown.factors.repetitionPenalty) < 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Repeated intervals:</span>
+                      <strong style={{ color: '#ca8a04' }}>{analysis.scoreBreakdown.factors.repetitionPenalty}</strong>
+                    </div>
+                  )}
+                  {parseFloat(analysis.scoreBreakdown.factors.motionBonus) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Stepwise motion:</span>
+                      <strong style={{ color: '#16a34a' }}>+{analysis.scoreBreakdown.factors.motionBonus}</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div style={{
+                borderTop: '1px solid #e9d5ff',
+                paddingTop: '8px',
+                marginTop: '4px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                <span>
+                  Total: <strong>{analysis.scoreBreakdown.totalWeightedScore}</strong>
+                  {' '}÷ <strong>{analysis.scoreBreakdown.totalDuration}</strong> beats
+                </span>
                 <strong style={{
                   padding: '2px 8px',
                   borderRadius: '4px',
                   backgroundColor: avgScore >= 0 ? '#dcfce7' : '#fee2e2',
                   color: avgScore >= 0 ? '#16a34a' : '#dc2626',
                 }}>
-                  {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
+                  = {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
                 </strong>
               </div>
-              <div style={{ marginTop: '8px', fontSize: '10px', color: '#7c3aed' }}>
-                Interpretation: positive = dissonances well-handled on average, negative = problematic handling
+              <div style={{ marginTop: '6px', fontSize: '10px', color: '#7c3aed' }}>
+                Weighted by duration. Higher = better counterpoint quality.
               </div>
             </div>
 

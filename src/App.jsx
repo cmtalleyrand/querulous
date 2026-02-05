@@ -233,15 +233,16 @@ export default function App() {
       if (analysisKey.includes('b')) tonic -= 1;
 
       // Get key signature for spelling (parsing ABC)
-      const spellingKeyBase = effSpellingKey.replace('#', '').replace('b', '');
+      // For minor keys, append 'm' to the FULL key (e.g., 'Ebm' not 'Em')
       let spellingKeyForSig = effSpellingKey;
-      if (['natural_minor', 'harmonic_minor'].includes(effSpellingMode)) spellingKeyForSig = spellingKeyBase + 'm';
-      const spellingKeySig = KEY_SIGNATURES[spellingKeyForSig] || KEY_SIGNATURES[spellingKeyBase] || [];
+      if (['natural_minor', 'harmonic_minor'].includes(effSpellingMode)) spellingKeyForSig = effSpellingKey + 'm';
+      const spellingKeySig = KEY_SIGNATURES[spellingKeyForSig] || KEY_SIGNATURES[effSpellingKey] || [];
 
       // Get key signature for answer generation (based on analysis key)
+      // Same fix: use full key with accidental when appending 'm'
       let analysisKeyForSig = analysisKey;
-      if (['natural_minor', 'harmonic_minor'].includes(analysisMode)) analysisKeyForSig = analysisKeyBase + 'm';
-      const analysisKeySig = KEY_SIGNATURES[analysisKeyForSig] || KEY_SIGNATURES[analysisKeyBase] || [];
+      if (['natural_minor', 'harmonic_minor'].includes(analysisMode)) analysisKeyForSig = analysisKey + 'm';
+      const analysisKeySig = KEY_SIGNATURES[analysisKeyForSig] || KEY_SIGNATURES[analysisKey] || [];
 
       const keyInfo = { key: analysisKey, tonic, mode: analysisMode, keySignature: analysisKeySig };
 
@@ -845,94 +846,7 @@ export default function App() {
                   />
                 </Section>
 
-                {/* Aggregate Counterpoint Score */}
-                {results.doubleCounterpoint && results.modulatoryRobustness && (
-                  <div style={{
-                    margin: '16px 0',
-                    padding: '16px',
-                    backgroundColor: '#f8fafc',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                  }}>
-                    <h3 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
-                      Aggregate Counterpoint Quality
-                    </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                      {/* S+CS Score */}
-                      {(() => {
-                        const scsScore = results.doubleCounterpoint.original?.detailedScoring?.summary?.averageScore || 0;
-                        return (
-                          <div style={{
-                            padding: '12px',
-                            backgroundColor: scsScore >= 0.5 ? '#dcfce7' : scsScore >= 0 ? '#fef9c3' : '#fee2e2',
-                            borderRadius: '6px',
-                            textAlign: 'center',
-                          }}>
-                            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Subject + CS</div>
-                            <div style={{
-                              fontSize: '20px',
-                              fontWeight: '700',
-                              color: scsScore >= 0.5 ? '#16a34a' : scsScore >= 0 ? '#ca8a04' : '#dc2626',
-                            }}>
-                              {scsScore >= 0 ? '+' : ''}{scsScore.toFixed(2)}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                      {/* A+CS Score */}
-                      {(() => {
-                        const acsScore = results.modulatoryRobustness.detailedScoring?.summary?.averageScore || 0;
-                        return (
-                          <div style={{
-                            padding: '12px',
-                            backgroundColor: acsScore >= 0.5 ? '#dcfce7' : acsScore >= 0 ? '#fef9c3' : '#fee2e2',
-                            borderRadius: '6px',
-                            textAlign: 'center',
-                          }}>
-                            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Answer + CS</div>
-                            <div style={{
-                              fontSize: '20px',
-                              fontWeight: '700',
-                              color: acsScore >= 0.5 ? '#16a34a' : acsScore >= 0 ? '#ca8a04' : '#dc2626',
-                            }}>
-                              {acsScore >= 0 ? '+' : ''}{acsScore.toFixed(2)}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                      {/* Combined Aggregate */}
-                      {(() => {
-                        const scsScore = results.doubleCounterpoint.original?.detailedScoring?.summary?.averageScore || 0;
-                        const acsScore = results.modulatoryRobustness.detailedScoring?.summary?.averageScore || 0;
-                        const aggregate = (scsScore + acsScore) / 2;
-                        return (
-                          <div style={{
-                            padding: '12px',
-                            backgroundColor: aggregate >= 0.5 ? '#dcfce7' : aggregate >= 0 ? '#fef9c3' : '#fee2e2',
-                            borderRadius: '6px',
-                            textAlign: 'center',
-                            border: '2px solid',
-                            borderColor: aggregate >= 0.5 ? '#16a34a' : aggregate >= 0 ? '#ca8a04' : '#dc2626',
-                          }}>
-                            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px', fontWeight: '600' }}>
-                              AGGREGATE
-                            </div>
-                            <div style={{
-                              fontSize: '24px',
-                              fontWeight: '700',
-                              color: aggregate >= 0.5 ? '#16a34a' : aggregate >= 0 ? '#ca8a04' : '#dc2626',
-                            }}>
-                              {aggregate >= 0 ? '+' : ''}{aggregate.toFixed(2)}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#64748b', textAlign: 'center' }}>
-                      Average dissonance handling score (0 = acceptable, positive = good, negative = problematic)
-                    </div>
-                  </div>
-                )}
+                {/* Scores are now shown in CounterpointComparisonViz with comprehensive breakdown */}
               </>
             )}
 
