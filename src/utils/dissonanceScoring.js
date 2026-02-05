@@ -136,6 +136,63 @@ function isOnsetInSequence(onset, ctx) {
 }
 
 /**
+ * Calculate sub-subdivision threshold for short note detection.
+ * Notes shorter than a triplet of the main subdivision are considered "very short"
+ * and should have reduced penalties (they pass too quickly to be very noticeable).
+ *
+ * For 4/4 meter: main beat = 1 quarter, subdivision = 8th note (0.5), triplet = ~0.167
+ * For 6/8 meter: main beat = dotted quarter (1.5), subdivision = 8th (0.5), triplet = ~0.167
+ *
+ * @param {Object} ctx - Analysis context with meter
+ * @returns {number} Duration threshold in beats
+ */
+function getShortNoteThreshold(ctx) {
+  const [numerator, denominator] = ctx.meter || [4, 4];
+
+  // Determine if compound meter (6/8, 9/8, 12/8)
+  const isCompound = (numerator % 3 === 0 && numerator > 3 && denominator === 8);
+
+  // In simple meter: subdivision = half a beat
+  // In compound meter: subdivision = 1/3 of the dotted-quarter beat
+  const subdivision = isCompound ? (1 / 3) : 0.5;
+
+  // Triplet of subdivision
+  return subdivision / 3;
+}
+
+/**
+ * Get a multiplier for penalty reduction based on note duration.
+ * Very short notes (below sub-subdivision level) get reduced penalties.
+ *
+ * @param {Simultaneity} sim - The simultaneity to check
+ * @param {Object} ctx - Analysis context
+ * @returns {{multiplier: number, isShort: boolean, reason: string|null}}
+ */
+function getShortNoteMultiplier(sim, ctx) {
+  // Use the shorter of the two notes' durations
+  const minDuration = Math.min(sim.voice1Note.duration, sim.voice2Note.duration);
+  const threshold = getShortNoteThreshold(ctx);
+
+  if (minDuration <= threshold) {
+    // Very short notes: 50% penalty reduction
+    return {
+      multiplier: 0.5,
+      isShort: true,
+      reason: `Very short note (${minDuration.toFixed(3)} beats < ${threshold.toFixed(3)} threshold)`,
+    };
+  } else if (minDuration <= threshold * 2) {
+    // Moderately short notes: 25% penalty reduction
+    return {
+      multiplier: 0.75,
+      isShort: true,
+      reason: `Short note (${minDuration.toFixed(3)} beats)`,
+    };
+  }
+
+  return { multiplier: 1.0, isShort: false, reason: null };
+}
+
+/**
  * Classify interval magnitude
  */
 function getIntervalMagnitude(semitones) {
@@ -1146,6 +1203,17 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
     totalScore += p4Bonus;
   }
 
+  // Short note sensitivity: very short notes (below sub-subdivision level)
+  // have reduced penalties since they pass too quickly to be very noticeable
+  const shortNoteInfo = getShortNoteMultiplier(currSim, ctx);
+  let shortNoteAdjustment = 0;
+  if (shortNoteInfo.isShort && totalScore < 0) {
+    // Only reduce penalties (negative scores), not bonuses
+    const reduction = totalScore * (1 - shortNoteInfo.multiplier);
+    shortNoteAdjustment = -reduction; // Make it positive since we're reducing penalty
+    totalScore = totalScore * shortNoteInfo.multiplier;
+  }
+
   // Determine type label and semantic category
   let type = 'unprepared';
   let label = '!';
@@ -1211,6 +1279,7 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
       `Exit: ${exitInfo.score.toFixed(1)} (${exitInfo.details.join(', ')})`,
       patternInfo.patterns.length > 0 ? `Pattern: ${patternInfo.patterns.map(p => `${p.type} +${p.bonus}`).join(', ')}` : 'No pattern match',
       isP4 ? `P4 (mild dissonance): +${p4Bonus.toFixed(1)}` : null,
+      shortNoteInfo.isShort ? `${shortNoteInfo.reason}: +${shortNoteAdjustment.toFixed(1)}` : null,
       `Total: ${totalScore.toFixed(1)}`,
     ].filter(Boolean),
   };
