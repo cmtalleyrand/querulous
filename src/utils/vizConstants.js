@@ -111,13 +111,13 @@ export function getIntervalStyle({
     }
     if (category === 'consonant_good_resolution') {
       return {
-        color: VIZ_COLORS.perfectConsonant,
-        bg: '#ccfbf1',
-        fill: 'rgba(45, 212, 191, 0.45)', // Brighter/more saturated for good resolution
+        color: '#0d9488', // Teal-600 - more saturated
+        bg: '#99f6e4', // Teal-200 - bright background
+        fill: 'rgba(20, 184, 166, 0.65)', // Teal-500 at higher opacity - MUCH brighter
         label: 'Good resolution',
         borderStyle: 'solid',
-        borderWidth: 2,
-        opacity: 0.85,
+        borderWidth: 3,
+        opacity: 0.95, // Very prominent
       };
     }
     if (category === 'consonant_bad_resolution') {
@@ -125,7 +125,7 @@ export function getIntervalStyle({
         color: VIZ_COLORS.unresolvedDissonance,
         bg: '#fed7aa',
         fill: VIZ_COLORS.unresolvedFill,
-        label: 'Poor resolution',
+        label: 'After leap resolution', // Clarify: THIS consonance follows a dissonance resolved by leap
         borderStyle: 'dashed',
         borderWidth: 2,
         opacity: 0.6,

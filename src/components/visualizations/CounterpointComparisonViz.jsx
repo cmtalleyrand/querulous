@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
-import { scoreDissonance } from '../../utils/dissonanceScoring';
+import { scoreDissonance, analyzeAllDissonances } from '../../utils/dissonanceScoring';
 import {
   generateGridLines,
   VIZ_COLORS,
@@ -130,6 +130,7 @@ export function CounterpointComparisonViz({
     let lastIntervalType = null; // 'perfect', 'third', 'sixth', 'dissonant'
 
     let prevPoint = null;
+    let prevSim = null;
     for (let i = 0; i < sims.length; i++) {
       const sim = sims[i];
       const snapBeat = Math.round(sim.onset * 4) / 4;
@@ -137,12 +138,39 @@ export function CounterpointComparisonViz({
       if (!beatMap.has(snapBeat)) {
         const scoring = scoreDissonance(sim, sims, i, intervalHistory);
 
-        // Calculate motion from previous interval
-        const v1Motion = prevPoint ? sim.voice1Note.pitch - prevPoint.v1Pitch : 0;
-        const v2Motion = prevPoint ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
+        // Check for rest/re-entry between previous and current
+        // If rest is long (>1 beat AND >2× previous note duration), this is a re-entry
+        let hadRest = false;
+        let isReentry = false;
+        let restInfo = null;
+        if (prevSim) {
+          const prevV1End = prevSim.voice1Note.onset + prevSim.voice1Note.duration;
+          const prevV2End = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
+          const v1RestDur = sim.onset - prevV1End;
+          const v2RestDur = sim.onset - prevV2End;
+
+          // Either voice had a rest
+          if (v1RestDur > 0.05 || v2RestDur > 0.05) {
+            hadRest = true;
+            // Check for re-entry (rest >1 beat AND >2× previous note)
+            const v1Reentry = v1RestDur > 1.0 && v1RestDur > 2 * prevSim.voice1Note.duration;
+            const v2Reentry = v2RestDur > 1.0 && v2RestDur > 2 * prevSim.voice2Note.duration;
+            if (v1Reentry || v2Reentry) {
+              isReentry = true;
+              restInfo = `Re-entry after ${Math.max(v1RestDur, v2RestDur).toFixed(1)} beat rest`;
+            } else if (hadRest) {
+              restInfo = `After rest (${Math.max(v1RestDur, v2RestDur).toFixed(2)} beats)`;
+            }
+          }
+        }
+
+        // Calculate motion from previous interval (only if no re-entry)
+        const v1Motion = (prevPoint && !isReentry) ? sim.voice1Note.pitch - prevPoint.v1Pitch : 0;
+        const v2Motion = (prevPoint && !isReentry) ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
 
         // Determine interval type for repeated tracking
-        const isPerfectInterval = [1, 5].includes(sim.interval.class); // P1/P8 (class 1), P5 (class 5)
+        // P4 (class 4) counts as perfect when treated as consonant
+        const isPerfectInterval = [1, 4, 5].includes(sim.interval.class); // P1/P8 (class 1), P4 (class 4), P5 (class 5)
         const isThird = sim.interval.class === 3; // m3/M3
         const isSixth = sim.interval.class === 6; // m6/M6
         const isConsonantInterval = scoring.isConsonant;
@@ -150,6 +178,14 @@ export function CounterpointComparisonViz({
         // Update consecutive counters
         let isRepeated = false;
         let repeatInfo = null;
+
+        // Re-entry resets consecutive counting
+        if (isReentry) {
+          consecutivePerfect = 0;
+          consecutiveThirds = 0;
+          consecutiveSixths = 0;
+          lastIntervalType = null;
+        }
 
         if (isConsonantInterval) {
           if (isPerfectInterval) {
@@ -247,8 +283,12 @@ export function CounterpointComparisonViz({
           isParallel: false,
           isRepeated,
           repeatInfo,
-          // Previous interval info for detail panel
-          prevInterval: prevPoint ? {
+          // Rest/re-entry info
+          hadRest,
+          isReentry,
+          restInfo,
+          // Previous interval info for detail panel (null if re-entry)
+          prevInterval: (prevPoint && !isReentry) ? {
             intervalName: prevPoint.intervalName,
             intervalClass: prevPoint.intervalClass,
             v1Pitch: prevPoint.v1Pitch,
@@ -258,8 +298,13 @@ export function CounterpointComparisonViz({
           v2Motion,
         };
 
-        // Check for parallel motion with previous interval
-        if (prevPoint) {
+        // Add rest info to details
+        if (restInfo) {
+          point.scoreDetails.unshift(restInfo);
+        }
+
+        // Check for parallel motion with previous interval (not if re-entry)
+        if (prevPoint && !isReentry) {
           point.isParallel = isParallelFifthOrOctave(prevPoint, point);
           if (point.isParallel) {
             point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} detected`);
@@ -270,6 +315,7 @@ export function CounterpointComparisonViz({
         intervalPoints.push(point);
         intervalHistory.push(sim.interval.class);
         prevPoint = point;
+        prevSim = sim;
       }
     }
 
@@ -324,6 +370,7 @@ export function CounterpointComparisonViz({
       beatMap,
       issues,
       warnings,
+      dissonances, // All dissonances for clickable list
       avgScore,
       scoreBreakdown,
       minPitch: Math.min(...allPitches) - 2,
@@ -372,8 +419,12 @@ export function CounterpointComparisonViz({
   const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
 
   const handleIntervalClick = useCallback((pt, event) => {
-    if (event) event.preventDefault();
-    setSelectedInterval(prev => prev?.onset === pt.onset ? null : pt);
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    // Always select the clicked interval (no toggle - stays open until new tap)
+    setSelectedInterval(pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
   }, []);
 
@@ -758,7 +809,7 @@ export function CounterpointComparisonViz({
                   key={`int-${i}`}
                   style={{ cursor: 'pointer' }}
                   onClick={(e) => handleIntervalClick(pt, e)}
-                  onTouchStart={(e) => handleIntervalClick(pt, e)}
+                  
                   onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
                   onMouseLeave={() => !isSelected && setHighlightedOnset(null)}
                 >
@@ -833,7 +884,7 @@ export function CounterpointComparisonViz({
                   key={`v1-${i}`}
                   style={{ cursor: 'pointer' }}
                   onClick={(e) => handleNoteClick(n, tabConfig.v1, e)}
-                  onTouchStart={(e) => handleNoteClick(n, tabConfig.v1, e)}
+                  
                 >
                   {isHighlighted && (
                     <rect
@@ -872,7 +923,7 @@ export function CounterpointComparisonViz({
                   key={`v2-${i}`}
                   style={{ cursor: 'pointer' }}
                   onClick={(e) => handleNoteClick(n, tabConfig.v2, e)}
-                  onTouchStart={(e) => handleNoteClick(n, tabConfig.v2, e)}
+                  
                 >
                   {isHighlighted && (
                     <rect
@@ -1192,7 +1243,6 @@ export function CounterpointComparisonViz({
             <div
               key={i}
               onClick={(e) => handleIssueClick(issue, e)}
-              onTouchStart={(e) => handleIssueClick(issue, e)}
               style={{
                 padding: '10px 14px',
                 borderBottom: i < issues.length - 1 ? `1px solid ${VIZ_COLORS.issueBackground}` : 'none',
@@ -1267,7 +1317,6 @@ export function CounterpointComparisonViz({
             <div
               key={i}
               onClick={(e) => handleIssueClick(warn, e)}
-              onTouchStart={(e) => handleIssueClick(warn, e)}
               style={{
                 padding: '8px 14px',
                 borderBottom: i < Math.min(warnings.length - 1, 4) ? `1px solid ${VIZ_COLORS.warningBackground}` : 'none',
@@ -1290,6 +1339,77 @@ export function CounterpointComparisonViz({
               +{warnings.length - 5} more warnings
             </div>
           )}
+        </div>
+      )}
+
+      {/* All Dissonances - clickable list */}
+      {analysis.dissonances && analysis.dissonances.length > 0 && (
+        <div style={{
+          backgroundColor: '#fff',
+          border: '1px solid #c4b5fd',
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: '#f5f3ff',
+            borderBottom: '1px solid #c4b5fd',
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#5b21b6',
+          }}>
+            All Dissonances ({analysis.dissonances.length}) — tap to view details
+          </div>
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {analysis.dissonances.map((diss, i) => (
+              <div
+                key={i}
+                onClick={(e) => handleIssueClick(diss, e)}
+                style={{
+                  padding: '8px 14px',
+                  borderBottom: i < analysis.dissonances.length - 1 ? '1px solid #f5f3ff' : 'none',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  backgroundColor: selectedInterval?.onset === diss.onset ? '#f5f3ff' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span style={{ color: '#7c3aed', fontWeight: '600', minWidth: '70px' }}>
+                  {formatter?.formatBeat(diss.onset) || `Beat ${diss.onset + 1}`}
+                </span>
+                <span style={{ fontWeight: '500' }}>{diss.intervalName}</span>
+                <span style={{
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  backgroundColor: diss.isStrong ? '#fef3c7' : '#f1f5f9',
+                  color: diss.isStrong ? '#92400e' : '#64748b',
+                }}>
+                  {diss.isStrong ? 'strong' : 'weak'}
+                </span>
+                {diss.type && diss.type !== 'unprepared' && (
+                  <span style={{
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    backgroundColor: '#dbeafe',
+                    color: '#1e40af',
+                  }}>
+                    {diss.type}
+                  </span>
+                )}
+                <span style={{
+                  marginLeft: 'auto',
+                  fontWeight: '600',
+                  color: diss.score >= 0 ? '#16a34a' : diss.score >= -1 ? '#ca8a04' : '#dc2626',
+                }}>
+                  {diss.score >= 0 ? '+' : ''}{diss.score.toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1354,27 +1474,55 @@ export function CounterpointComparisonViz({
               )}
             </div>
 
-            {/* Calculation explanation */}
+            {/* What each dissonance score includes */}
             <div style={{
               backgroundColor: '#f8fafc',
               borderRadius: '6px',
               padding: '10px',
               fontSize: '11px',
               color: '#64748b',
+              marginBottom: '10px',
             }}>
-              <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>How average is calculated:</div>
-              <div style={{ marginBottom: '4px' }}>
-                Total dissonance score: <strong style={{ color: analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '#16a34a' : '#dc2626' }}>
+              <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>Each dissonance score includes:</div>
+              <ul style={{ margin: '0', paddingLeft: '16px', lineHeight: '1.6' }}>
+                <li><strong>Entry motion:</strong> oblique/contrary (+0.5), similar (-0.5 to -1.0), parallel (-1.5)</li>
+                <li><strong>Metric placement:</strong> strong beat (-0.5)</li>
+                <li><strong>Resolution target:</strong> imperfect consonance (+1.0), perfect (+0.5), another dissonance (-0.75)</li>
+                <li><strong>Resolution quality:</strong> step (good), leap penalties by size</li>
+                <li><strong>Patterns:</strong> suspension (+1.5), appoggiatura (+2.5), cambiata (+0.5-1.5), etc.</li>
+                <li><strong>Rest modifier:</strong> from-rest halves motion penalties</li>
+                <li><strong>Re-entry:</strong> after long rest (&gt;1 beat AND &gt;2× note) = neutral (0)</li>
+              </ul>
+            </div>
+
+            {/* Aggregate calculation */}
+            <div style={{
+              backgroundColor: '#faf5ff',
+              borderRadius: '6px',
+              padding: '10px',
+              fontSize: '11px',
+              color: '#5b21b6',
+            }}>
+              <div style={{ fontWeight: '600', marginBottom: '6px' }}>Average dissonance handling quality:</div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span>Sum of all dissonance scores:</span>
+                <strong style={{ color: analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '#16a34a' : '#dc2626' }}>
                   {analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '+' : ''}{analysis.scoreBreakdown.totalDissonanceScore.toFixed(2)}
                 </strong>
-              </div>
-              <div style={{ marginBottom: '4px' }}>
-                Number of dissonances: <strong>{analysis.scoreBreakdown.dissonances}</strong>
-              </div>
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '4px', marginTop: '4px' }}>
-                Average = {analysis.scoreBreakdown.totalDissonanceScore.toFixed(2)} ÷ {analysis.scoreBreakdown.dissonances} = <strong style={{ color: avgScore >= 0 ? '#16a34a' : '#dc2626' }}>
+                <span>÷</span>
+                <strong>{analysis.scoreBreakdown.dissonances} dissonances</strong>
+                <span>=</span>
+                <strong style={{
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  backgroundColor: avgScore >= 0 ? '#dcfce7' : '#fee2e2',
+                  color: avgScore >= 0 ? '#16a34a' : '#dc2626',
+                }}>
                   {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
                 </strong>
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '10px', color: '#7c3aed' }}>
+                Interpretation: positive = dissonances well-handled on average, negative = problematic handling
               </div>
             </div>
 
