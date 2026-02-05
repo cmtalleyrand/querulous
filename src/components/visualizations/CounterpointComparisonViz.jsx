@@ -1328,23 +1328,32 @@ export function CounterpointComparisonViz({
                       padding: '10px',
                       border: `1px solid ${pt.isConsonant ? '#bbf7d0' : '#e5e7eb'}`,
                     }}>
-                      <div style={{ fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                         {pt.isConsonant ? 'Interval Analysis' : 'Score Breakdown'}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {pt.scoreDetails.map((detail, i) => {
                           const text = typeof detail === 'object' ? detail.text : detail;
                           const isWarning = text.includes('⚠️') || text.includes('REPEATED') || text.includes('PARALLEL');
+                          // Detect positive scores (e.g., "+0.5", "+1.0") and negative scores
+                          const hasPositive = /\+\d/.test(text) || text.includes('good') || text.includes('Good');
+                          const hasNegative = /-\d/.test(text) && !text.includes('m2') && !text.includes('-m'); // Avoid interval names
+                          let textColor = '#475569'; // Default dark gray
+                          if (isWarning || hasNegative) {
+                            textColor = '#dc2626'; // Red for warnings/negatives
+                          } else if (hasPositive) {
+                            textColor = '#16a34a'; // Green for positives
+                          }
                           return (
                             <div key={i} style={{
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
-                              fontSize: '11px',
-                              padding: '2px 0',
+                              fontSize: '12px',
+                              padding: '3px 0',
                               borderBottom: i < pt.scoreDetails.length - 1 ? '1px solid #f3f4f6' : 'none',
-                              color: isWarning ? '#dc2626' : '#64748b',
-                              fontWeight: isWarning ? '600' : '400',
+                              color: textColor,
+                              fontWeight: (isWarning || hasPositive || hasNegative) ? '500' : '400',
                             }}>
                               <span style={{ flex: 1 }}>{text}</span>
                             </div>
@@ -1354,17 +1363,20 @@ export function CounterpointComparisonViz({
                       {/* Show total score for dissonances */}
                       {!pt.isConsonant && (
                         <div style={{
-                          marginTop: '8px',
-                          paddingTop: '6px',
-                          borderTop: '1px solid #e5e7eb',
+                          marginTop: '10px',
+                          paddingTop: '8px',
+                          borderTop: '2px solid #e5e7eb',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                         }}>
-                          <span style={{ fontSize: '11px', fontWeight: '600', color: '#475569' }}>Total Score</span>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>Total Score</span>
                           <span style={{
-                            fontSize: '12px',
+                            fontSize: '16px',
                             fontWeight: '700',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
                             color: pt.score >= 0 ? '#16a34a' : '#dc2626',
                           }}>
                             {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
