@@ -214,8 +214,9 @@ export function CounterpointComparisonViz({
         const v2Motion = (prevPoint && showMelodicInterval) ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
 
         // Determine interval type for repeated tracking
-        // P4 (class 4) counts as perfect when treated as consonant
-        const isPerfectInterval = [1, 4, 5].includes(sim.interval.class); // P1/P8 (class 1), P4 (class 4), P5 (class 5)
+        // P4 (class 4) counts as perfect when treated as consonant, but NOT A4 (augmented 4th/tritone)
+        const isPerfectInterval = [1, 5].includes(sim.interval.class) ||
+          (sim.interval.class === 4 && sim.interval.quality === 'perfect'); // P1/P8, P5, P4 (but not A4)
         const isThird = sim.interval.class === 3; // m3/M3
         const isSixth = sim.interval.class === 6; // m6/M6
         const isConsonantInterval = scoring.isConsonant;
