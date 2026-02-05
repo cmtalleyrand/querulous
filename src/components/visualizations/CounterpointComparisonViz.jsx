@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
-import { scoreDissonance } from '../../utils/dissonanceScoring';
+import { scoreDissonance, analyzeAllDissonances } from '../../utils/dissonanceScoring';
 import {
   generateGridLines,
   VIZ_COLORS,
