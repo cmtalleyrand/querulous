@@ -1428,27 +1428,55 @@ export function CounterpointComparisonViz({
               )}
             </div>
 
-            {/* Calculation explanation */}
+            {/* What each dissonance score includes */}
             <div style={{
               backgroundColor: '#f8fafc',
               borderRadius: '6px',
               padding: '10px',
               fontSize: '11px',
               color: '#64748b',
+              marginBottom: '10px',
             }}>
-              <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>How average is calculated:</div>
-              <div style={{ marginBottom: '4px' }}>
-                Total dissonance score: <strong style={{ color: analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '#16a34a' : '#dc2626' }}>
+              <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>Each dissonance score includes:</div>
+              <ul style={{ margin: '0', paddingLeft: '16px', lineHeight: '1.6' }}>
+                <li><strong>Entry motion:</strong> oblique/contrary (+0.5), similar (-0.5 to -1.0), parallel (-1.5)</li>
+                <li><strong>Metric placement:</strong> strong beat (-0.5)</li>
+                <li><strong>Resolution target:</strong> imperfect consonance (+1.0), perfect (+0.5), another dissonance (-0.75)</li>
+                <li><strong>Resolution quality:</strong> step (good), leap penalties by size</li>
+                <li><strong>Patterns:</strong> suspension (+1.5), appoggiatura (+2.5), cambiata (+0.5-1.5), etc.</li>
+                <li><strong>Rest modifier:</strong> from-rest halves motion penalties</li>
+                <li><strong>Re-entry:</strong> after long rest (&gt;1 beat AND &gt;2× note) = neutral (0)</li>
+              </ul>
+            </div>
+
+            {/* Aggregate calculation */}
+            <div style={{
+              backgroundColor: '#faf5ff',
+              borderRadius: '6px',
+              padding: '10px',
+              fontSize: '11px',
+              color: '#5b21b6',
+            }}>
+              <div style={{ fontWeight: '600', marginBottom: '6px' }}>Average dissonance handling quality:</div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span>Sum of all dissonance scores:</span>
+                <strong style={{ color: analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '#16a34a' : '#dc2626' }}>
                   {analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '+' : ''}{analysis.scoreBreakdown.totalDissonanceScore.toFixed(2)}
                 </strong>
-              </div>
-              <div style={{ marginBottom: '4px' }}>
-                Number of dissonances: <strong>{analysis.scoreBreakdown.dissonances}</strong>
-              </div>
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '4px', marginTop: '4px' }}>
-                Average = {analysis.scoreBreakdown.totalDissonanceScore.toFixed(2)} ÷ {analysis.scoreBreakdown.dissonances} = <strong style={{ color: avgScore >= 0 ? '#16a34a' : '#dc2626' }}>
+                <span>÷</span>
+                <strong>{analysis.scoreBreakdown.dissonances} dissonances</strong>
+                <span>=</span>
+                <strong style={{
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  backgroundColor: avgScore >= 0 ? '#dcfce7' : '#fee2e2',
+                  color: avgScore >= 0 ? '#16a34a' : '#dc2626',
+                }}>
                   {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
                 </strong>
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '10px', color: '#7c3aed' }}>
+                Interpretation: positive = dissonances well-handled on average, negative = problematic handling
               </div>
             </div>
 
