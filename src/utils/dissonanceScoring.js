@@ -1110,7 +1110,8 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
 
   // P4 special handling - in two-voice counterpoint, P4 is generally treated as dissonant
   // because one voice is always the bass, and P4 against bass is dissonant
-  if (currSim.interval.class === 4) {
+  // NOTE: Only applies to PERFECT 4th (P4), NOT augmented 4th (A4/tritone) which is always dissonant
+  if (currSim.interval.class === 4 && currSim.interval.quality === 'perfect') {
     isDissonant = isP4DissonantInContext(currSim, ctx);
   }
 

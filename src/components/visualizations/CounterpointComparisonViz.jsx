@@ -138,39 +138,85 @@ export function CounterpointComparisonViz({
       if (!beatMap.has(snapBeat)) {
         const scoring = scoreDissonance(sim, sims, i, intervalHistory);
 
-        // Check for rest/re-entry between previous and current
-        // If rest is long (>1 beat AND >2× previous note duration), this is a re-entry
-        let hadRest = false;
-        let isReentry = false;
+        // Check for rest between previous and current simultaneity
+        // Categories:
+        // 1. none: no rest (<0.05 beats) - normal motion
+        // 2. asynchronous: short rest, other voice still sustaining - halved penalties/bonuses
+        // 3. reentry_short: short rest, other voice played full note - weak resolution check
+        // 4. reentry_medium: medium rest (one but not both long criteria) - weak resolution check
+        // 5. reentry_long: long rest (>1 beat AND >2× note) - no melodic interval (forgotten)
+        let restCategory = 'none';
         let restInfo = null;
+        let showMelodicInterval = true;
+        let motionScoreMultiplier = 1.0;
+        let checkWeakResolution = false;
+        let ghostNoteDuration = 0;
+
         if (prevSim) {
           const prevV1End = prevSim.voice1Note.onset + prevSim.voice1Note.duration;
           const prevV2End = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
           const v1RestDur = sim.onset - prevV1End;
           const v2RestDur = sim.onset - prevV2End;
 
-          // Either voice had a rest
-          if (v1RestDur > 0.05 || v2RestDur > 0.05) {
-            hadRest = true;
-            // Check for re-entry (rest >1 beat AND >2× previous note)
-            const v1Reentry = v1RestDur > 1.0 && v1RestDur > 2 * prevSim.voice1Note.duration;
-            const v2Reentry = v2RestDur > 1.0 && v2RestDur > 2 * prevSim.voice2Note.duration;
-            if (v1Reentry || v2Reentry) {
-              isReentry = true;
-              restInfo = `Re-entry after ${Math.max(v1RestDur, v2RestDur).toFixed(1)} beat rest`;
-            } else if (hadRest) {
-              restInfo = `After rest (${Math.max(v1RestDur, v2RestDur).toFixed(2)} beats)`;
+          const v1Rested = v1RestDur > 0.05;
+          const v2Rested = v2RestDur > 0.05;
+
+          if (v1Rested || v2Rested) {
+            // At least one voice had a rest
+            // Determine which voice rested (or both)
+            const restingVoice = v1Rested && (!v2Rested || v1RestDur >= v2RestDur) ? 1 : 2;
+            const restDur = restingVoice === 1 ? v1RestDur : v2RestDur;
+            const otherVoiceRestDur = restingVoice === 1 ? v2RestDur : v1RestDur;
+            const prevNoteDur = restingVoice === 1 ? prevSim.voice1Note.duration : prevSim.voice2Note.duration;
+
+            // Did the other voice play a full note during the rest?
+            // If other voice also has a gap (otherVoiceRestDur > 0), it finished a note
+            const otherVoicePlayedFullNote = otherVoiceRestDur > 0;
+
+            // Long rest criteria: >1 beat AND >2× previous note duration
+            const meetsLongDuration = restDur > 1.0;
+            const meetsLongRatio = restDur > 2 * prevNoteDur;
+            const isLongRest = meetsLongDuration && meetsLongRatio;
+
+            // Medium rest: meets ONE criterion but not both
+            const isMediumRest = (meetsLongDuration || meetsLongRatio) && !isLongRest;
+
+            if (isLongRest) {
+              // Long rest: forgotten - no melodic interval, unresolved
+              restCategory = 'reentry_long';
+              showMelodicInterval = false;
+              restInfo = `Re-entry after ${restDur.toFixed(1)} beat rest (forgotten)`;
+            } else if (isMediumRest) {
+              // Medium rest: re-entry but still remember pitch
+              restCategory = 'reentry_medium';
+              checkWeakResolution = true;
+              ghostNoteDuration = prevNoteDur * 1.5;
+              restInfo = `Re-entry after ${restDur.toFixed(2)} beat rest`;
+            } else if (otherVoicePlayedFullNote) {
+              // Short rest + other voice completed a note: re-entry
+              restCategory = 'reentry_short';
+              checkWeakResolution = true;
+              ghostNoteDuration = prevNoteDur * 1.5;
+              restInfo = `Re-entry (other voice played during rest)`;
+            } else {
+              // Short rest + other voice still sustaining: asynchronous
+              restCategory = 'asynchronous';
+              motionScoreMultiplier = 0.5;
+              restInfo = `Asynchronous (${restDur.toFixed(2)} beat offset)`;
             }
           }
         }
 
-        // Calculate motion from previous interval (only if no re-entry)
-        const v1Motion = (prevPoint && !isReentry) ? sim.voice1Note.pitch - prevPoint.v1Pitch : 0;
-        const v2Motion = (prevPoint && !isReentry) ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
+        // Calculate motion from previous interval
+        // For long re-entry: no melodic interval (forgotten)
+        // For all others: show melodic interval
+        const v1Motion = (prevPoint && showMelodicInterval) ? sim.voice1Note.pitch - prevPoint.v1Pitch : 0;
+        const v2Motion = (prevPoint && showMelodicInterval) ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
 
         // Determine interval type for repeated tracking
-        // P4 (class 4) counts as perfect when treated as consonant
-        const isPerfectInterval = [1, 4, 5].includes(sim.interval.class); // P1/P8 (class 1), P4 (class 4), P5 (class 5)
+        // P4 (class 4) counts as perfect when treated as consonant, but NOT A4 (augmented 4th/tritone)
+        const isPerfectInterval = [1, 5].includes(sim.interval.class) ||
+          (sim.interval.class === 4 && sim.interval.quality === 'perfect'); // P1/P8, P5, P4 (but not A4)
         const isThird = sim.interval.class === 3; // m3/M3
         const isSixth = sim.interval.class === 6; // m6/M6
         const isConsonantInterval = scoring.isConsonant;
@@ -179,8 +225,10 @@ export function CounterpointComparisonViz({
         let isRepeated = false;
         let repeatInfo = null;
 
-        // Re-entry resets consecutive counting
-        if (isReentry) {
+        // Any re-entry (short, medium, or long) resets consecutive counting
+        // Asynchronous does NOT reset (it's still connected, just offset)
+        const isAnyReentry = restCategory.startsWith('reentry');
+        if (isAnyReentry) {
           consecutivePerfect = 0;
           consecutiveThirds = 0;
           consecutiveSixths = 0;
@@ -270,6 +318,14 @@ export function CounterpointComparisonViz({
         const v2End = sim.voice2Note.onset + sim.voice2Note.duration;
         const simDuration = Math.min(v1End, v2End) - sim.onset;
 
+        // Determine motion type based on rest category
+        let motionType = 'normal'; // normal, asynchronous, reentry
+        if (restCategory === 'asynchronous') {
+          motionType = 'asynchronous';
+        } else if (isAnyReentry) {
+          motionType = 'reentry';
+        }
+
         // Check for parallel 5ths/8ves
         const point = {
           onset: sim.onset,
@@ -289,12 +345,16 @@ export function CounterpointComparisonViz({
           isParallel: false,
           isRepeated,
           repeatInfo,
-          // Rest/re-entry info
-          hadRest,
-          isReentry,
+          // Rest category and motion info
+          restCategory,
           restInfo,
-          // Previous interval info for detail panel (null if re-entry)
-          prevInterval: (prevPoint && !isReentry) ? {
+          motionType,
+          motionScoreMultiplier,
+          showMelodicInterval,
+          checkWeakResolution,
+          ghostNoteDuration,
+          // Previous interval info for detail panel (null if long re-entry = forgotten)
+          prevInterval: (prevPoint && showMelodicInterval) ? {
             intervalName: prevPoint.intervalName,
             intervalClass: prevPoint.intervalClass,
             v1Pitch: prevPoint.v1Pitch,
@@ -310,12 +370,30 @@ export function CounterpointComparisonViz({
         }
 
         // Check for parallel motion with previous interval
-        // ANY rest breaks the parallel chain (not just long re-entry rests)
-        if (prevPoint && !hadRest) {
+        // Re-entry breaks the parallel chain entirely
+        // Asynchronous still checks parallels (but penalty halved in scoring)
+        // Normal motion checks parallels normally
+        if (prevPoint && !isAnyReentry) {
           point.isParallel = isParallelFifthOrOctave(prevPoint, point);
           if (point.isParallel) {
-            point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} detected`);
+            if (motionType === 'asynchronous') {
+              point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} (asynchronous - halved penalty)`);
+            } else {
+              point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} detected`);
+            }
           }
+        }
+
+        // Weak resolution check for re-entry situations
+        // If we're at a re-entry point after a dissonance, and current interval is consonant,
+        // the previous dissonance gets "weak resolution" credit (not good, but not unresolved)
+        if (checkWeakResolution && prevPoint && !prevPoint.isConsonant && isConsonantInterval) {
+          // Mark previous dissonance as weakly resolved via ghost note
+          prevPoint.isResolved = true;
+          prevPoint.weakResolution = true;
+          prevPoint.scoreDetails.push(`Weak resolution via ghost note (${ghostNoteDuration.toFixed(2)} beats extended)`);
+          // Adjust score slightly - not as good as proper resolution, but not penalized as unresolved
+          // No score change, just removes "unresolved" penalty
         }
 
         beatMap.set(snapBeat, point);
@@ -414,9 +492,11 @@ export function CounterpointComparisonViz({
       }
 
       // Parallel 5ths/8ves - significant penalty
+      // Asynchronous motion halves the penalty (independence preserved by offset)
       if (pt.isParallel) {
-        parallelPenalty += 1.0 * dur;
-        totalWeightedScore -= 1.0 * dur;
+        const parallelMult = pt.motionScoreMultiplier || 1.0;
+        parallelPenalty += 1.0 * dur * parallelMult;
+        totalWeightedScore -= 1.0 * dur * parallelMult;
       }
 
       // Motion bonus: stepwise motion is good, leaps are riskier
@@ -1248,23 +1328,32 @@ export function CounterpointComparisonViz({
                       padding: '10px',
                       border: `1px solid ${pt.isConsonant ? '#bbf7d0' : '#e5e7eb'}`,
                     }}>
-                      <div style={{ fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
                         {pt.isConsonant ? 'Interval Analysis' : 'Score Breakdown'}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         {pt.scoreDetails.map((detail, i) => {
                           const text = typeof detail === 'object' ? detail.text : detail;
                           const isWarning = text.includes('⚠️') || text.includes('REPEATED') || text.includes('PARALLEL');
+                          // Detect positive scores (e.g., "+0.5", "+1.0") and negative scores
+                          const hasPositive = /\+\d/.test(text) || text.includes('good') || text.includes('Good');
+                          const hasNegative = /-\d/.test(text) && !text.includes('m2') && !text.includes('-m'); // Avoid interval names
+                          let textColor = '#475569'; // Default dark gray
+                          if (isWarning || hasNegative) {
+                            textColor = '#dc2626'; // Red for warnings/negatives
+                          } else if (hasPositive) {
+                            textColor = '#16a34a'; // Green for positives
+                          }
                           return (
                             <div key={i} style={{
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
-                              fontSize: '11px',
-                              padding: '2px 0',
+                              fontSize: '12px',
+                              padding: '3px 0',
                               borderBottom: i < pt.scoreDetails.length - 1 ? '1px solid #f3f4f6' : 'none',
-                              color: isWarning ? '#dc2626' : '#64748b',
-                              fontWeight: isWarning ? '600' : '400',
+                              color: textColor,
+                              fontWeight: (isWarning || hasPositive || hasNegative) ? '500' : '400',
                             }}>
                               <span style={{ flex: 1 }}>{text}</span>
                             </div>
@@ -1274,17 +1363,20 @@ export function CounterpointComparisonViz({
                       {/* Show total score for dissonances */}
                       {!pt.isConsonant && (
                         <div style={{
-                          marginTop: '8px',
-                          paddingTop: '6px',
-                          borderTop: '1px solid #e5e7eb',
+                          marginTop: '10px',
+                          paddingTop: '8px',
+                          borderTop: '2px solid #e5e7eb',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                         }}>
-                          <span style={{ fontSize: '11px', fontWeight: '600', color: '#475569' }}>Total Score</span>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>Total Score</span>
                           <span style={{
-                            fontSize: '12px',
+                            fontSize: '16px',
                             fontWeight: '700',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
                             color: pt.score >= 0 ? '#16a34a' : '#dc2626',
                           }}>
                             {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
