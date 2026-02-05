@@ -130,6 +130,7 @@ export function CounterpointComparisonViz({
     let lastIntervalType = null; // 'perfect', 'third', 'sixth', 'dissonant'
 
     let prevPoint = null;
+    let prevSim = null;
     for (let i = 0; i < sims.length; i++) {
       const sim = sims[i];
       const snapBeat = Math.round(sim.onset * 4) / 4;
@@ -137,12 +138,39 @@ export function CounterpointComparisonViz({
       if (!beatMap.has(snapBeat)) {
         const scoring = scoreDissonance(sim, sims, i, intervalHistory);
 
-        // Calculate motion from previous interval
-        const v1Motion = prevPoint ? sim.voice1Note.pitch - prevPoint.v1Pitch : 0;
-        const v2Motion = prevPoint ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
+        // Check for rest/re-entry between previous and current
+        // If rest is long (>1 beat AND >2× previous note duration), this is a re-entry
+        let hadRest = false;
+        let isReentry = false;
+        let restInfo = null;
+        if (prevSim) {
+          const prevV1End = prevSim.voice1Note.onset + prevSim.voice1Note.duration;
+          const prevV2End = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
+          const v1RestDur = sim.onset - prevV1End;
+          const v2RestDur = sim.onset - prevV2End;
+
+          // Either voice had a rest
+          if (v1RestDur > 0.05 || v2RestDur > 0.05) {
+            hadRest = true;
+            // Check for re-entry (rest >1 beat AND >2× previous note)
+            const v1Reentry = v1RestDur > 1.0 && v1RestDur > 2 * prevSim.voice1Note.duration;
+            const v2Reentry = v2RestDur > 1.0 && v2RestDur > 2 * prevSim.voice2Note.duration;
+            if (v1Reentry || v2Reentry) {
+              isReentry = true;
+              restInfo = `Re-entry after ${Math.max(v1RestDur, v2RestDur).toFixed(1)} beat rest`;
+            } else if (hadRest) {
+              restInfo = `After rest (${Math.max(v1RestDur, v2RestDur).toFixed(2)} beats)`;
+            }
+          }
+        }
+
+        // Calculate motion from previous interval (only if no re-entry)
+        const v1Motion = (prevPoint && !isReentry) ? sim.voice1Note.pitch - prevPoint.v1Pitch : 0;
+        const v2Motion = (prevPoint && !isReentry) ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
 
         // Determine interval type for repeated tracking
-        const isPerfectInterval = [1, 5].includes(sim.interval.class); // P1/P8 (class 1), P5 (class 5)
+        // P4 (class 4) counts as perfect when treated as consonant
+        const isPerfectInterval = [1, 4, 5].includes(sim.interval.class); // P1/P8 (class 1), P4 (class 4), P5 (class 5)
         const isThird = sim.interval.class === 3; // m3/M3
         const isSixth = sim.interval.class === 6; // m6/M6
         const isConsonantInterval = scoring.isConsonant;
@@ -150,6 +178,14 @@ export function CounterpointComparisonViz({
         // Update consecutive counters
         let isRepeated = false;
         let repeatInfo = null;
+
+        // Re-entry resets consecutive counting
+        if (isReentry) {
+          consecutivePerfect = 0;
+          consecutiveThirds = 0;
+          consecutiveSixths = 0;
+          lastIntervalType = null;
+        }
 
         if (isConsonantInterval) {
           if (isPerfectInterval) {
@@ -247,8 +283,12 @@ export function CounterpointComparisonViz({
           isParallel: false,
           isRepeated,
           repeatInfo,
-          // Previous interval info for detail panel
-          prevInterval: prevPoint ? {
+          // Rest/re-entry info
+          hadRest,
+          isReentry,
+          restInfo,
+          // Previous interval info for detail panel (null if re-entry)
+          prevInterval: (prevPoint && !isReentry) ? {
             intervalName: prevPoint.intervalName,
             intervalClass: prevPoint.intervalClass,
             v1Pitch: prevPoint.v1Pitch,
@@ -258,8 +298,13 @@ export function CounterpointComparisonViz({
           v2Motion,
         };
 
-        // Check for parallel motion with previous interval
-        if (prevPoint) {
+        // Add rest info to details
+        if (restInfo) {
+          point.scoreDetails.unshift(restInfo);
+        }
+
+        // Check for parallel motion with previous interval (not if re-entry)
+        if (prevPoint && !isReentry) {
           point.isParallel = isParallelFifthOrOctave(prevPoint, point);
           if (point.isParallel) {
             point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} detected`);
@@ -270,6 +315,7 @@ export function CounterpointComparisonViz({
         intervalPoints.push(point);
         intervalHistory.push(sim.interval.class);
         prevPoint = point;
+        prevSim = sim;
       }
     }
 

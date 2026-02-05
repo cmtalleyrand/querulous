@@ -125,7 +125,7 @@ export function getIntervalStyle({
         color: VIZ_COLORS.unresolvedDissonance,
         bg: '#fed7aa',
         fill: VIZ_COLORS.unresolvedFill,
-        label: 'Poor resolution',
+        label: 'After leap resolution', // Clarify: THIS consonance follows a dissonance resolved by leap
         borderStyle: 'dashed',
         borderWidth: 2,
         opacity: 0.6,
