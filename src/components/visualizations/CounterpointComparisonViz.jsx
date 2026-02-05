@@ -117,6 +117,24 @@ export function CounterpointComparisonViz({
 
     const sims = findSims(voice1, transposedVoice2);
 
+    // Collect sequence data from both voices for scoring
+    // This enables sequence-based penalty reduction for parallels
+    const v1Sequences = sequences[tabConfig.v1];
+    const v2Sequences = sequences[tabConfig.v2];
+    const allSequenceNoteRanges = [
+      ...(v1Sequences?.noteRanges || []),
+      ...(v2Sequences?.noteRanges || []),
+    ];
+    const allSequenceBeatRanges = [
+      ...(v1Sequences?.sequences?.map(s => ({ startBeat: s.startBeat, endBeat: s.endBeat })) || []),
+      ...(v2Sequences?.sequences?.map(s => ({ startBeat: s.startBeat, endBeat: s.endBeat })) || []),
+    ];
+    const scoringOptions = {
+      meter,
+      sequenceNoteRanges: allSequenceNoteRanges,
+      sequenceBeatRanges: allSequenceBeatRanges,
+    };
+
     const intervalHistory = [];
     const intervalPoints = [];
     const beatMap = new Map();
@@ -136,7 +154,7 @@ export function CounterpointComparisonViz({
       const snapBeat = Math.round(sim.onset * 4) / 4;
 
       if (!beatMap.has(snapBeat)) {
-        const scoring = scoreDissonance(sim, sims, i, intervalHistory);
+        const scoring = scoreDissonance(sim, sims, i, intervalHistory, scoringOptions);
 
         // Check for rest between previous and current simultaneity
         // Categories:
@@ -376,11 +394,21 @@ export function CounterpointComparisonViz({
         if (prevPoint && !isAnyReentry) {
           point.isParallel = isParallelFifthOrOctave(prevPoint, point);
           if (point.isParallel) {
-            if (motionType === 'asynchronous') {
-              point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} (asynchronous - halved penalty)`);
+            // Check if this parallel is within a sequence (reduced penalty)
+            const parallelInSequence = allSequenceBeatRanges.some(range =>
+              point.onset >= range.startBeat && point.onset <= range.endBeat
+            );
+            point.parallelInSequence = parallelInSequence;
+
+            let parallelMsg = `⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'}`;
+            if (parallelInSequence) {
+              parallelMsg += ' (in sequence - penalty reduced 75%)';
+            } else if (motionType === 'asynchronous') {
+              parallelMsg += ' (asynchronous - halved penalty)';
             } else {
-              point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} detected`);
+              parallelMsg += ' detected';
             }
+            point.scoreDetails.push(parallelMsg);
           }
         }
 
@@ -493,8 +521,15 @@ export function CounterpointComparisonViz({
 
       // Parallel 5ths/8ves - significant penalty
       // Asynchronous motion halves the penalty (independence preserved by offset)
+      // Sequences reduce penalty by 75% (parallels in sequences are intentional/acceptable)
       if (pt.isParallel) {
-        const parallelMult = pt.motionScoreMultiplier || 1.0;
+        let parallelMult = pt.motionScoreMultiplier || 1.0;
+
+        // Use the parallelInSequence flag set during parallel detection
+        if (pt.parallelInSequence) {
+          parallelMult *= 0.25; // Reduce penalty by 75% in sequences
+        }
+
         parallelPenalty += 1.0 * dur * parallelMult;
         totalWeightedScore -= 1.0 * dur * parallelMult;
       }
@@ -560,7 +595,7 @@ export function CounterpointComparisonViz({
       maxPitch: Math.max(...allPitches) + 2,
       maxTime,
     };
-  }, [voice1, voice2, transposition, meter]);
+  }, [voice1, voice2, transposition, meter, sequences, tabConfig]);
 
   // Track issue count changes
   useEffect(() => {
@@ -641,12 +676,13 @@ export function CounterpointComparisonViz({
     }
   }, []);
 
-  // Check if note is in a sequence
-  const isNoteInSequence = (note, voiceKey) => {
+  // Check if note is in a sequence (using note index, not onset time)
+  // noteRanges from detectSequences contains { start: noteIndex, end: noteIndex }
+  const isNoteInSequence = (noteIndex, voiceKey) => {
     const voiceSequences = sequences[voiceKey];
     if (!voiceSequences?.noteRanges) return false;
     return voiceSequences.noteRanges.some(range =>
-      note.onset >= range.start && note.onset < range.end
+      noteIndex >= range.start && noteIndex <= range.end
     );
   };
 
@@ -1060,7 +1096,7 @@ export function CounterpointComparisonViz({
               const isHighlighted = highlightedOnset !== null &&
                 intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
                   n.onset <= pt.onset && pt.onset < n.onset + n.duration);
-              const inSequence = isNoteInSequence(n, tabConfig.v1);
+              const inSequence = isNoteInSequence(i, tabConfig.v1);
 
               return (
                 <g
@@ -1099,7 +1135,7 @@ export function CounterpointComparisonViz({
               const isHighlighted = highlightedOnset !== null &&
                 intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
                   n.onset <= pt.onset && pt.onset < n.onset + n.duration);
-              const inSequence = isNoteInSequence(voices[tabConfig.v2][i], tabConfig.v2);
+              const inSequence = isNoteInSequence(i, tabConfig.v2);
 
               return (
                 <g

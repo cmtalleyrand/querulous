@@ -99,8 +99,10 @@ export function createAnalysisContext(options = {}) {
  * @returns {boolean}
  */
 function isP4DissonantInContext(sim, ctx) {
-  // Return based on user's checkbox setting
-  return ctx.treatP4AsDissonant === true;
+  // P4 is ALWAYS dissonant in two-voice counterpoint
+  // (one voice is always the bass, and P4 against bass is dissonant)
+  // It's just scored less severely than other dissonances
+  return true;
 }
 
 /**
@@ -1133,7 +1135,16 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
   const patternInfo = checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx);
 
   // Calculate total score
-  const totalScore = entryInfo.score + exitInfo.score + patternInfo.bonus;
+  let totalScore = entryInfo.score + exitInfo.score + patternInfo.bonus;
+
+  // P4 is less severe than other dissonances - add bonus
+  // P4 (perfect 4th) has interval class 4 and quality 'perfect'
+  const isP4 = currSim.interval.class === 4 && currSim.interval.quality === 'perfect';
+  let p4Bonus = 0;
+  if (isP4) {
+    p4Bonus = 0.5; // P4 is milder dissonance
+    totalScore += p4Bonus;
+  }
 
   // Determine type label and semantic category
   let type = 'unprepared';
@@ -1199,8 +1210,9 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
       `Entry: ${entryInfo.score.toFixed(1)} (${entryInfo.details.join(', ')})`,
       `Exit: ${exitInfo.score.toFixed(1)} (${exitInfo.details.join(', ')})`,
       patternInfo.patterns.length > 0 ? `Pattern: ${patternInfo.patterns.map(p => `${p.type} +${p.bonus}`).join(', ')}` : 'No pattern match',
+      isP4 ? `P4 (mild dissonance): +${p4Bonus.toFixed(1)}` : null,
       `Total: ${totalScore.toFixed(1)}`,
-    ],
+    ].filter(Boolean),
   };
 }
 
