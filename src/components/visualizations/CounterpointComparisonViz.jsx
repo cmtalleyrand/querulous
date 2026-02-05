@@ -324,6 +324,7 @@ export function CounterpointComparisonViz({
       beatMap,
       issues,
       warnings,
+      dissonances, // All dissonances for clickable list
       avgScore,
       scoreBreakdown,
       minPitch: Math.min(...allPitches) - 2,
@@ -372,8 +373,12 @@ export function CounterpointComparisonViz({
   const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
 
   const handleIntervalClick = useCallback((pt, event) => {
-    if (event) event.preventDefault();
-    setSelectedInterval(prev => prev?.onset === pt.onset ? null : pt);
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    // Always select the clicked interval (no toggle - stays open until new tap)
+    setSelectedInterval(pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
   }, []);
 
@@ -758,7 +763,7 @@ export function CounterpointComparisonViz({
                   key={`int-${i}`}
                   style={{ cursor: 'pointer' }}
                   onClick={(e) => handleIntervalClick(pt, e)}
-                  onTouchStart={(e) => handleIntervalClick(pt, e)}
+                  
                   onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
                   onMouseLeave={() => !isSelected && setHighlightedOnset(null)}
                 >
@@ -833,7 +838,7 @@ export function CounterpointComparisonViz({
                   key={`v1-${i}`}
                   style={{ cursor: 'pointer' }}
                   onClick={(e) => handleNoteClick(n, tabConfig.v1, e)}
-                  onTouchStart={(e) => handleNoteClick(n, tabConfig.v1, e)}
+                  
                 >
                   {isHighlighted && (
                     <rect
@@ -872,7 +877,7 @@ export function CounterpointComparisonViz({
                   key={`v2-${i}`}
                   style={{ cursor: 'pointer' }}
                   onClick={(e) => handleNoteClick(n, tabConfig.v2, e)}
-                  onTouchStart={(e) => handleNoteClick(n, tabConfig.v2, e)}
+                  
                 >
                   {isHighlighted && (
                     <rect
@@ -1192,7 +1197,6 @@ export function CounterpointComparisonViz({
             <div
               key={i}
               onClick={(e) => handleIssueClick(issue, e)}
-              onTouchStart={(e) => handleIssueClick(issue, e)}
               style={{
                 padding: '10px 14px',
                 borderBottom: i < issues.length - 1 ? `1px solid ${VIZ_COLORS.issueBackground}` : 'none',
@@ -1267,7 +1271,6 @@ export function CounterpointComparisonViz({
             <div
               key={i}
               onClick={(e) => handleIssueClick(warn, e)}
-              onTouchStart={(e) => handleIssueClick(warn, e)}
               style={{
                 padding: '8px 14px',
                 borderBottom: i < Math.min(warnings.length - 1, 4) ? `1px solid ${VIZ_COLORS.warningBackground}` : 'none',
@@ -1290,6 +1293,77 @@ export function CounterpointComparisonViz({
               +{warnings.length - 5} more warnings
             </div>
           )}
+        </div>
+      )}
+
+      {/* All Dissonances - clickable list */}
+      {analysis.dissonances && analysis.dissonances.length > 0 && (
+        <div style={{
+          backgroundColor: '#fff',
+          border: '1px solid #c4b5fd',
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: '#f5f3ff',
+            borderBottom: '1px solid #c4b5fd',
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#5b21b6',
+          }}>
+            All Dissonances ({analysis.dissonances.length}) — tap to view details
+          </div>
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {analysis.dissonances.map((diss, i) => (
+              <div
+                key={i}
+                onClick={(e) => handleIssueClick(diss, e)}
+                style={{
+                  padding: '8px 14px',
+                  borderBottom: i < analysis.dissonances.length - 1 ? '1px solid #f5f3ff' : 'none',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  backgroundColor: selectedInterval?.onset === diss.onset ? '#f5f3ff' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span style={{ color: '#7c3aed', fontWeight: '600', minWidth: '70px' }}>
+                  {formatter?.formatBeat(diss.onset) || `Beat ${diss.onset + 1}`}
+                </span>
+                <span style={{ fontWeight: '500' }}>{diss.intervalName}</span>
+                <span style={{
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  backgroundColor: diss.isStrong ? '#fef3c7' : '#f1f5f9',
+                  color: diss.isStrong ? '#92400e' : '#64748b',
+                }}>
+                  {diss.isStrong ? 'strong' : 'weak'}
+                </span>
+                {diss.type && diss.type !== 'unprepared' && (
+                  <span style={{
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    backgroundColor: '#dbeafe',
+                    color: '#1e40af',
+                  }}>
+                    {diss.type}
+                  </span>
+                )}
+                <span style={{
+                  marginLeft: 'auto',
+                  fontWeight: '600',
+                  color: diss.score >= 0 ? '#16a34a' : diss.score >= -1 ? '#ca8a04' : '#dc2626',
+                }}>
+                  {diss.score >= 0 ? '+' : ''}{diss.score.toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
