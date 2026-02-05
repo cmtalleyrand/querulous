@@ -121,6 +121,14 @@ export function CounterpointComparisonViz({
     const intervalPoints = [];
     const beatMap = new Map();
 
+    // Track consecutive intervals for "repeated" detection
+    // Perfect consonances (P1, P5, P8): repeated after 2nd consecutive
+    // Imperfect consonances: repeated after 3rd consecutive of SAME TYPE (3rds vs 6ths)
+    let consecutivePerfect = 0;
+    let consecutiveThirds = 0;
+    let consecutiveSixths = 0;
+    let lastIntervalType = null; // 'perfect', 'third', 'sixth', 'dissonant'
+
     let prevPoint = null;
     for (let i = 0; i < sims.length; i++) {
       const sim = sims[i];
@@ -133,6 +141,94 @@ export function CounterpointComparisonViz({
         const v1Motion = prevPoint ? sim.voice1Note.pitch - prevPoint.v1Pitch : 0;
         const v2Motion = prevPoint ? sim.voice2Note.pitch - prevPoint.v2Pitch : 0;
 
+        // Determine interval type for repeated tracking
+        const isPerfectInterval = [1, 5].includes(sim.interval.class); // P1/P8 (class 1), P5 (class 5)
+        const isThird = sim.interval.class === 3; // m3/M3
+        const isSixth = sim.interval.class === 6; // m6/M6
+        const isConsonantInterval = scoring.isConsonant;
+
+        // Update consecutive counters
+        let isRepeated = false;
+        let repeatInfo = null;
+
+        if (isConsonantInterval) {
+          if (isPerfectInterval) {
+            if (lastIntervalType === 'perfect') {
+              consecutivePerfect++;
+            } else {
+              consecutivePerfect = 1;
+              consecutiveThirds = 0;
+              consecutiveSixths = 0;
+            }
+            lastIntervalType = 'perfect';
+            // Repeated after 2nd consecutive perfect
+            if (consecutivePerfect > 2) {
+              isRepeated = true;
+              repeatInfo = `${consecutivePerfect}th consecutive perfect consonance (threshold: 2)`;
+            }
+          } else if (isThird) {
+            if (lastIntervalType === 'third') {
+              consecutiveThirds++;
+            } else {
+              consecutiveThirds = 1;
+              consecutivePerfect = 0;
+              consecutiveSixths = 0;
+            }
+            lastIntervalType = 'third';
+            // Repeated after 3rd consecutive third
+            if (consecutiveThirds > 3) {
+              isRepeated = true;
+              repeatInfo = `${consecutiveThirds}th consecutive 3rd (threshold: 3)`;
+            }
+          } else if (isSixth) {
+            if (lastIntervalType === 'sixth') {
+              consecutiveSixths++;
+            } else {
+              consecutiveSixths = 1;
+              consecutivePerfect = 0;
+              consecutiveThirds = 0;
+            }
+            lastIntervalType = 'sixth';
+            // Repeated after 3rd consecutive sixth
+            if (consecutiveSixths > 3) {
+              isRepeated = true;
+              repeatInfo = `${consecutiveSixths}th consecutive 6th (threshold: 3)`;
+            }
+          } else {
+            // Other consonance (P4 in some contexts)
+            consecutivePerfect = 0;
+            consecutiveThirds = 0;
+            consecutiveSixths = 0;
+            lastIntervalType = 'other';
+          }
+        } else {
+          // Dissonance breaks the chain
+          consecutivePerfect = 0;
+          consecutiveThirds = 0;
+          consecutiveSixths = 0;
+          lastIntervalType = 'dissonant';
+        }
+
+        // Build detailed info for display
+        const displayDetails = [...(scoring.details || [])];
+
+        // Add consonance info for consonant intervals
+        if (isConsonantInterval) {
+          if (isPerfectInterval) {
+            displayDetails.push(`Perfect consonance (${sim.interval.toString()})`);
+            displayDetails.push(`Consecutive perfect: ${consecutivePerfect}`);
+          } else if (isThird) {
+            displayDetails.push(`Imperfect consonance (3rd)`);
+            displayDetails.push(`Consecutive 3rds: ${consecutiveThirds}`);
+          } else if (isSixth) {
+            displayDetails.push(`Imperfect consonance (6th)`);
+            displayDetails.push(`Consecutive 6ths: ${consecutiveSixths}`);
+          }
+          if (isRepeated) {
+            displayDetails.push(`⚠️ REPEATED: ${repeatInfo}`);
+          }
+        }
+
         // Check for parallel 5ths/8ves
         const point = {
           onset: sim.onset,
@@ -140,15 +236,17 @@ export function CounterpointComparisonViz({
           v2Pitch: sim.voice2Note.pitch,
           intervalClass: sim.interval.class,
           intervalName: sim.interval.toString(),
-          isConsonant: scoring.isConsonant,
+          isConsonant: isConsonantInterval,
           isStrong: sim.metricWeight >= 0.75,
+          metricWeight: sim.metricWeight,
           category: scoring.category || 'consonant_normal',
           score: scoring.score,
-          scoreDetails: scoring.details,
+          scoreDetails: displayDetails,
           type: scoring.type,
           isResolved: scoring.isResolved !== false,
           isParallel: false,
-          isRepeated: sim.interval.class === 1 || sim.interval.class === 0,
+          isRepeated,
+          repeatInfo,
           // Previous interval info for detail panel
           prevInterval: prevPoint ? {
             intervalName: prevPoint.intervalName,
@@ -163,6 +261,9 @@ export function CounterpointComparisonViz({
         // Check for parallel motion with previous interval
         if (prevPoint) {
           point.isParallel = isParallelFifthOrOctave(prevPoint, point);
+          if (point.isParallel) {
+            point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} detected`);
+          }
         }
 
         beatMap.set(snapBeat, point);
@@ -192,9 +293,29 @@ export function CounterpointComparisonViz({
     );
 
     const dissonances = intervalPoints.filter(p => !p.isConsonant);
-    const avgScore = dissonances.length > 0
-      ? dissonances.reduce((sum, p) => sum + p.score, 0) / dissonances.length
-      : 0;
+    const totalDissonanceScore = dissonances.reduce((sum, p) => sum + p.score, 0);
+    const avgScore = dissonances.length > 0 ? totalDissonanceScore / dissonances.length : 0;
+
+    // Build aggregate score breakdown for transparency
+    const scoreBreakdown = {
+      totalIntervals: intervalPoints.length,
+      consonances: intervalPoints.filter(p => p.isConsonant).length,
+      dissonances: dissonances.length,
+      repeatedIntervals: intervalPoints.filter(p => p.isRepeated).length,
+      parallelIssues: intervalPoints.filter(p => p.isParallel).length,
+      unresolvedDissonances: dissonances.filter(p => !p.isResolved).length,
+      strongBeatDissonances: dissonances.filter(p => p.isStrong).length,
+      totalDissonanceScore,
+      avgDissonanceScore: avgScore,
+      // Individual dissonance scores for detailed view
+      dissonanceScores: dissonances.map(d => ({
+        onset: d.onset,
+        interval: d.intervalName,
+        score: d.score,
+        isStrong: d.isStrong,
+        isResolved: d.isResolved,
+      })),
+    };
 
     return {
       voice1,
@@ -204,6 +325,7 @@ export function CounterpointComparisonViz({
       issues,
       warnings,
       avgScore,
+      scoreBreakdown,
       minPitch: Math.min(...allPitches) - 2,
       maxPitch: Math.max(...allPitches) + 2,
       maxTime,
@@ -964,20 +1086,21 @@ export function CounterpointComparisonViz({
                     </div>
                   )}
 
-                  {/* Score breakdown - always show for dissonances */}
-                  {!pt.isConsonant && pt.scoreDetails && pt.scoreDetails.length > 0 && (
+                  {/* Score/Analysis breakdown - show for ALL intervals */}
+                  {pt.scoreDetails && pt.scoreDetails.length > 0 && (
                     <div style={{
-                      backgroundColor: '#fafafa',
+                      backgroundColor: pt.isConsonant ? '#f0fdf4' : '#fafafa',
                       borderRadius: '6px',
                       padding: '10px',
-                      border: '1px solid #e5e7eb',
+                      border: `1px solid ${pt.isConsonant ? '#bbf7d0' : '#e5e7eb'}`,
                     }}>
                       <div style={{ fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
-                        Score Breakdown
+                        {pt.isConsonant ? 'Interval Analysis' : 'Score Breakdown'}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                         {pt.scoreDetails.map((detail, i) => {
                           const text = typeof detail === 'object' ? detail.text : detail;
+                          const isWarning = text.includes('⚠️') || text.includes('REPEATED') || text.includes('PARALLEL');
                           return (
                             <div key={i} style={{
                               display: 'flex',
@@ -986,37 +1109,44 @@ export function CounterpointComparisonViz({
                               fontSize: '11px',
                               padding: '2px 0',
                               borderBottom: i < pt.scoreDetails.length - 1 ? '1px solid #f3f4f6' : 'none',
+                              color: isWarning ? '#dc2626' : '#64748b',
+                              fontWeight: isWarning ? '600' : '400',
                             }}>
-                              <span style={{ color: '#64748b', flex: 1 }}>{text}</span>
+                              <span style={{ flex: 1 }}>{text}</span>
                             </div>
                           );
                         })}
                       </div>
+                      {/* Show total score for dissonances */}
+                      {!pt.isConsonant && (
+                        <div style={{
+                          marginTop: '8px',
+                          paddingTop: '6px',
+                          borderTop: '1px solid #e5e7eb',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}>
+                          <span style={{ fontSize: '11px', fontWeight: '600', color: '#475569' }}>Total Score</span>
+                          <span style={{
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                          }}>
+                            {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      {/* Show metric weight info */}
                       <div style={{
-                        marginTop: '8px',
+                        marginTop: '6px',
                         paddingTop: '6px',
                         borderTop: '1px solid #e5e7eb',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
+                        fontSize: '10px',
+                        color: '#94a3b8',
                       }}>
-                        <span style={{ fontSize: '11px', fontWeight: '600', color: '#475569' }}>Total</span>
-                        <span style={{
-                          fontSize: '12px',
-                          fontWeight: '700',
-                          color: pt.score >= 0 ? '#16a34a' : '#dc2626',
-                        }}>
-                          {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
-                        </span>
+                        Metric weight: {(pt.metricWeight * 100).toFixed(0)}% ({pt.isStrong ? 'strong beat' : 'weak beat'})
                       </div>
-                    </div>
-                  )}
-
-                  {/* Type indicator for consonances */}
-                  {pt.isConsonant && (
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
-                      {isPerfect ? 'Perfect consonance' : 'Imperfect consonance'}
-                      {pt.isRepeated && ' (repeated pitch class)'}
                     </div>
                   )}
                 </div>
@@ -1160,6 +1290,122 @@ export function CounterpointComparisonViz({
               +{warnings.length - 5} more warnings
             </div>
           )}
+        </div>
+      )}
+
+      {/* Aggregate Score Breakdown - always show for transparency */}
+      {analysis.scoreBreakdown && (
+        <div style={{
+          backgroundColor: '#fff',
+          border: '1px solid #e2e8f0',
+          borderRadius: '8px',
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: '#f8fafc',
+            borderBottom: '1px solid #e2e8f0',
+            fontWeight: '600',
+            fontSize: '13px',
+            color: '#475569',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <span>Score Calculation Breakdown</span>
+            <span style={{
+              padding: '3px 10px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontWeight: '700',
+              backgroundColor: avgScore >= 0.5 ? '#dcfce7' : avgScore >= 0 ? '#fef9c3' : '#fee2e2',
+              color: avgScore >= 0.5 ? '#16a34a' : avgScore >= 0 ? '#ca8a04' : '#dc2626',
+            }}>
+              Avg: {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
+            </span>
+          </div>
+          <div style={{ padding: '12px 14px' }}>
+            {/* Summary stats */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+              gap: '8px',
+              marginBottom: '12px',
+            }}>
+              <div style={{ padding: '8px', backgroundColor: '#f0fdf4', borderRadius: '4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: '#16a34a' }}>{analysis.scoreBreakdown.consonances}</div>
+                <div style={{ fontSize: '10px', color: '#64748b' }}>Consonances</div>
+              </div>
+              <div style={{ padding: '8px', backgroundColor: '#faf5ff', borderRadius: '4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: '#7c3aed' }}>{analysis.scoreBreakdown.dissonances}</div>
+                <div style={{ fontSize: '10px', color: '#64748b' }}>Dissonances</div>
+              </div>
+              {analysis.scoreBreakdown.repeatedIntervals > 0 && (
+                <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#737373' }}>{analysis.scoreBreakdown.repeatedIntervals}</div>
+                  <div style={{ fontSize: '10px', color: '#64748b' }}>Repeated</div>
+                </div>
+              )}
+              {analysis.scoreBreakdown.parallelIssues > 0 && (
+                <div style={{ padding: '8px', backgroundColor: '#fef2f2', borderRadius: '4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#dc2626' }}>{analysis.scoreBreakdown.parallelIssues}</div>
+                  <div style={{ fontSize: '10px', color: '#64748b' }}>Parallel 5/8</div>
+                </div>
+              )}
+            </div>
+
+            {/* Calculation explanation */}
+            <div style={{
+              backgroundColor: '#f8fafc',
+              borderRadius: '6px',
+              padding: '10px',
+              fontSize: '11px',
+              color: '#64748b',
+            }}>
+              <div style={{ fontWeight: '600', marginBottom: '6px', color: '#475569' }}>How average is calculated:</div>
+              <div style={{ marginBottom: '4px' }}>
+                Total dissonance score: <strong style={{ color: analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '#16a34a' : '#dc2626' }}>
+                  {analysis.scoreBreakdown.totalDissonanceScore >= 0 ? '+' : ''}{analysis.scoreBreakdown.totalDissonanceScore.toFixed(2)}
+                </strong>
+              </div>
+              <div style={{ marginBottom: '4px' }}>
+                Number of dissonances: <strong>{analysis.scoreBreakdown.dissonances}</strong>
+              </div>
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '4px', marginTop: '4px' }}>
+                Average = {analysis.scoreBreakdown.totalDissonanceScore.toFixed(2)} ÷ {analysis.scoreBreakdown.dissonances} = <strong style={{ color: avgScore >= 0 ? '#16a34a' : '#dc2626' }}>
+                  {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
+                </strong>
+              </div>
+            </div>
+
+            {/* Individual dissonance scores */}
+            {analysis.scoreBreakdown.dissonanceScores.length > 0 && (
+              <div style={{ marginTop: '12px' }}>
+                <div style={{ fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+                  Individual Dissonance Scores:
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {analysis.scoreBreakdown.dissonanceScores.map((d, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        backgroundColor: d.score >= 0 ? '#dcfce7' : d.score >= -1 ? '#fef9c3' : '#fee2e2',
+                        color: d.score >= 0 ? '#16a34a' : d.score >= -1 ? '#ca8a04' : '#dc2626',
+                        border: `1px solid ${d.score >= 0 ? '#bbf7d0' : d.score >= -1 ? '#fde047' : '#fca5a5'}`,
+                        cursor: 'pointer',
+                      }}
+                      title={`${d.interval} at ${formatter?.formatBeat(d.onset) || d.onset} - ${d.isStrong ? 'strong' : 'weak'} beat, ${d.isResolved ? 'resolved' : 'unresolved'}`}
+                    >
+                      {d.score >= 0 ? '+' : ''}{d.score.toFixed(1)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
