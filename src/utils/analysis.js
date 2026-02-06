@@ -1678,12 +1678,30 @@ export function detectSequences(notes, minLength = 3) {
   // Sort by total coverage (longer sequences covering more notes are more significant)
   sequences.sort((a, b) => (b.unitLength * b.repetitions) - (a.unitLength * a.repetitions));
 
-  // Remove subsequences of longer sequences
+  // Remove sequences that significantly overlap with longer/better sequences
+  // A sequence is removed if:
+  // 1. It's fully contained in a longer sequence, OR
+  // 2. It overlaps >50% with a longer sequence (prefer the longer one)
   const filtered = sequences.filter((seq, i) => {
     for (let j = 0; j < i; j++) {
       const other = sequences[j];
+
+      // Check for full containment
       if (seq.startNoteIndex >= other.startNoteIndex && seq.endNoteIndex <= other.endNoteIndex) {
         return false;
+      }
+
+      // Check for significant overlap (>50%)
+      const overlapStart = Math.max(seq.startNoteIndex, other.startNoteIndex);
+      const overlapEnd = Math.min(seq.endNoteIndex, other.endNoteIndex);
+      if (overlapStart <= overlapEnd) {
+        const overlapSize = overlapEnd - overlapStart + 1;
+        const seqSize = seq.endNoteIndex - seq.startNoteIndex + 1;
+        const overlapRatio = overlapSize / seqSize;
+        if (overlapRatio > 0.5) {
+          // More than 50% overlap with a better sequence - remove this one
+          return false;
+        }
       }
     }
     return true;

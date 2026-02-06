@@ -99,8 +99,10 @@ export function createAnalysisContext(options = {}) {
  * @returns {boolean}
  */
 function isP4DissonantInContext(sim, ctx) {
-  // Return based on user's checkbox setting
-  return ctx.treatP4AsDissonant === true;
+  // P4 is ALWAYS dissonant in two-voice counterpoint
+  // (one voice is always the bass, and P4 against bass is dissonant)
+  // It's just scored less severely than other dissonances
+  return true;
 }
 
 /**
@@ -131,6 +133,54 @@ function isOnsetInSequence(onset, ctx) {
     }
   }
   return false;
+}
+
+/**
+ * Calculate sub-subdivision threshold for short note detection.
+ * Notes shorter than a triplet of the main subdivision are considered "very short"
+ * and should have reduced penalties (they pass too quickly to be very noticeable).
+ *
+ * For 4/4 meter: main beat = 1 quarter, subdivision = 8th note (0.5), triplet = ~0.167
+ * For 6/8 meter: main beat = dotted quarter (1.5), subdivision = 8th (0.5), triplet = ~0.167
+ *
+ * @param {Object} ctx - Analysis context with meter
+ * @returns {number} Duration threshold in beats
+ */
+function getShortNoteThreshold(ctx) {
+  const [numerator, denominator] = ctx.meter || [4, 4];
+
+  // Determine if compound meter (6/8, 9/8, 12/8)
+  const isCompound = (numerator % 3 === 0 && numerator > 3 && denominator === 8);
+
+  // In simple meter: subdivision = half a beat
+  // In compound meter: subdivision = 1/3 of the dotted-quarter beat
+  const subdivision = isCompound ? (1 / 3) : 0.5;
+
+  // Triplet of subdivision
+  return subdivision / 3;
+}
+
+/**
+ * Check if a note is "short" (below sub-subdivision level).
+ * Short notes get special treatment for penalties:
+ * - Consecutive dissonances: penalty halved if on off-beat
+ * - Motion/parallels: penalty halved if NOT repeated
+ * - Repetition penalties: halved
+ *
+ * @param {Simultaneity} sim - The simultaneity to check
+ * @param {Object} ctx - Analysis context
+ * @returns {{isShort: boolean, duration: number, threshold: number}}
+ */
+function getShortNoteInfo(sim, ctx) {
+  // Use the shorter of the two notes' durations
+  const minDuration = Math.min(sim.voice1Note.duration, sim.voice2Note.duration);
+  const threshold = getShortNoteThreshold(ctx);
+
+  return {
+    isShort: minDuration <= threshold,
+    duration: minDuration,
+    threshold,
+  };
 }
 
 /**
@@ -546,8 +596,16 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     details.push('Resolves to consonance: +0.5');
   } else {
     // Resolution to another dissonance
-    score = -0.75;
-    details.push('Leads to another dissonance (no resolution): -0.75');
+    // Short note + off-beat: halve the penalty (two quick consecutive dissonances on off-beats not a big deal)
+    const shortNoteInfo = getShortNoteInfo(currSim, ctx);
+    const isOffBeat = currSim.metricWeight < 0.75;
+    if (shortNoteInfo.isShort && isOffBeat) {
+      score = -0.375; // Halved penalty
+      details.push('Leads to another dissonance: -0.375 (short note on off-beat - halved)');
+    } else {
+      score = -0.75;
+      details.push('Leads to another dissonance (no resolution): -0.75');
+    }
   }
 
   // Check for resolution by abandonment (one voice drops out)
@@ -1133,7 +1191,16 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
   const patternInfo = checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx);
 
   // Calculate total score
-  const totalScore = entryInfo.score + exitInfo.score + patternInfo.bonus;
+  let totalScore = entryInfo.score + exitInfo.score + patternInfo.bonus;
+
+  // P4 is less severe than other dissonances - add bonus
+  // P4 (perfect 4th) has interval class 4 and quality 'perfect'
+  const isP4 = currSim.interval.class === 4 && currSim.interval.quality === 'perfect';
+  let p4Bonus = 0;
+  if (isP4) {
+    p4Bonus = 0.5; // P4 is milder dissonance
+    totalScore += p4Bonus;
+  }
 
   // Determine type label and semantic category
   let type = 'unprepared';
@@ -1199,8 +1266,9 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
       `Entry: ${entryInfo.score.toFixed(1)} (${entryInfo.details.join(', ')})`,
       `Exit: ${exitInfo.score.toFixed(1)} (${exitInfo.details.join(', ')})`,
       patternInfo.patterns.length > 0 ? `Pattern: ${patternInfo.patterns.map(p => `${p.type} +${p.bonus}`).join(', ')}` : 'No pattern match',
+      isP4 ? `P4 (mild dissonance): +${p4Bonus.toFixed(1)}` : null,
       `Total: ${totalScore.toFixed(1)}`,
-    ],
+    ].filter(Boolean),
   };
 }
 

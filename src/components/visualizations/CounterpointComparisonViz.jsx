@@ -117,6 +117,40 @@ export function CounterpointComparisonViz({
 
     const sims = findSims(voice1, transposedVoice2);
 
+    // Calculate short note threshold (triplet of subdivision)
+    // For 4/4: subdivision = 0.5, threshold = 0.167
+    // For 6/8: subdivision = 0.33, threshold = 0.111
+    const [numerator, denominator] = meter;
+    const isCompound = (numerator % 3 === 0 && numerator > 3 && denominator === 8);
+    const subdivision = isCompound ? (1 / 3) : 0.5;
+    const shortNoteThreshold = subdivision / 3;
+
+    // Map voice keys to sequence keys (voices use 'cs1', sequences use 'countersubject')
+    const voiceToSequenceKey = (voiceKey) => {
+      if (voiceKey === 'cs1') return 'countersubject';
+      return voiceKey;
+    };
+
+    // Collect sequence data from both voices for scoring
+    // This enables sequence-based penalty reduction for parallels
+    const v1SeqKey = voiceToSequenceKey(tabConfig.v1);
+    const v2SeqKey = voiceToSequenceKey(tabConfig.v2);
+    const v1Sequences = sequences[v1SeqKey];
+    const v2Sequences = sequences[v2SeqKey];
+    const allSequenceNoteRanges = [
+      ...(v1Sequences?.noteRanges || []),
+      ...(v2Sequences?.noteRanges || []),
+    ];
+    const allSequenceBeatRanges = [
+      ...(v1Sequences?.sequences?.map(s => ({ startBeat: s.startBeat, endBeat: s.endBeat })) || []),
+      ...(v2Sequences?.sequences?.map(s => ({ startBeat: s.startBeat, endBeat: s.endBeat })) || []),
+    ];
+    const scoringOptions = {
+      meter,
+      sequenceNoteRanges: allSequenceNoteRanges,
+      sequenceBeatRanges: allSequenceBeatRanges,
+    };
+
     const intervalHistory = [];
     const intervalPoints = [];
     const beatMap = new Map();
@@ -136,7 +170,7 @@ export function CounterpointComparisonViz({
       const snapBeat = Math.round(sim.onset * 4) / 4;
 
       if (!beatMap.has(snapBeat)) {
-        const scoring = scoreDissonance(sim, sims, i, intervalHistory);
+        const scoring = scoreDissonance(sim, sims, i, intervalHistory, scoringOptions);
 
         // Check for rest between previous and current simultaneity
         // Categories:
@@ -318,6 +352,11 @@ export function CounterpointComparisonViz({
         const v2End = sim.voice2Note.onset + sim.voice2Note.duration;
         const simDuration = Math.min(v1End, v2End) - sim.onset;
 
+        // Check if this is a short note (below sub-subdivision threshold)
+        const minNoteDuration = Math.min(sim.voice1Note.duration, sim.voice2Note.duration);
+        const isShortNote = minNoteDuration <= shortNoteThreshold;
+        const isOffBeat = sim.metricWeight < 0.75;
+
         // Determine motion type based on rest category
         let motionType = 'normal'; // normal, asynchronous, reentry
         if (restCategory === 'asynchronous') {
@@ -345,6 +384,9 @@ export function CounterpointComparisonViz({
           isParallel: false,
           isRepeated,
           repeatInfo,
+          // Short note detection for penalty reduction
+          isShortNote,
+          isOffBeat,
           // Rest category and motion info
           restCategory,
           restInfo,
@@ -376,11 +418,28 @@ export function CounterpointComparisonViz({
         if (prevPoint && !isAnyReentry) {
           point.isParallel = isParallelFifthOrOctave(prevPoint, point);
           if (point.isParallel) {
-            if (motionType === 'asynchronous') {
-              point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} (asynchronous - halved penalty)`);
+            // Check if this parallel is within a sequence (reduced penalty)
+            const parallelInSequence = allSequenceBeatRanges.some(range =>
+              point.onset >= range.startBeat && point.onset <= range.endBeat
+            );
+            point.parallelInSequence = parallelInSequence;
+
+            // Track if this is a repeated parallel (two parallels in a row)
+            point.isRepeatedParallel = prevPoint.isParallel === true;
+
+            let parallelMsg = `⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'}`;
+            if (parallelInSequence) {
+              parallelMsg += ' (in sequence - penalty reduced 75%)';
+            } else if (isShortNote && !point.isRepeatedParallel) {
+              parallelMsg += ' (short note, not repeated - halved penalty)';
+            } else if (motionType === 'asynchronous') {
+              parallelMsg += ' (asynchronous - halved penalty)';
+            } else if (point.isRepeatedParallel) {
+              parallelMsg += ' (repeated - full penalty)';
             } else {
-              point.scoreDetails.push(`⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'} detected`);
+              parallelMsg += ' detected';
             }
+            point.scoreDetails.push(parallelMsg);
           }
         }
 
@@ -476,10 +535,11 @@ export function CounterpointComparisonViz({
           baseScore -= 0.2;
         }
 
-        // Repetition penalty
+        // Repetition penalty (halved for short notes)
         if (pt.isRepeated) {
-          repetitionPenalty += 0.25 * dur;
-          baseScore -= 0.15;
+          const repMult = pt.isShortNote ? 0.5 : 1.0;
+          repetitionPenalty += 0.25 * dur * repMult;
+          baseScore -= 0.15 * repMult;
         }
 
         consonanceContribution += baseScore * dur;
@@ -492,9 +552,21 @@ export function CounterpointComparisonViz({
       }
 
       // Parallel 5ths/8ves - significant penalty
-      // Asynchronous motion halves the penalty (independence preserved by offset)
+      // Penalty reduction rules:
+      // - Sequences: 75% reduction (parallels in sequences are intentional)
+      // - Short note + not repeated: 50% reduction (quick parallel followed by different motion)
+      // - Two fast parallels in a row: full penalty
+      // - Asynchronous motion: 50% reduction
       if (pt.isParallel) {
-        const parallelMult = pt.motionScoreMultiplier || 1.0;
+        let parallelMult = pt.motionScoreMultiplier || 1.0;
+
+        if (pt.parallelInSequence) {
+          parallelMult *= 0.25; // Reduce penalty by 75% in sequences
+        } else if (pt.isShortNote && !pt.isRepeatedParallel) {
+          parallelMult *= 0.5; // Short note, not repeated - halve penalty
+        }
+        // Note: isRepeatedParallel with short note = full penalty (no reduction)
+
         parallelPenalty += 1.0 * dur * parallelMult;
         totalWeightedScore -= 1.0 * dur * parallelMult;
       }
@@ -560,7 +632,7 @@ export function CounterpointComparisonViz({
       maxPitch: Math.max(...allPitches) + 2,
       maxTime,
     };
-  }, [voice1, voice2, transposition, meter]);
+  }, [voice1, voice2, transposition, meter, sequences, tabConfig]);
 
   // Track issue count changes
   useEffect(() => {
@@ -641,14 +713,22 @@ export function CounterpointComparisonViz({
     }
   }, []);
 
-  // Check if note is in a sequence
-  const isNoteInSequence = (note, voiceKey) => {
-    const voiceSequences = sequences[voiceKey];
+  // Map voice keys to sequence keys (voices use 'cs1', sequences use 'countersubject')
+  const voiceToSequenceKey = useCallback((voiceKey) => {
+    if (voiceKey === 'cs1') return 'countersubject';
+    return voiceKey;
+  }, []);
+
+  // Check if note is in a sequence (using note index, not onset time)
+  // noteRanges from detectSequences contains { start: noteIndex, end: noteIndex }
+  const isNoteInSequence = useCallback((noteIndex, voiceKey) => {
+    const seqKey = voiceToSequenceKey(voiceKey);
+    const voiceSequences = sequences[seqKey];
     if (!voiceSequences?.noteRanges) return false;
     return voiceSequences.noteRanges.some(range =>
-      note.onset >= range.start && note.onset < range.end
+      noteIndex >= range.start && noteIndex <= range.end
     );
-  };
+  }, [sequences, voiceToSequenceKey]);
 
   if (!analysis) {
     return (
@@ -1060,7 +1140,7 @@ export function CounterpointComparisonViz({
               const isHighlighted = highlightedOnset !== null &&
                 intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
                   n.onset <= pt.onset && pt.onset < n.onset + n.duration);
-              const inSequence = isNoteInSequence(n, tabConfig.v1);
+              const inSequence = isNoteInSequence(i, tabConfig.v1);
 
               return (
                 <g
@@ -1099,7 +1179,7 @@ export function CounterpointComparisonViz({
               const isHighlighted = highlightedOnset !== null &&
                 intervalPoints.some(pt => getOnsetKey(pt.onset) === highlightedOnset &&
                   n.onset <= pt.onset && pt.onset < n.onset + n.duration);
-              const inSequence = isNoteInSequence(voices[tabConfig.v2][i], tabConfig.v2);
+              const inSequence = isNoteInSequence(i, tabConfig.v2);
 
               return (
                 <g
