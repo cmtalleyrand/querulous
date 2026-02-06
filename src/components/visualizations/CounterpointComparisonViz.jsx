@@ -125,10 +125,18 @@ export function CounterpointComparisonViz({
     const subdivision = isCompound ? (1 / 3) : 0.5;
     const shortNoteThreshold = subdivision / 3;
 
+    // Map voice keys to sequence keys (voices use 'cs1', sequences use 'countersubject')
+    const voiceToSequenceKey = (voiceKey) => {
+      if (voiceKey === 'cs1') return 'countersubject';
+      return voiceKey;
+    };
+
     // Collect sequence data from both voices for scoring
     // This enables sequence-based penalty reduction for parallels
-    const v1Sequences = sequences[tabConfig.v1];
-    const v2Sequences = sequences[tabConfig.v2];
+    const v1SeqKey = voiceToSequenceKey(tabConfig.v1);
+    const v2SeqKey = voiceToSequenceKey(tabConfig.v2);
+    const v1Sequences = sequences[v1SeqKey];
+    const v2Sequences = sequences[v2SeqKey];
     const allSequenceNoteRanges = [
       ...(v1Sequences?.noteRanges || []),
       ...(v2Sequences?.noteRanges || []),
@@ -705,15 +713,22 @@ export function CounterpointComparisonViz({
     }
   }, []);
 
+  // Map voice keys to sequence keys (voices use 'cs1', sequences use 'countersubject')
+  const voiceToSequenceKey = useCallback((voiceKey) => {
+    if (voiceKey === 'cs1') return 'countersubject';
+    return voiceKey;
+  }, []);
+
   // Check if note is in a sequence (using note index, not onset time)
   // noteRanges from detectSequences contains { start: noteIndex, end: noteIndex }
-  const isNoteInSequence = (noteIndex, voiceKey) => {
-    const voiceSequences = sequences[voiceKey];
+  const isNoteInSequence = useCallback((noteIndex, voiceKey) => {
+    const seqKey = voiceToSequenceKey(voiceKey);
+    const voiceSequences = sequences[seqKey];
     if (!voiceSequences?.noteRanges) return false;
     return voiceSequences.noteRanges.some(range =>
       noteIndex >= range.start && noteIndex <= range.end
     );
-  };
+  }, [sequences, voiceToSequenceKey]);
 
   if (!analysis) {
     return (
