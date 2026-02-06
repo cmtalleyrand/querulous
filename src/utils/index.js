@@ -22,6 +22,7 @@ export {
   classifyDissonance,
   analyzeDissonances,
   testContourIndependence,
+  testMelodicContour,
   testHarmonicImplication,
   testRhythmicVariety,
   testRhythmicComplementarity,

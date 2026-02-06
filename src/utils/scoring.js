@@ -174,35 +174,14 @@ export function getScoreBgColor(score) {
 /**
  * Calculate Tonal Definition score (base-zero)
  * Baseline 0 = ambiguous tonal center
- * Factors: opening note, terminal quality, dominant arrival, harmonic clarity,
- *          leap recovery, focal point
+ * Factors: dominant arrival, harmonic clarity
+ * (Opening/terminal analysis removed - oversimplified and not purely harmonic)
  */
 export function calculateTonalDefinitionScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
 
   let internal = 0; // Base-zero score
   const details = [];
-
-  // Opening on tonic chord tone: +10
-  if (result.opening?.isTonicChordTone) {
-    internal += 10;
-    details.push({ factor: 'Opens on tonic chord tone', impact: +10 });
-  } else if (result.opening?.scaleDegree === 5) {
-    internal += 5;
-    details.push({ factor: 'Opens on dominant', impact: +5 });
-  }
-
-  // Terminal quality (most important factor)
-  const terminalScores = {
-    strong: 15,    // Clear cadential implication
-    good: 8,       // Good but not ideal
-    workable: 0,   // Neutral
-    ambiguous: -8, // Unclear direction
-    unusual: -12,  // Problematic
-  };
-  const termScore = terminalScores[result.terminal?.q] || 0;
-  internal += termScore;
-  details.push({ factor: `Terminal: ${result.terminal?.q || 'unknown'}`, impact: termScore });
 
   // Dominant arrival bonus
   if (result.dominantArrival) {
@@ -217,14 +196,30 @@ export function calculateTonalDefinitionScore(result) {
   }
 
   // Harmonic clarity from chord analysis (0-2.5 points, scaled to internal)
-  // This measures how clearly the melody implies specific harmonies
   if (result.harmonicClarityScore && result.harmonicClarityScore > 0) {
     const clarityImpact = Math.round(result.harmonicClarityScore * 4); // Scale to 0-10
     internal += clarityImpact;
     details.push({ factor: 'Harmonic clarity', impact: clarityImpact });
   }
 
-  // Leap recovery bonus (user specified +0.25 base, scaled to internal)
+  return {
+    score: toDisplayScore(internal),
+    internal,
+    details,
+  };
+}
+
+/**
+ * Calculate Melodic Contour score (base-zero)
+ * Factors: leap recovery, focal point/climax
+ */
+export function calculateMelodicContourScore(result) {
+  if (!result || result.error) return { score: 0, internal: 0, details: [] };
+
+  let internal = 0;
+  const details = [];
+
+  // Leap recovery bonus
   if (result.leapRecoveryScore && result.leapRecoveryScore > 0) {
     const leapImpact = Math.round(result.leapRecoveryScore * 8); // ~2 points
     internal += leapImpact;
@@ -475,8 +470,8 @@ export const calculateTonalAnswerScore = calculateAnswerCompatibilityScore;
 
 /**
  * Calculate Tonal Clarity score (base-zero)
- * Combines former tonal definition + answer compatibility into one basic indicator.
- * This is deliberately simple - tonal analysis is quite primitive at this stage.
+ * Combines harmonic implication + answer compatibility into one basic indicator.
+ * (Opening/terminal removed - oversimplified and not purely harmonic)
  *
  * Baseline 0 = acceptable tonal orientation
  * Positive = clear tonal structure
@@ -486,22 +481,27 @@ export function calculateTonalClarityScore(harmonicResult, answerResult) {
   const details = [];
   let internal = 0;
 
-  // --- From Tonal Definition ---
+  // --- From Harmonic Implication ---
   if (harmonicResult && !harmonicResult.error) {
-    // Opening on tonic chord tone
-    if (harmonicResult.opening?.isTonicChordTone) {
-      internal += 3;
-      details.push({ factor: 'Opens on tonic chord tone', impact: +3 });
+    // Dominant arrival bonus
+    if (harmonicResult.dominantArrival) {
+      const ratio = harmonicResult.dominantArrival.ratio;
+      if (ratio >= 0.3 && ratio <= 0.7) {
+        internal += 3;
+        details.push({ factor: 'Well-placed dominant arrival', impact: +3 });
+      } else {
+        internal += 1;
+        details.push({ factor: 'Dominant arrival present', impact: +1 });
+      }
     }
 
-    // Terminal quality (simplified)
-    const terminalQ = harmonicResult.terminal?.q;
-    if (terminalQ === 'strong' || terminalQ === 'good') {
-      internal += 3;
-      details.push({ factor: `Terminal: ${terminalQ}`, impact: +3 });
-    } else if (terminalQ === 'ambiguous' || terminalQ === 'unusual') {
-      internal -= 3;
-      details.push({ factor: `Terminal: ${terminalQ}`, impact: -3 });
+    // Harmonic clarity
+    if (harmonicResult.harmonicClarityScore > 1.5) {
+      internal += 2;
+      details.push({ factor: 'Clear harmonic implications', impact: +2 });
+    } else if (harmonicResult.harmonicClarityScore < 0.5) {
+      internal -= 2;
+      details.push({ factor: 'Ambiguous harmonic implications', impact: -2 });
     }
   }
 

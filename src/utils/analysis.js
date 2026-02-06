@@ -400,72 +400,14 @@ export function testContourIndependence(subject, cs, formatter) {
 }
 
 /**
- * Analyze harmonic implications of a subject
+ * Analyze melodic contour characteristics of a subject
+ * Separated from harmonic analysis for proper separation of concerns
  */
-export function testHarmonicImplication(subject, tonic, mode, formatter) {
+export function testMelodicContour(subject, formatter) {
   if (!subject.length) return { error: 'No notes' };
 
   const meter = formatter.meter;
-  const degrees = subject.map((n) => n.scaleDegree);
   const observations = [];
-
-  // Opening analysis
-  const opening = degrees[0];
-  const isTonicChordTone = [[1, 0], [3, 0], [5, 0]].some(
-    ([d, a]) => opening.degree === d && opening.alteration === a
-  );
-  observations.push({
-    type: isTonicChordTone ? 'strength' : 'consideration',
-    description: isTonicChordTone
-      ? `Opens on ${opening}, a tonic chord tone`
-      : `Opens on ${opening}, not a tonic chord tone`,
-  });
-
-  // Terminal analysis
-  const terminal = degrees[degrees.length - 1];
-  const ti =
-    {
-      1: { q: 'strong', d: 'Ends on ^1—clean I→V' },
-      2: { q: 'good', d: 'Ends on ^2—pre-dominant' },
-      5: { q: 'ambiguous', d: 'Ends on ^5—V→V stasis' },
-      7: { q: 'strong', d: 'Ends on ^7—dominant pull' },
-      4: { q: 'workable', d: 'Ends on ^4' },
-      3: { q: 'workable', d: 'Ends on ^3' },
-    }[terminal.degree] || { q: 'unusual', d: `Ends on ${terminal}` };
-
-  observations.push({
-    type: ti.q === 'strong' ? 'strength' : ti.q === 'ambiguous' ? 'consideration' : 'info',
-    description: ti.d,
-  });
-
-  // Dominant arrival
-  let domArr = null;
-  const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
-
-  for (let i = 0; i < subject.length; i++) {
-    const d = degrees[i];
-    if (
-      (d.degree === 5 && d.alteration === 0 && metricWeight(subject[i].onset, meter) >= 0.5) ||
-      (d.degree === 7 && d.alteration === 0)
-    ) {
-      domArr = {
-        location: formatter.formatBeat(subject[i].onset),
-        ratio: subject[i].onset / subLen,
-        degree: d.toString(),
-      };
-      break;
-    }
-  }
-
-  if (domArr) {
-    const timing = domArr.ratio < 0.3 ? 'Early' : domArr.ratio > 0.6 ? 'Late' : 'Mid-subject';
-    observations.push({
-      type: 'info',
-      description: `${timing} dominant arrival on ${domArr.degree} at ${domArr.location}`,
-    });
-  }
-
-  // Melodic contour analysis: leap recovery and focal point
 
   // 1. Leap recovery: penalize unrecovered leaps, small bonus for good recovery
   let leapRecoveries = 0;
@@ -493,7 +435,7 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
 
   let leapRecoveryScore = 0;
   if (leapRecoveries > 0 && unresolvedLeaps === 0) {
-    leapRecoveryScore = 0.25; // User specified +0.25 instead of +0.5
+    leapRecoveryScore = 0.25;
     observations.push({
       type: 'strength',
       description: `Good leap recovery (${leapRecoveries} recovered leap${leapRecoveries > 1 ? 's' : ''})`,
@@ -506,15 +448,11 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
   }
 
   // 2. Focal point/climax detection: bonus up to +3.0 based on clarity
-  // A clear focal point is: the single highest (or lowest) pitch, metrically strong,
-  // in the middle portion of the subject
-  // NOTE: approach by step or leap doesn't matter - a dramatic leap to climax is just as valid
   const pitches = subject.map(n => n.pitch);
   const maxPitch = Math.max(...pitches);
   const minPitch = Math.min(...pitches);
   const range = maxPitch - minPitch;
 
-  // Find all instances of highest and lowest pitch
   const highIndices = pitches.map((p, i) => p === maxPitch ? i : -1).filter(i => i >= 0);
   const lowIndices = pitches.map((p, i) => p === minPitch ? i : -1).filter(i => i >= 0);
 
@@ -529,14 +467,10 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     const weight = metricWeight(subject[idx].onset, meter);
     const isMetricallyStrong = weight >= 0.5;
 
-    // Calculate focal point score (up to +3.0)
-    // - Base: single clear high point in middle = +1.5
-    // - Metrically strong = +1.0
-    // - Good range (>octave) = +0.5
     if (isInMiddle) {
-      focalPointScore = 1.5; // Base: clear single high point in middle
-      if (isMetricallyStrong) focalPointScore += 1.0; // Bonus: metrically strong
-      if (range >= 12) focalPointScore += 0.5; // Bonus: large range (octave+)
+      focalPointScore = 1.5;
+      if (isMetricallyStrong) focalPointScore += 1.0;
+      if (range >= 12) focalPointScore += 0.5;
       focalPointScore = Math.min(focalPointScore, 3.0);
 
       focalPointDetails = {
@@ -565,7 +499,7 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     const isMetricallyStrong = weight >= 0.5;
 
     if (isInMiddle) {
-      focalPointScore = 0.5; // Low point focal is less common but valid
+      focalPointScore = 0.5;
       if (isMetricallyStrong) focalPointScore += 0.5;
       focalPointScore = Math.min(focalPointScore, 1.5);
 
@@ -584,26 +518,70 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     }
   }
 
-  // 3. Chord/Harmony analysis: analyze what harmonies the melody implies
-  // Uses the analyzeChords function from harmonicAnalysis.js
+  return {
+    leapRecoveryScore,
+    leapRecoveries,
+    unresolvedLeaps,
+    focalPointScore,
+    focalPointDetails,
+    range,
+    observations,
+  };
+}
+
+/**
+ * Analyze harmonic implications of a subject
+ * Now focused purely on harmony: dominant arrival and chord analysis
+ */
+export function testHarmonicImplication(subject, tonic, mode, formatter) {
+  if (!subject.length) return { error: 'No notes' };
+
+  const meter = formatter.meter;
+  const degrees = subject.map((n) => n.scaleDegree);
+  const observations = [];
+
+  // Dominant arrival detection
+  let domArr = null;
+  const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
+
+  for (let i = 0; i < subject.length; i++) {
+    const d = degrees[i];
+    if (
+      (d.degree === 5 && d.alteration === 0 && metricWeight(subject[i].onset, meter) >= 0.5) ||
+      (d.degree === 7 && d.alteration === 0)
+    ) {
+      domArr = {
+        location: formatter.formatBeat(subject[i].onset),
+        ratio: subject[i].onset / subLen,
+        degree: d.toString(),
+      };
+      break;
+    }
+  }
+
+  if (domArr) {
+    const timing = domArr.ratio < 0.3 ? 'Early' : domArr.ratio > 0.6 ? 'Late' : 'Mid-subject';
+    observations.push({
+      type: 'info',
+      description: `${timing} dominant arrival on ${domArr.degree} at ${domArr.location}`,
+    });
+  }
+
+  // Chord/Harmony analysis
   let chordAnalysis = null;
   let harmonicClarityScore = 0;
 
   try {
-    // Convert MIDI tonic to pitch class (0-11)
     const tonicPitchClass = typeof tonic === 'number' ? tonic % 12 : 0;
     chordAnalysis = analyzeChords(subject, meter, tonicPitchClass);
 
     if (chordAnalysis && chordAnalysis.summary) {
       const { harmonicClarity, startsOnTonic, endsOnTonic, impliesDominant, uniqueHarmonies } = chordAnalysis.summary;
 
-      // Score based on harmonic clarity (0-1 scale from analyzeChords)
-      // High clarity = consistent chord implications, scores 0 to +2
       harmonicClarityScore = harmonicClarity >= 0.8 ? 2.0 :
                             harmonicClarity >= 0.6 ? 1.0 :
                             harmonicClarity >= 0.4 ? 0.5 : 0;
 
-      // Bonus for strong tonal anchors
       if (startsOnTonic && endsOnTonic) {
         harmonicClarityScore += 0.5;
         observations.push({
@@ -617,7 +595,6 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
         });
       }
 
-      // Note dominant implication
       if (impliesDominant) {
         observations.push({
           type: 'info',
@@ -625,7 +602,6 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
         });
       }
 
-      // Observation about harmonic clarity
       if (harmonicClarity >= 0.7) {
         observations.push({
           type: 'strength',
@@ -639,17 +615,11 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
       }
     }
   } catch (e) {
-    // Chord analysis failed - not critical
     console.warn('Chord analysis failed:', e);
   }
 
   return {
-    opening: { degree: opening.toString(), isTonicChordTone },
-    terminal: { degree: terminal.toString(), ...ti },
     dominantArrival: domArr,
-    leapRecoveryScore,
-    focalPointScore,
-    focalPointDetails,
     chordAnalysis,
     harmonicClarityScore,
     observations,
