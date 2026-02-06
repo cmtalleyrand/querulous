@@ -35,6 +35,7 @@ import {
   formatSubjectABC,
   validateABCTiming,
   findSimultaneities,
+  testMelodicContour,
   testHarmonicImplication,
   testRhythmicVariety,
   testRhythmicComplementarity,
@@ -311,6 +312,7 @@ export default function App() {
       };
 
       // Run subject analyses
+      res.melodicContour = testMelodicContour(subject, formatter);
       res.harmonicImplication = testHarmonicImplication(subject, tonic, analysisMode, formatter);
       res.rhythmicVariety = testRhythmicVariety(subject, formatter);
 
@@ -850,12 +852,17 @@ export default function App() {
               </>
             )}
 
+            {/* Melodic Contour */}
+            {results.melodicContour && (
+              <Section title="Melodic Contour" helpKey="melodicContour" defaultCollapsed={true}>
+                <ObservationList observations={results.melodicContour.observations} />
+              </Section>
+            )}
+
             {/* Harmonic Implication */}
             <Section title="Harmonic Implication" helpKey="harmonicImplication">
               <DataRow
                 data={{
-                  Opening: `${results.harmonicImplication.opening.degree} ${results.harmonicImplication.opening.isTonicChordTone ? '(tonic)' : ''}`,
-                  Terminal: results.harmonicImplication.terminal.degree,
                   'Dominant arrival': results.harmonicImplication.dominantArrival
                     ? `${results.harmonicImplication.dominantArrival.degree} at ${results.harmonicImplication.dominantArrival.location}`
                     : 'None',
