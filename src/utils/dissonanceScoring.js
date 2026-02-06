@@ -161,35 +161,26 @@ function getShortNoteThreshold(ctx) {
 }
 
 /**
- * Get a multiplier for penalty reduction based on note duration.
- * Very short notes (below sub-subdivision level) get reduced penalties.
+ * Check if a note is "short" (below sub-subdivision level).
+ * Short notes get special treatment for penalties:
+ * - Consecutive dissonances: penalty halved if on off-beat
+ * - Motion/parallels: penalty halved if NOT repeated
+ * - Repetition penalties: halved
  *
  * @param {Simultaneity} sim - The simultaneity to check
  * @param {Object} ctx - Analysis context
- * @returns {{multiplier: number, isShort: boolean, reason: string|null}}
+ * @returns {{isShort: boolean, duration: number, threshold: number}}
  */
-function getShortNoteMultiplier(sim, ctx) {
+function getShortNoteInfo(sim, ctx) {
   // Use the shorter of the two notes' durations
   const minDuration = Math.min(sim.voice1Note.duration, sim.voice2Note.duration);
   const threshold = getShortNoteThreshold(ctx);
 
-  if (minDuration <= threshold) {
-    // Very short notes: 50% penalty reduction
-    return {
-      multiplier: 0.5,
-      isShort: true,
-      reason: `Very short note (${minDuration.toFixed(3)} beats < ${threshold.toFixed(3)} threshold)`,
-    };
-  } else if (minDuration <= threshold * 2) {
-    // Moderately short notes: 25% penalty reduction
-    return {
-      multiplier: 0.75,
-      isShort: true,
-      reason: `Short note (${minDuration.toFixed(3)} beats)`,
-    };
-  }
-
-  return { multiplier: 1.0, isShort: false, reason: null };
+  return {
+    isShort: minDuration <= threshold,
+    duration: minDuration,
+    threshold,
+  };
 }
 
 /**
@@ -605,8 +596,16 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     details.push('Resolves to consonance: +0.5');
   } else {
     // Resolution to another dissonance
-    score = -0.75;
-    details.push('Leads to another dissonance (no resolution): -0.75');
+    // Short note + off-beat: halve the penalty (two quick consecutive dissonances on off-beats not a big deal)
+    const shortNoteInfo = getShortNoteInfo(currSim, ctx);
+    const isOffBeat = currSim.metricWeight < 0.75;
+    if (shortNoteInfo.isShort && isOffBeat) {
+      score = -0.375; // Halved penalty
+      details.push('Leads to another dissonance: -0.375 (short note on off-beat - halved)');
+    } else {
+      score = -0.75;
+      details.push('Leads to another dissonance (no resolution): -0.75');
+    }
   }
 
   // Check for resolution by abandonment (one voice drops out)
@@ -1203,17 +1202,6 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
     totalScore += p4Bonus;
   }
 
-  // Short note sensitivity: very short notes (below sub-subdivision level)
-  // have reduced penalties since they pass too quickly to be very noticeable
-  const shortNoteInfo = getShortNoteMultiplier(currSim, ctx);
-  let shortNoteAdjustment = 0;
-  if (shortNoteInfo.isShort && totalScore < 0) {
-    // Only reduce penalties (negative scores), not bonuses
-    const reduction = totalScore * (1 - shortNoteInfo.multiplier);
-    shortNoteAdjustment = -reduction; // Make it positive since we're reducing penalty
-    totalScore = totalScore * shortNoteInfo.multiplier;
-  }
-
   // Determine type label and semantic category
   let type = 'unprepared';
   let label = '!';
@@ -1279,7 +1267,6 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
       `Exit: ${exitInfo.score.toFixed(1)} (${exitInfo.details.join(', ')})`,
       patternInfo.patterns.length > 0 ? `Pattern: ${patternInfo.patterns.map(p => `${p.type} +${p.bonus}`).join(', ')}` : 'No pattern match',
       isP4 ? `P4 (mild dissonance): +${p4Bonus.toFixed(1)}` : null,
-      shortNoteInfo.isShort ? `${shortNoteInfo.reason}: +${shortNoteAdjustment.toFixed(1)}` : null,
       `Total: ${totalScore.toFixed(1)}`,
     ].filter(Boolean),
   };

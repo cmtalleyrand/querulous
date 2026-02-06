@@ -117,6 +117,14 @@ export function CounterpointComparisonViz({
 
     const sims = findSims(voice1, transposedVoice2);
 
+    // Calculate short note threshold (triplet of subdivision)
+    // For 4/4: subdivision = 0.5, threshold = 0.167
+    // For 6/8: subdivision = 0.33, threshold = 0.111
+    const [numerator, denominator] = meter;
+    const isCompound = (numerator % 3 === 0 && numerator > 3 && denominator === 8);
+    const subdivision = isCompound ? (1 / 3) : 0.5;
+    const shortNoteThreshold = subdivision / 3;
+
     // Collect sequence data from both voices for scoring
     // This enables sequence-based penalty reduction for parallels
     const v1Sequences = sequences[tabConfig.v1];
@@ -336,6 +344,11 @@ export function CounterpointComparisonViz({
         const v2End = sim.voice2Note.onset + sim.voice2Note.duration;
         const simDuration = Math.min(v1End, v2End) - sim.onset;
 
+        // Check if this is a short note (below sub-subdivision threshold)
+        const minNoteDuration = Math.min(sim.voice1Note.duration, sim.voice2Note.duration);
+        const isShortNote = minNoteDuration <= shortNoteThreshold;
+        const isOffBeat = sim.metricWeight < 0.75;
+
         // Determine motion type based on rest category
         let motionType = 'normal'; // normal, asynchronous, reentry
         if (restCategory === 'asynchronous') {
@@ -363,6 +376,9 @@ export function CounterpointComparisonViz({
           isParallel: false,
           isRepeated,
           repeatInfo,
+          // Short note detection for penalty reduction
+          isShortNote,
+          isOffBeat,
           // Rest category and motion info
           restCategory,
           restInfo,
@@ -400,11 +416,18 @@ export function CounterpointComparisonViz({
             );
             point.parallelInSequence = parallelInSequence;
 
+            // Track if this is a repeated parallel (two parallels in a row)
+            point.isRepeatedParallel = prevPoint.isParallel === true;
+
             let parallelMsg = `⚠️ PARALLEL ${isPerfectInterval ? '5ths/8ves' : 'motion'}`;
             if (parallelInSequence) {
               parallelMsg += ' (in sequence - penalty reduced 75%)';
+            } else if (isShortNote && !point.isRepeatedParallel) {
+              parallelMsg += ' (short note, not repeated - halved penalty)';
             } else if (motionType === 'asynchronous') {
               parallelMsg += ' (asynchronous - halved penalty)';
+            } else if (point.isRepeatedParallel) {
+              parallelMsg += ' (repeated - full penalty)';
             } else {
               parallelMsg += ' detected';
             }
@@ -504,10 +527,11 @@ export function CounterpointComparisonViz({
           baseScore -= 0.2;
         }
 
-        // Repetition penalty
+        // Repetition penalty (halved for short notes)
         if (pt.isRepeated) {
-          repetitionPenalty += 0.25 * dur;
-          baseScore -= 0.15;
+          const repMult = pt.isShortNote ? 0.5 : 1.0;
+          repetitionPenalty += 0.25 * dur * repMult;
+          baseScore -= 0.15 * repMult;
         }
 
         consonanceContribution += baseScore * dur;
@@ -520,15 +544,20 @@ export function CounterpointComparisonViz({
       }
 
       // Parallel 5ths/8ves - significant penalty
-      // Asynchronous motion halves the penalty (independence preserved by offset)
-      // Sequences reduce penalty by 75% (parallels in sequences are intentional/acceptable)
+      // Penalty reduction rules:
+      // - Sequences: 75% reduction (parallels in sequences are intentional)
+      // - Short note + not repeated: 50% reduction (quick parallel followed by different motion)
+      // - Two fast parallels in a row: full penalty
+      // - Asynchronous motion: 50% reduction
       if (pt.isParallel) {
         let parallelMult = pt.motionScoreMultiplier || 1.0;
 
-        // Use the parallelInSequence flag set during parallel detection
         if (pt.parallelInSequence) {
           parallelMult *= 0.25; // Reduce penalty by 75% in sequences
+        } else if (pt.isShortNote && !pt.isRepeatedParallel) {
+          parallelMult *= 0.5; // Short note, not repeated - halve penalty
         }
+        // Note: isRepeatedParallel with short note = full penalty (no reduction)
 
         parallelPenalty += 1.0 * dur * parallelMult;
         totalWeightedScore -= 1.0 * dur * parallelMult;
