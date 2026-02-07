@@ -209,6 +209,36 @@ export const ANALYSIS_THRESHOLDS = {
   SEQUENCE_PENALTY_MULT: 0.25,    // 75% reduction for parallels in sequences
   SHORT_NOTE_PENALTY_MULT: 0.5,   // 50% reduction for short notes (non-repeated)
   ASYNC_MOTION_PENALTY_MULT: 0.5, // 50% reduction for asynchronous motion
+
+  // Harmonic analysis - salience calculation
+  PASSING_NOTE_THRESHOLD: 0.125,  // duration threshold for passing tones
+  MIN_SALIENCE: 0.025,            // minimum salience floor
+  SALIENCE_DECAY: 0.85,           // decay multiplier per beat distance
+
+  // Metric multipliers for salience
+  SALIENCE_DOWNBEAT_MULT: 1.2,    // downbeat (weight = 1.0)
+  SALIENCE_STRONG_BEAT_MULT: 1.0, // medium-strong beat (weight >= 0.75)
+  SALIENCE_OTHER_BEAT_MULT: 0.75, // other main beat (weight >= 0.5)
+  SALIENCE_OFF_BEAT_MULT: 0.5,    // off-beat (weight < 0.5)
+
+  // Chord member weights
+  ROOT_WEIGHT: 1.1,               // root is most important
+  THIRD_WEIGHT: 1.0,              // third defines quality
+  FIFTH_SEVENTH_WEIGHT: 0.8,      // fifth and seventh
+  SIXTH_AUGFIFTH_WEIGHT: 0.6,     // 6th, aug5th, etc.
+
+  // Chain management
+  CHAIN_BREAK_SALIENCE: 0.125,    // salience threshold for non-chord tone to break chain
+
+  // Chord candidate thresholds
+  MIN_CHORD_SALIENCE: 0.15,       // minimum total salience for beat to imply chord
+  NON_CHORD_TONE_PENALTY: 0.3,    // penalty multiplier for non-chord tone salience
+  ARPEGGIATION_BONUS: 0.2,        // bonus per beat of chain length
+  MAX_CHAIN_BONUS: 1.0,           // cap on arpeggiation bonus
+
+  // DP optimization
+  CHORD_CHANGE_PENALTY: 0.1,      // small penalty for changing chords (prefer continuity)
+  COMPLEXITY_PENALTY: 0.05,       // penalty per complexity level (prefer simpler chords)
 };
 
 /**
