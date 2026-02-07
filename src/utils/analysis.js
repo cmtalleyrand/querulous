@@ -2,6 +2,7 @@ import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName, isDuringRest } from './formatter';
 import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis';
+import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -332,8 +333,18 @@ export function checkParallelPerfects(sims, formatter) {
 
 /**
  * Analyze contour independence between two voices
+ * Thresholds adjusted for small note counts (<=8 notes)
  */
 export function testContourIndependence(subject, cs, formatter) {
+  // Get adjusted thresholds based on note count
+  const noteCount = Math.min(subject.length, cs.length);
+  const thresholds = getAdjustedThresholds(noteCount);
+
+  // Adjust ratio thresholds for small note counts
+  // With few motions, ratios are less meaningful
+  const parallelWarningThreshold = noteCount <= 8 ? 0.7 : 0.6;
+  const contraryGoodThreshold = noteCount <= 8 ? 0.25 : 0.35;
+
   const sMotions = [];
   const csMotions = [];
 
@@ -352,13 +363,13 @@ export function testContourIndependence(subject, cs, formatter) {
 
   for (const sm of sMotions) {
     for (const cm of csMotions) {
-      if (Math.abs(sm.time - cm.time) <= 0.25) {
+      if (Math.abs(sm.time - cm.time) <= thresholds.MOTION_SIMILARITY_WINDOW) {
         if (sm.direction === 0 || cm.direction === 0) {
           oblique++;
         } else if (sm.direction === cm.direction) {
           if (sm.semitones === cm.semitones) {
             parallel++;
-            if (sm.semitones >= 5) {
+            if (sm.semitones > ANALYSIS_THRESHOLDS.LEAP_THRESHOLD) {
               details.push({ description: `Parallel leaps at ${formatter.formatBeat(sm.time)}` });
             }
           } else {
@@ -379,9 +390,9 @@ export function testContourIndependence(subject, cs, formatter) {
   const obliqueRatio = total > 0 ? oblique / total : 0;
 
   let assessment = 'Independent contours';
-  if (total > 0 && (parallel + similar) / total > 0.6) {
+  if (total > 0 && (parallel + similar) / total > parallelWarningThreshold) {
     assessment = 'Voices move together frequently—consider more contrary motion';
-  } else if (contraryRatio > 0.35) {
+  } else if (contraryRatio > contraryGoodThreshold) {
     assessment = 'Good balance of motion types';
   }
 
@@ -396,6 +407,7 @@ export function testContourIndependence(subject, cs, formatter) {
     obliqueRatio,
     details,
     assessment,
+    noteCount, // Include for transparency
   };
 }
 
@@ -408,6 +420,8 @@ export function testMelodicContour(subject, formatter) {
 
   const meter = formatter.meter;
   const observations = [];
+  const { LEAP_THRESHOLD, STEP_MAX, FOCAL_POINT_MIDDLE_START, FOCAL_POINT_MIDDLE_END,
+          FOCAL_POINT_MIN_RANGE, STRONG_BEAT_WEIGHT } = ANALYSIS_THRESHOLDS;
 
   // 1. Leap recovery: penalize unrecovered leaps, small bonus for good recovery
   let leapRecoveries = 0;
@@ -417,16 +431,16 @@ export function testMelodicContour(subject, formatter) {
     const interval2 = subject[i + 1].pitch - subject[i].pitch;
     const absInt1 = Math.abs(interval1);
 
-    // Check if first interval is a leap (>4 semitones)
-    if (absInt1 > 4) {
+    // Check if first interval is a leap
+    if (absInt1 > LEAP_THRESHOLD) {
       const absInt2 = Math.abs(interval2);
-      // Recovery = step (1-2 semitones) in opposite direction
+      // Recovery = step in opposite direction
       const isOppositeDirection = (interval1 > 0 && interval2 < 0) || (interval1 < 0 && interval2 > 0);
-      const isStep = absInt2 <= 2;
+      const isStep = absInt2 <= STEP_MAX;
 
       if (isStep && isOppositeDirection) {
         leapRecoveries++;
-      } else if (absInt2 > 4) {
+      } else if (absInt2 > LEAP_THRESHOLD) {
         // Two consecutive leaps without recovery
         unresolvedLeaps++;
       }
@@ -460,12 +474,12 @@ export function testMelodicContour(subject, formatter) {
   let focalPointDetails = null;
 
   // Check for clear high point (climax)
-  if (highIndices.length === 1 && range >= 5) {
+  if (highIndices.length === 1 && range >= FOCAL_POINT_MIN_RANGE) {
     const idx = highIndices[0];
     const relativePosition = idx / (subject.length - 1);
-    const isInMiddle = relativePosition >= 0.25 && relativePosition <= 0.85;
+    const isInMiddle = relativePosition >= FOCAL_POINT_MIDDLE_START && relativePosition <= FOCAL_POINT_MIDDLE_END;
     const weight = metricWeight(subject[idx].onset, meter);
-    const isMetricallyStrong = weight >= 0.5;
+    const isMetricallyStrong = weight >= STRONG_BEAT_WEIGHT;
 
     if (isInMiddle) {
       focalPointScore = 1.5;
@@ -491,12 +505,12 @@ export function testMelodicContour(subject, formatter) {
   }
 
   // If no clear high point climax, check for expressive low point
-  if (focalPointScore === 0 && lowIndices.length === 1 && range >= 5) {
+  if (focalPointScore === 0 && lowIndices.length === 1 && range >= FOCAL_POINT_MIN_RANGE) {
     const idx = lowIndices[0];
     const relativePosition = idx / (subject.length - 1);
-    const isInMiddle = relativePosition >= 0.25 && relativePosition <= 0.85;
+    const isInMiddle = relativePosition >= FOCAL_POINT_MIDDLE_START && relativePosition <= FOCAL_POINT_MIDDLE_END;
     const weight = metricWeight(subject[idx].onset, meter);
-    const isMetricallyStrong = weight >= 0.5;
+    const isMetricallyStrong = weight >= STRONG_BEAT_WEIGHT;
 
     if (isInMiddle) {
       focalPointScore = 0.5;
