@@ -231,13 +231,10 @@ export const ANALYSIS_THRESHOLDS = {
   CHAIN_BREAK_SALIENCE: 0.125,    // salience threshold for non-chord tone to break chain
 
   // Chord candidate thresholds
-  MIN_CHORD_SALIENCE: 0.15,       // minimum total salience for beat to imply chord
-  NON_CHORD_TONE_PENALTY: 0.3,    // penalty multiplier for non-chord tone salience
-  ARPEGGIATION_BONUS: 0.2,        // bonus per beat of chain length
-  MAX_CHAIN_BONUS: 1.0,           // cap on arpeggiation bonus
+  NON_CHORD_TONE_SALIENCE_FLOOR: 0.05, // floor for non-chord tone penalty: max[(salience - this), 0]
+  MIN_NOTES_FOR_CHORD: 2,         // minimum notes required to consider a chord
 
   // DP optimization
-  CHORD_CHANGE_PENALTY: 0.1,      // small penalty for changing chords (prefer continuity)
   COMPLEXITY_PENALTY: 0.05,       // penalty per complexity level (prefer simpler chords)
 };
 

@@ -224,13 +224,14 @@ function getChordMemberWeight(interval) {
 /**
  * Score a chord candidate against beat notes
  * Returns total weighted salience of matching notes minus penalty for non-chord tones
+ * Non-chord tone penalty: sum of max[(salience - 0.05), 0] for each unmatched note
  * Includes bass position scoring: bonus for root in bass, penalty for 5th/7th in bass
  */
 function scoreChordCandidate(root, chordType, beatNotes) {
-  const { NON_CHORD_TONE_PENALTY } = ANALYSIS_THRESHOLDS;
+  const { NON_CHORD_TONE_SALIENCE_FLOOR } = ANALYSIS_THRESHOLDS;
 
   let matchedSalience = 0;
-  let unmatchedSalience = 0;
+  let nonChordPenalty = 0;
   const matches = [];
   const nonChordTones = [];
 
@@ -260,17 +261,20 @@ function scoreChordCandidate(root, chordType, beatNotes) {
         weight,
       });
     } else {
-      unmatchedSalience += note.salience;
+      // Penalty = max[(salience - 0.05), 0] - penalizes high salience non-chord tones more
+      const penalty = Math.max(note.salience - NON_CHORD_TONE_SALIENCE_FLOOR, 0);
+      nonChordPenalty += penalty;
       nonChordTones.push({
         pitch: note.pitch,
         interval,
         salience: note.salience,
+        penalty,
       });
     }
   }
 
-  // Base score = matched salience - penalty for non-chord tones
-  let score = matchedSalience - (unmatchedSalience * NON_CHORD_TONE_PENALTY);
+  // Base score = matched salience - non-chord tone penalty
+  let score = matchedSalience - nonChordPenalty;
 
   // Apply bass position multiplier
   let bassMultiplier = 1.0;
@@ -291,7 +295,7 @@ function scoreChordCandidate(root, chordType, beatNotes) {
   return {
     score,
     matchedSalience,
-    unmatchedSalience,
+    nonChordPenalty,
     matches,
     nonChordTones,
     matchCount: matches.length,
@@ -315,9 +319,13 @@ function hasRequiredIntervals(root, chordType, presentPCs) {
 
 /**
  * Find all valid chord candidates for a beat
+ * Requires at least 2 notes to consider any chord
  */
 function findChordCandidates(beatNotes) {
-  if (beatNotes.length === 0) return [];
+  const { MIN_NOTES_FOR_CHORD } = ANALYSIS_THRESHOLDS;
+
+  // Need at least 2 notes to imply a chord
+  if (beatNotes.length < MIN_NOTES_FOR_CHORD) return [];
 
   const presentPCs = new Set(beatNotes.map(n => n.pitchClass));
   const candidates = [];
@@ -372,28 +380,17 @@ function chainBrokenByNonChordTone(chord, beatNotes) {
 }
 
 /**
- * Calculate arpeggiation bonus for chain length
- */
-function getArpeggiationBonus(chainLength) {
-  const { ARPEGGIATION_BONUS, MAX_CHAIN_BONUS } = ANALYSIS_THRESHOLDS;
-  return Math.min(chainLength * ARPEGGIATION_BONUS, MAX_CHAIN_BONUS);
-}
-
-/**
  * DP optimization to find optimal chord sequence
  * State: best[beatIdx][chordKey] = { score, chainLength, path }
+ * Includes audit trail for debugging chord determination
  */
 function findOptimalChordSequence(beats, tonic) {
-  const {
-    CHORD_CHANGE_PENALTY,
-    COMPLEXITY_PENALTY,
-    MIN_CHORD_SALIENCE,
-  } = ANALYSIS_THRESHOLDS;
+  const { COMPLEXITY_PENALTY } = ANALYSIS_THRESHOLDS;
 
   const n = beats.length;
   if (n === 0) return [];
 
-  // DP table: best[beat][chordKey] = { score, chainLen, prevChordKey, path }
+  // DP table: best[beat][chordKey] = { score, chainLen, prevChordKey, path, audit }
   // chordKey = `${root}-${type}` or 'null' for no chord
   const dp = Array(n).fill(null).map(() => new Map());
 
@@ -407,20 +404,30 @@ function findOptimalChordSequence(beats, tonic) {
     chainLen: 0,
     chord: null,
     prevKey: null,
+    audit: { reason: 'no chord assigned' },
   });
 
   // Add each candidate
   for (const cand of firstCandidates) {
-    if (cand.matchedSalience < MIN_CHORD_SALIENCE) continue;
-
     const key = `${cand.root}-${cand.type}`;
     const complexityPen = cand.complexity * COMPLEXITY_PENALTY;
+    const finalScore = cand.score - complexityPen;
 
     dp[0].set(key, {
-      score: cand.score - complexityPen,
+      score: finalScore,
       chainLen: 1,
       chord: cand,
       prevKey: null,
+      audit: {
+        baseScore: cand.score,
+        complexityPenalty: complexityPen,
+        finalScore,
+        matchedSalience: cand.matchedSalience,
+        nonChordPenalty: cand.nonChordPenalty,
+        bassMultiplier: cand.bassMultiplier,
+        matches: cand.matches,
+        nonChordTones: cand.nonChordTones,
+      },
     });
   }
 
@@ -445,12 +452,11 @@ function findOptimalChordSequence(beats, tonic) {
       chainLen: 0,
       chord: null,
       prevKey: bestNullPrev,
+      audit: { reason: 'no chord assigned', inheritedScore: bestNullScore },
     });
 
     // Option 2: Each chord candidate
     for (const cand of currCandidates) {
-      if (cand.matchedSalience < MIN_CHORD_SALIENCE) continue;
-
       const currKey = `${cand.root}-${cand.type}`;
       let bestScore = -Infinity;
       let bestPrevKey = null;
@@ -465,12 +471,8 @@ function findOptimalChordSequence(beats, tonic) {
                            prevState.chord.type === cand.type;
 
           if (sameChord && !chainBrokenByNonChordTone(cand, currBeat.notes)) {
-            // Extend chain
+            // Extend chain (no bonus, just track length)
             newChainLen = prevState.chainLen + 1;
-            transitionScore += getArpeggiationBonus(1); // Bonus for continuation
-          } else {
-            // Chord change penalty
-            transitionScore -= CHORD_CHANGE_PENALTY;
           }
         }
 
@@ -487,11 +489,24 @@ function findOptimalChordSequence(beats, tonic) {
       // Update if this is better than existing entry for this chord
       const existing = dp[i].get(currKey);
       if (!existing || bestScore > existing.score) {
+        const complexityPen = cand.complexity * COMPLEXITY_PENALTY;
         dp[i].set(currKey, {
           score: bestScore,
           chainLen: bestChainLen,
           chord: cand,
           prevKey: bestPrevKey,
+          audit: {
+            baseScore: cand.score,
+            complexityPenalty: complexityPen,
+            inheritedScore: bestScore - cand.score + complexityPen,
+            finalScore: bestScore,
+            matchedSalience: cand.matchedSalience,
+            nonChordPenalty: cand.nonChordPenalty,
+            bassMultiplier: cand.bassMultiplier,
+            matches: cand.matches,
+            nonChordTones: cand.nonChordTones,
+            prevChord: bestPrevKey,
+          },
         });
       }
     }
@@ -508,7 +523,7 @@ function findOptimalChordSequence(beats, tonic) {
     }
   }
 
-  // Reconstruct path
+  // Reconstruct path with audit trail
   const result = Array(n).fill(null);
   let currKey = bestFinalKey;
 
@@ -519,6 +534,7 @@ function findOptimalChordSequence(beats, tonic) {
         chord: state.chord,
         chainLen: state.chainLen,
         score: state.score,
+        audit: state.audit,
       };
       currKey = state.prevKey;
     }
@@ -653,6 +669,16 @@ export function analyzeHarmonicImplication(notes, meter, tonic = 0, options = {}
       isChainStart,
       isChainEnd,
       isArpeggiation: chainLength > 1,
+      // Audit trail for debugging chord determination
+      audit: dpResult?.audit || null,
+      // All candidates considered for this beat (for comparison)
+      allCandidates: beat.candidates.slice(0, 5).map(c => ({
+        name: `${pitchClassName(c.root)}${formatChordType(c.type)}`,
+        score: c.score,
+        matchedSalience: c.matchedSalience,
+        nonChordPenalty: c.nonChordPenalty,
+        bassMultiplier: c.bassMultiplier,
+      })),
     });
   }
 
