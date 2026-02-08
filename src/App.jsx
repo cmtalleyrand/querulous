@@ -861,13 +861,6 @@ export default function App() {
 
             {/* Harmonic Implication */}
             <Section title="Harmonic Implication" helpKey="harmonicImplication">
-              <DataRow
-                data={{
-                  'Dominant arrival': results.harmonicImplication.dominantArrival
-                    ? `${results.harmonicImplication.dominantArrival.degree} at ${results.harmonicImplication.dominantArrival.location}`
-                    : 'None',
-                }}
-              />
               <ObservationList observations={results.harmonicImplication.observations} />
               {results.harmonicImplication.chordAnalysis && (
                 <ChordAnalysisDisplay

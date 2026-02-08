@@ -85,9 +85,9 @@ export function ChordAnalysisDisplay({ chordAnalysis, formatter }) {
         </span>
         {summary && (
           <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: 'auto' }}>
-            {summary.analyzedBeats} beats, {summary.uniqueHarmonies} chord{summary.uniqueHarmonies !== 1 ? 's' : ''}
-            {summary.startsOnTonic && ' • starts on I'}
-            {summary.endsOnTonic && ' • ends on I'}
+            {summary.analyzedBeats}/{summary.totalBeats} beats, {summary.uniqueHarmonies} chord{summary.uniqueHarmonies !== 1 ? 's' : ''}
+            {summary.firstChord && ` • opens ${summary.firstChord}`}
+            {summary.lastChord && ` • closes ${summary.lastChord}`}
           </span>
         )}
       </div>
@@ -110,16 +110,27 @@ export function ChordAnalysisDisplay({ chordAnalysis, formatter }) {
               backgroundColor: '#f1f5f9',
               borderRadius: '4px',
               fontSize: '12px',
+              flexWrap: 'wrap',
             }}>
               <span>
-                <strong>Starts on tonic:</strong> {summary.startsOnTonic ? 'Yes' : 'No'}
+                <strong>Coverage:</strong> {Math.round((summary.coverage || 0) * 100)}%
               </span>
               <span>
-                <strong>Ends on tonic:</strong> {summary.endsOnTonic ? 'Yes' : 'No'}
+                <strong>Avg fit:</strong> {(summary.avgFitScore || 0).toFixed(2)}
               </span>
               <span>
                 <strong>Dominant implied:</strong> {summary.impliesDominant ? 'Yes' : 'No'}
               </span>
+              {summary.firstChord && (
+                <span>
+                  <strong>Opens:</strong> {summary.firstChord}
+                </span>
+              )}
+              {summary.lastChord && (
+                <span>
+                  <strong>Closes:</strong> {summary.lastChord}
+                </span>
+              )}
             </div>
           )}
 
@@ -251,16 +262,42 @@ export function ChordAnalysisDisplay({ chordAnalysis, formatter }) {
                     Audit: Why {selectedBeat.chord.name}?
                   </div>
                   <div style={{ color: '#6b7280', lineHeight: '1.6' }}>
-                    <div>Matched salience: {selectedBeat.audit.matchedSalience?.toFixed(3)}</div>
-                    <div>Non-chord penalty: −{selectedBeat.audit.nonChordPenalty?.toFixed(3)}</div>
-                    <div>Bass multiplier: ×{selectedBeat.audit.bassMultiplier?.toFixed(2)}</div>
-                    <div>Base score: {selectedBeat.audit.baseScore?.toFixed(3)}</div>
-                    <div>Complexity penalty: −{selectedBeat.audit.complexityPenalty?.toFixed(3)}</div>
-                    <div>Inherited from prev: {selectedBeat.audit.inheritedScore?.toFixed(3) || '0'}</div>
-                    <div style={{ fontWeight: '600', color: '#374151' }}>
-                      Final score: {selectedBeat.audit.finalScore?.toFixed(3)}
+                    <div>Σ(salience × weight): +{selectedBeat.audit.matchedSalience?.toFixed(3)}</div>
+                    <div>Σ non-chord penalty: −{selectedBeat.audit.nonChordPenalty?.toFixed(3)}</div>
+                    <div>= pre-bass score: {selectedBeat.audit.preBasScore?.toFixed(3)}</div>
+                    <div>Bass position: ×{selectedBeat.audit.bassMultiplier?.toFixed(2)} ({selectedBeat.audit.bassReason || 'n/a'})</div>
+                    <div>= base score: {selectedBeat.audit.baseScore?.toFixed(3)}</div>
+                    <div>Complexity (level {selectedBeat.audit.complexityLevel || '?'}): −{selectedBeat.audit.complexityPenalty?.toFixed(3)}</div>
+                    <div>Inherited from prev{selectedBeat.audit.prevChord ? ` (${selectedBeat.audit.prevChord})` : ''}: +{selectedBeat.audit.inheritedScore?.toFixed(3) || '0'}</div>
+                    {selectedBeat.audit.chainContinued && <div>Chain continued from previous beat</div>}
+                    <div style={{ fontWeight: '600', color: '#374151', borderTop: '1px solid #e2e8f0', paddingTop: '4px', marginTop: '4px' }}>
+                      Final DP score: {selectedBeat.audit.finalScore?.toFixed(3)}
                     </div>
                   </div>
+
+                  {/* Per-note breakdown */}
+                  {selectedBeat.audit.matches && selectedBeat.audit.matches.length > 0 && (
+                    <div style={{ marginTop: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '4px' }}>
+                      <div style={{ fontWeight: '500', color: '#374151', marginBottom: '2px' }}>Matched notes:</div>
+                      {selectedBeat.audit.matches.map((m, i) => (
+                        <div key={i} style={{ color: '#6b7280', paddingLeft: '8px' }}>
+                          {pitchName(m.pitch)}: salience {m.salience?.toFixed(3)} × weight {m.weight?.toFixed(1)} = {m.contribution?.toFixed(3)}
+                          {m.beatDistance > 0 ? ` (${m.beatDistance}b ago, decay ${m.decay?.toFixed(2)})` : ' (current beat)'}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selectedBeat.audit.nonChordTones && selectedBeat.audit.nonChordTones.length > 0 && (
+                    <div style={{ marginTop: '4px' }}>
+                      <div style={{ fontWeight: '500', color: '#d97706', marginBottom: '2px' }}>Non-chord tones:</div>
+                      {selectedBeat.audit.nonChordTones.map((n, i) => (
+                        <div key={i} style={{ color: '#d97706', paddingLeft: '8px' }}>
+                          {pitchName(n.pitch)}: salience {n.salience?.toFixed(3)}, penalty {n.penalty?.toFixed(3)}
+                          {n.beatDistance > 0 ? ` (${n.beatDistance}b ago, decay ${n.decay?.toFixed(2)})` : ' (current beat)'}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

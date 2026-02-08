@@ -21,144 +21,106 @@ The algorithm determines what harmonies a melodic line implies through a three-s
 - In compound meters (6/8, 9/8, 12/8), main beats are dotted quarters
 - Chords cannot change within a beat (one chord maximum per beat)
 
+### Preprocessing
+
+Long notes are split at beat boundaries into segments. A whole note spanning 4 beats creates 4 segments, each contributing to its respective beat's chord analysis. Truly repeated attacks on the same pitch (not sustained segments) are merged.
+
 ### Note Salience Formula
 
 For each note sounding during a beat, calculate its salience:
 
 ```
 salience = max(
-  (duration_in_quarters × metric_weight × approach_modifier) - 0.1,
-  0.01
-)
+  (duration - 0.125) × metric_multiplier × approach_modifier,
+  0.025
+) × decay
 ```
 
 Where:
-- **duration_in_quarters**: Total duration including tied/repeated notes in the same beat
-- **metric_weight**: Based on where the note attacks
-  - Strong beat (beat 1): 1.0
-  - Medium beat (beat 3 in 4/4): 0.75
-  - Other main beats: 0.5
-  - Off-beat: 0.3
+- **duration**: Note duration in beat units within this beat segment
+- **0.125**: Passing note threshold — very short notes get minimal salience
+- **0.025**: Minimum salience floor — every note contributes at least this much
+- **metric_multiplier**: Based on where the note attacks
+  - Downbeat (weight ≥ 1.0): 1.2
+  - Strong beat (weight ≥ 0.75): 1.0
+  - Other main beat (weight ≥ 0.5): 0.75
+  - Off-beat: 0.5
 - **approach_modifier**:
-  - Step approach (m2/M2): × 0.8 (less structurally important)
-  - Perfect interval leap approach (P4/P5/P8): × 1.2 (more structurally important)
+  - Step approach (1-2 semitones): × 0.8 (passing/neighbor, less structural)
+  - Perfect interval leap (P4/P5/P8): × 1.2 (structurally important)
   - Other: × 1.0
 
-### Recency Weighting
+### Lookback Decay (Linear)
 
-Notes are weighted by recency - how recently they **stopped** sounding (not onset):
+Notes from previous beats contribute to the current beat's chord analysis with **linear** decay:
 
 ```
-recency_weight = 1.0 - (time_since_note_ended × decay_rate)
+decay = max(1.0 - beatDistance × SALIENCE_DECAY_RATE, 0)
 ```
 
-Where decay is **linear** (not exponential). Notes still sounding have recency_weight = 1.0.
+Where `SALIENCE_DECAY_RATE = 0.4`. This means:
+- Current beat (distance 0): decay = 1.0
+- Previous beat (distance 1): decay = 0.6
+- 2 beats ago (distance 2): decay = 0.2
+
+Maximum lookback is 2 beats. Linear decay (rather than exponential) reaches zero, fully eliminating distant notes, and is less aggressive at close distances, which better supports genuine arpeggiation.
+
+### Two-Pass Chord Boundary Constraint
+
+The algorithm uses a two-pass approach to prevent notes from "skipping over" an intervening chord change:
+
+1. **Pass 1 (unconstrained)**: Collect notes with full 2-beat lookback and run DP to get initial chord assignments.
+2. **Pass 2 (constrained)**: Re-collect notes, but now a note from beat N can only contribute to beat M if all intervening beats (N+1 ... M-1) have the same chord assignment as beat M, or are null. Then re-run the DP on the constrained note sets.
+
+This means a C major arpeggio across 4 beats works correctly (all beats share the same chord, so lookback is unrestricted), but a note from beat 4 cannot contribute to beat 6 if beat 5 was assigned a different chord.
 
 ### Repetition
 
-If a pitch is repeated within the measure, its total duration is summed. Repetition itself can occur anywhere in the measure.
+If a pitch is repeated within the measure via separate attacks, the repeated notes are merged (durations summed). Sustained note segments are not merged — they contribute independently to each beat.
 
 ---
 
 ## Stage 2: Chord Vocabulary
 
-### Required Intervals by Chord Type
+### Implemented Chord Types
 
-Every chord **must** have its root present. Additional requirements:
+The vocabulary is deliberately limited to triads, sixth chords, and seventh chords. Extended chords (9ths, 11ths, 13ths), sus chords, power chords, add chords, and altered chords are excluded. The rationale: with only 2-4 pitch classes per beat, an extended vocabulary causes almost every combination to match some exotic chord, producing meaningless results (e.g., every note group becomes a "ninth" of something).
 
-| Chord Type | Required Intervals |
-|------------|-------------------|
-| Power chord (5) | Root only (fifth optional) |
-| Major triad | Root + third |
-| Minor triad | Root + third |
-| Diminished triad | Root + third + fifth (fifth required for dim) |
-| Augmented triad | Root + third + fifth (fifth required for aug) |
-| Sus2 | Root + 2nd |
-| Sus4 | Root + 4th |
-| 6th chords | Root + third + 6th |
-| 7th chords | Root + third + 7th |
-| 9th/11th/13th | Root + third + defining extension |
-| Add chords | Root + added interval |
-| Altered chords | Root + third + altered interval |
+Suspensions are non-chord tones handled by the dissonance scoring system, not by harmonic analysis.
 
-**Note**: The fifth is never necessary to a chord unless it is Augmented or Diminished.
+Every chord **must** have its root present in the beat's notes.
 
-**Suspensions**: Require the fifth present (the fifth holds while root moves).
+#### Triads (complexity: 1)
+| Name | Intervals | Required | Notes (from C) |
+|------|-----------|----------|----------------|
+| major | [0, 4, 7] | root + 3rd | C E G |
+| minor | [0, 3, 7] | root + 3rd | C Eb G |
 
-### Complete Chord Vocabulary
+#### Triads (complexity: 2)
+| Name | Intervals | Required | Notes (from C) |
+|------|-----------|----------|----------------|
+| diminished | [0, 3, 6] | root + 3rd + 5th | C Eb Gb |
+| augmented | [0, 4, 8] | root + 3rd + 5th | C E G# |
 
-Chords defined by semitone intervals from root:
+#### Sixth Chords (complexity: 3)
+| Name | Intervals | Required | Notes (from C) |
+|------|-----------|----------|----------------|
+| major_6 | [0, 4, 7, 9] | root + 3rd + 6th | C E G A |
+| minor_6 | [0, 3, 7, 9] | root + 3rd + 6th | C Eb G A |
 
-#### Triads
-| Name | Intervals | Notes (from C) |
-|------|-----------|----------------|
-| major | [0, 4, 7] | C E G |
-| minor | [0, 3, 7] | C Eb G |
-| diminished | [0, 3, 6] | C Eb Gb |
-| augmented | [0, 4, 8] | C E G# |
+#### Seventh Chords (complexity: 3)
+| Name | Intervals | Required | Notes (from C) |
+|------|-----------|----------|----------------|
+| dominant_7 | [0, 4, 7, 10] | root + 3rd + 7th | C E G Bb |
+| major_7 | [0, 4, 7, 11] | root + 3rd + 7th | C E G B |
+| minor_7 | [0, 3, 7, 10] | root + 3rd + 7th | C Eb G Bb |
 
-#### Suspended
-| Name | Intervals | Notes (from C) |
-|------|-----------|----------------|
-| sus2 | [0, 2, 7] | C D G |
-| sus4 | [0, 5, 7] | C F G |
-
-#### Power Chord
-| Name | Intervals | Notes (from C) |
-|------|-----------|----------------|
-| power5 | [0, 7] | C G |
-
-#### Sixth Chords
-| Name | Intervals | Notes (from C) |
-|------|-----------|----------------|
-| major_6 | [0, 4, 7, 9] | C E G A |
-| minor_6 | [0, 3, 7, 9] | C Eb G A |
-| minor_b6 | [0, 3, 7, 8] | C Eb G Ab |
-
-#### Seventh Chords
-| Name | Intervals | Notes (from C) |
-|------|-----------|----------------|
-| major_7 | [0, 4, 7, 11] | C E G B |
-| dominant_7 | [0, 4, 7, 10] | C E G Bb |
-| minor_7 | [0, 3, 7, 10] | C Eb G Bb |
-| minor_major_7 | [0, 3, 7, 11] | C Eb G B |
-| half_diminished_7 | [0, 3, 6, 10] | C Eb Gb Bb |
-| diminished_7 | [0, 3, 6, 9] | C Eb Gb Bbb |
-| augmented_7 | [0, 4, 8, 10] | C E G# Bb |
-| augmented_major_7 | [0, 4, 8, 11] | C E G# B |
-
-#### Extended Chords
-| Name | Intervals | Notes (from C) |
-|------|-----------|----------------|
-| major_9 | [0, 4, 7, 11, 14] | C E G B D |
-| dominant_9 | [0, 4, 7, 10, 14] | C E G Bb D |
-| minor_9 | [0, 3, 7, 10, 14] | C Eb G Bb D |
-| major_11 | [0, 4, 7, 11, 14, 17] | C E G B D F |
-| dominant_11 | [0, 4, 7, 10, 14, 17] | C E G Bb D F |
-| minor_11 | [0, 3, 7, 10, 14, 17] | C Eb G Bb D F |
-| major_13 | [0, 4, 7, 11, 14, 17, 21] | C E G B D F A |
-| dominant_13 | [0, 4, 7, 10, 14, 17, 21] | C E G Bb D F A |
-| minor_13 | [0, 3, 7, 10, 14, 17, 21] | C Eb G Bb D F A |
-
-#### Add Chords
-| Name | Intervals | Notes (from C) |
-|------|-----------|----------------|
-| add9 | [0, 4, 7, 14] | C E G D |
-| minor_add9 | [0, 3, 7, 14] | C Eb G D |
-| add_b9 | [0, 4, 7, 13] | C E G Db |
-| add_#4 | [0, 4, 6, 7] | C E F# G |
-| add11 | [0, 4, 7, 17] | C E G F |
-| add13 | [0, 4, 7, 21] | C E G A |
-
-#### Altered Chords
-| Name | Intervals | Notes (from C) |
-|------|-----------|----------------|
-| 7b5 | [0, 4, 6, 10] | C E Gb Bb |
-| 7#5 | [0, 4, 8, 10] | C E G# Bb |
-| 7b9 | [0, 4, 7, 10, 13] | C E G Bb Db |
-| 7#9 | [0, 4, 7, 10, 15] | C E G Bb D# |
-| 7b5b9 | [0, 4, 6, 10, 13] | C E Gb Bb Db |
-| 7#5#9 | [0, 4, 8, 10, 15] | C E G# Bb D# |
+#### Seventh Chords (complexity: 4)
+| Name | Intervals | Required | Notes (from C) |
+|------|-----------|----------|----------------|
+| half_diminished_7 | [0, 3, 6, 10] | all four | C Eb Gb Bb |
+| diminished_7 | [0, 3, 6, 9] | all four | C Eb Gb Bbb |
+| minor_major_7 | [0, 3, 7, 11] | root + 3rd + 7th | C Eb G B |
 
 ### Inversions
 
@@ -168,120 +130,116 @@ All chords can appear in any inversion. The algorithm tests all 12 possible root
 
 ## Stage 3: Per-Beat Chord Scoring
 
-For each beat, evaluate every possible chord (all types × 12 roots):
+For each beat, evaluate every possible chord (all types × 12 roots where root is present):
 
 ### Step 1: Check Required Intervals
 
-If the root is not present in the beat's notes, **immediately discard** this candidate.
+If the root is not present in the beat's notes, **immediately discard**.
 
-For each chord type, check if required intervals are present:
-- Major/minor/aug: third must be present
-- Diminished/augmented: fifth must be present
-- 6th chords: third and 6th must be present
-- 7th chords: third and 7th must be present
-- Extensions: defining extension must be present
-
-If required intervals are missing, discard the candidate.
+For each chord type, check if all required intervals are present. If any are missing, discard.
 
 ### Step 2: Calculate Fit Score
 
 ```
-fit_score = Σ (note_salience × match_weight)
+matched_salience = Σ (note_salience × chord_member_weight)  for matching notes
+non_chord_penalty = Σ max(note_salience - 0.05, 0)          for non-matching notes
+pre_bass_score = matched_salience - non_chord_penalty
 ```
 
-Where match_weight depends on the interval's role:
+Chord member weights by interval role:
 
-| Role | Match Weight |
-|------|-------------|
-| Root | 1.0 |
-| Third | 0.9 |
-| Seventh | 0.8 |
-| Fifth | 0.7 |
-| Sixth | 0.7 |
-| Extensions (9, 11, 13) | 0.6 |
-| Alterations | 0.5 |
-| Unmatched note | 0.0 |
+| Role | Weight | Constant |
+|------|--------|----------|
+| Root (0) | 1.1 | ROOT_WEIGHT |
+| Third (3, 4) | 1.0 | THIRD_WEIGHT |
+| Fifth (7), Seventh (10, 11) | 0.8 | FIFTH_SEVENTH_WEIGHT |
+| Tritone (6), Aug5 (8), Sixth (9) | 0.6 | SIXTH_AUGFIFTH_WEIGHT |
+| Other | 0.5 | — |
 
-### Step 3: Parsimony
+Non-chord tone penalty has a floor of 0.05 — notes with salience below this threshold incur no penalty (they're too insignificant to count against the chord).
 
-When candidates have similar fit scores, **prefer simpler chords**:
+### Step 3: Bass Position
 
-Complexity ranking (lower = simpler, preferred):
-1. Power chord (simplest)
-2. Major/minor triad
-3. Diminished/augmented triad
-4. Sus2/sus4
-5. 6th chords
-6. 7th chords
-7. Add chords
-8. 9th chords
-9. Altered chords
-10. 11th/13th chords (most complex)
+```
+score = pre_bass_score × bass_multiplier
+```
 
-Parsimony is a **tiebreaker** when evidence is ambiguous, not a penalty on unexplained notes.
+| Bass note is... | Multiplier |
+|-----------------|-----------|
+| Root | × 1.1 (bonus) |
+| Fifth | × 0.9 (mild penalty) |
+| Seventh | × 0.8 (penalty) |
+| Other | × 1.0 |
+
+### Step 4: Complexity Penalty
+
+Applied in the DP stage: `COMPLEXITY_PENALTY = 0.05` per complexity level.
+
+Simpler chords are preferred when evidence is ambiguous. Major/minor triads (complexity 1) have the smallest penalty; diminished_7 and half_diminished_7 (complexity 4) have the largest.
 
 ---
 
 ## Stage 4: Global Refinement (Dynamic Programming)
 
-The goal is to find a **sequential series of chords** (one per beat maximum) that maximizes overall harmonic coherence.
+The goal is to find a **sequential series of chords** (one per beat maximum) that maximises overall harmonic coherence.
+
+### DP Formulation
+
+State: `dp[beat][chordKey]` where chordKey = `"root-type"` or `"null"`
+
+```
+dp[i][c] = max over all prev states dp[i-1][c'] of:
+  dp[i-1][c'].score + chord_score(i, c) - complexity_penalty(c)
+```
+
+Each beat also has a "null" option (no chord assigned) that inherits the best previous score without adding anything.
 
 ### Arpeggiation Chains
 
-Notes can contribute to harmony in two ways:
-1. **Vertically**: Sounding simultaneously with other notes on a beat
-2. **Horizontally**: As part of an arpeggio spanning multiple beats
+When the same chord (root + type) appears on consecutive beats, it forms an arpeggiation chain. Chain length is tracked but does not add bonus score — the chain is informational.
 
-A note can contribute **both horizontally AND vertically**, but maximum one contribution of each type.
+**Chain breaking**: A salient non-chord tone (salience ≥ 0.125) on the current beat breaks the chain even if the chord type matches.
 
-**Chain breaking**: A change in chord quality breaks the arpeggiation chain. For example:
-- C major → C major: chain continues
-- C major → G major: chain breaks (different root)
-- C major → C minor: chain breaks (quality change)
+### Backtracking
 
-### Proximity Preference
-
-Notes prefer to be matched with chords closer in time. A note on beat 1 matching a chord on beat 1 is better than matching a chord on beat 3.
-
-### Dynamic Programming Formulation
-
-Define:
-- `beats[i]` = set of notes sounding during beat i
-- `candidates[i]` = viable chord candidates for beat i (after filtering)
-- `H[i][c]` = maximum harmonic fit score ending at beat i with chord c
-
-Recurrence:
-```
-H[i][c] = local_fit(i, c) + max(
-  H[i-1][c'] + arpeggiation_bonus(c', c)  // for all c' where chain continues
-  H[i-1][c']                                // for all c' where chain breaks
-)
-```
-
-Where:
-- `local_fit(i, c)` = fit score of chord c for beat i's notes
-- `arpeggiation_bonus(c', c)` = bonus if c' and c are the same chord (chain continues)
+After filling the DP table, backtrack from the best final state to reconstruct the optimal chord sequence.
 
 ### Output
 
 The algorithm outputs:
-1. A sequence of chords, one per beat (or null for beats with no clear harmony)
-2. Confidence scores for each chord assignment
-3. Notes that remain unexplained by the harmonic analysis
+1. A sequence of chords, one per beat (or null for beats with insufficient evidence)
+2. Per-beat audit trail showing every calculation step
+3. Top 5 alternative candidates per beat for comparison
+
+---
+
+## Summary Metrics
+
+| Metric | Definition | Purpose |
+|--------|-----------|---------|
+| **coverage** | analyzedBeats / totalBeats | Primary clarity measure: what proportion of beats have chord assignments |
+| **avgFitScore** | Mean chord score across assigned beats | Quality measure: how well the assigned chords fit their notes |
+| **avgConfidence** | Mean (matchCount / noteCount) per beat | Match ratio: what fraction of notes belong to the chord |
+| **harmonicRhythm** | uniqueChords / totalBeats | Rate of harmonic change |
+| **impliesDominant** | Whether any chord has root = dominant of key | V or V7 present in sequence |
+| **firstChord / lastChord** | Opening and closing chord names | Informational, not scored |
 
 ---
 
 ## Scoring Impact
 
-The harmonic implication analysis feeds into the **Tonal Clarity** score:
+The `coverage` metric feeds into the **Tonal Definition** score:
 
-| Condition | Impact |
-|-----------|--------|
-| Clear harmonic progression detected | +3 |
-| Implies tonic at phrase boundaries | +2 |
-| Implies dominant before cadences | +2 |
-| Ambiguous or unclear harmony | -2 |
-| Contradictory implications | -3 |
+| Coverage | harmonicClarityScore |
+|----------|---------------------|
+| ≥ 80% | 2.0 |
+| ≥ 60% | 1.0 |
+| ≥ 40% | 0.5 |
+| < 40% | 0 |
+
+This is then scaled by × 4 and added to the internal tonal definition score (0-8 range contribution).
+
+Dominant implication adds +3 (Tonal Definition) or +2 (Tonal Clarity) to internal score.
 
 ---
 
@@ -303,7 +261,19 @@ interval = (notePitchClass - rootPitchClass + 12) % 12
 
 ### Handling Rests
 
-Beats containing only rests have no chord candidate. The algorithm may extend the previous chord or leave the beat unassigned.
+Beats containing only rests have no chord candidate. The DP may select the "null" option for those beats, and they count against coverage.
+
+### Audit Trail
+
+Every chord assignment includes a detailed audit showing:
+- Per-note salience breakdown (duration, metric weight, approach, decay)
+- Per-note contribution to matched salience (salience × weight)
+- Non-chord tone penalties with individual values
+- Pre-bass score, bass position multiplier and reason
+- Complexity level and penalty
+- Inherited score from previous beat
+- Chain continuation status
+- Final DP score
 
 ---
 
@@ -311,32 +281,21 @@ Beats containing only rests have no chord candidate. The algorithm may extend th
 
 Given a subject in C major: C4 (beat 1, quarter) - E4 (beat 2, quarter) - G4 (beat 3, quarter) - C5 (beat 4, quarter)
 
-**Beat 1**: C4 sounds
-- Salience: 1.0 (quarter) × 1.0 (strong beat) × 1.0 = 1.0
-- Candidates: C power, C major (need third), C minor (need third), etc.
-- Best fit: C power chord (only root required)
+**Beat 1**: C4 sounds alone → no chord (need ≥ 2 pitch classes)
 
-**Beat 2**: E4 sounds, C4 may still decay
-- E salience: 1.0 × 0.5 = 0.5
-- C4 recency: decaying
-- Candidates: C major (has root C, third E)
-- Best fit: C major (arpeggiation from beat 1)
+**Beat 2**: E4 sounds, C4 contributes with decay 0.6
+- C4: salience = base × 0.6 (decayed from previous beat)
+- E4: salience = base × 1.0 (current beat)
+- Candidates: C major (root C present, third E present)
+- Best fit: C major
 
-**Beat 3**: G4 sounds
-- G salience: 1.0 × 0.75 = 0.75
-- Best fit: C major continues (now complete triad across beats)
+**Beat 3**: G4 sounds, E4 contributes with decay 0.6
+- E4: decayed
+- G4: current beat
+- Candidates: C major (if root still in range), Em, etc.
+- DP chooses based on global optimisation
 
 **Beat 4**: C5 sounds
-- Strong beat, octave reinforcement
-- Best fit: C major confirmed
+- Similar lookback logic
 
-**Result**: Entire subject implies C major throughout (arpeggiated).
-
----
-
-## Future Extensions
-
-- Voice-leading analysis between successive chords
-- Secondary dominant detection
-- Modal mixture recognition
-- Sequence pattern detection in harmonic progressions
+**Result**: Subject implies C major arpeggiation across most beats.
