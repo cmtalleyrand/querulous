@@ -2,6 +2,7 @@ import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName, isDuringRest } from './formatter';
 import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis';
+import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -332,8 +333,18 @@ export function checkParallelPerfects(sims, formatter) {
 
 /**
  * Analyze contour independence between two voices
+ * Thresholds adjusted for small note counts (<=8 notes)
  */
 export function testContourIndependence(subject, cs, formatter) {
+  // Get adjusted thresholds based on note count
+  const noteCount = Math.min(subject.length, cs.length);
+  const thresholds = getAdjustedThresholds(noteCount);
+
+  // Adjust ratio thresholds for small note counts
+  // With few motions, ratios are less meaningful
+  const parallelWarningThreshold = noteCount <= 8 ? 0.7 : 0.6;
+  const contraryGoodThreshold = noteCount <= 8 ? 0.25 : 0.35;
+
   const sMotions = [];
   const csMotions = [];
 
@@ -352,13 +363,13 @@ export function testContourIndependence(subject, cs, formatter) {
 
   for (const sm of sMotions) {
     for (const cm of csMotions) {
-      if (Math.abs(sm.time - cm.time) <= 0.25) {
+      if (Math.abs(sm.time - cm.time) <= thresholds.MOTION_SIMILARITY_WINDOW) {
         if (sm.direction === 0 || cm.direction === 0) {
           oblique++;
         } else if (sm.direction === cm.direction) {
           if (sm.semitones === cm.semitones) {
             parallel++;
-            if (sm.semitones >= 5) {
+            if (sm.semitones > ANALYSIS_THRESHOLDS.LEAP_THRESHOLD) {
               details.push({ description: `Parallel leaps at ${formatter.formatBeat(sm.time)}` });
             }
           } else {
@@ -379,9 +390,9 @@ export function testContourIndependence(subject, cs, formatter) {
   const obliqueRatio = total > 0 ? oblique / total : 0;
 
   let assessment = 'Independent contours';
-  if (total > 0 && (parallel + similar) / total > 0.6) {
+  if (total > 0 && (parallel + similar) / total > parallelWarningThreshold) {
     assessment = 'Voices move together frequently—consider more contrary motion';
-  } else if (contraryRatio > 0.35) {
+  } else if (contraryRatio > contraryGoodThreshold) {
     assessment = 'Good balance of motion types';
   }
 
@@ -396,11 +407,145 @@ export function testContourIndependence(subject, cs, formatter) {
     obliqueRatio,
     details,
     assessment,
+    noteCount, // Include for transparency
+  };
+}
+
+/**
+ * Analyze melodic contour characteristics of a subject
+ * Separated from harmonic analysis for proper separation of concerns
+ */
+export function testMelodicContour(subject, formatter) {
+  if (!subject.length) return { error: 'No notes' };
+
+  const meter = formatter.meter;
+  const observations = [];
+  const { LEAP_THRESHOLD, STEP_MAX, FOCAL_POINT_MIDDLE_START, FOCAL_POINT_MIDDLE_END,
+          FOCAL_POINT_MIN_RANGE, STRONG_BEAT_WEIGHT } = ANALYSIS_THRESHOLDS;
+
+  // 1. Leap recovery: penalize unrecovered leaps, small bonus for good recovery
+  let leapRecoveries = 0;
+  let unresolvedLeaps = 0;
+  for (let i = 1; i < subject.length - 1; i++) {
+    const interval1 = subject[i].pitch - subject[i - 1].pitch;
+    const interval2 = subject[i + 1].pitch - subject[i].pitch;
+    const absInt1 = Math.abs(interval1);
+
+    // Check if first interval is a leap
+    if (absInt1 > LEAP_THRESHOLD) {
+      const absInt2 = Math.abs(interval2);
+      // Recovery = step in opposite direction
+      const isOppositeDirection = (interval1 > 0 && interval2 < 0) || (interval1 < 0 && interval2 > 0);
+      const isStep = absInt2 <= STEP_MAX;
+
+      if (isStep && isOppositeDirection) {
+        leapRecoveries++;
+      } else if (absInt2 > LEAP_THRESHOLD) {
+        // Two consecutive leaps without recovery
+        unresolvedLeaps++;
+      }
+    }
+  }
+
+  let leapRecoveryScore = 0;
+  if (leapRecoveries > 0 && unresolvedLeaps === 0) {
+    leapRecoveryScore = 0.25;
+    observations.push({
+      type: 'strength',
+      description: `Good leap recovery (${leapRecoveries} recovered leap${leapRecoveries > 1 ? 's' : ''})`,
+    });
+  } else if (unresolvedLeaps > 0) {
+    observations.push({
+      type: 'consideration',
+      description: `${unresolvedLeaps} unrecovered leap${unresolvedLeaps > 1 ? 's' : ''}`,
+    });
+  }
+
+  // 2. Focal point/climax detection: bonus up to +3.0 based on clarity
+  const pitches = subject.map(n => n.pitch);
+  const maxPitch = Math.max(...pitches);
+  const minPitch = Math.min(...pitches);
+  const range = maxPitch - minPitch;
+
+  const highIndices = pitches.map((p, i) => p === maxPitch ? i : -1).filter(i => i >= 0);
+  const lowIndices = pitches.map((p, i) => p === minPitch ? i : -1).filter(i => i >= 0);
+
+  let focalPointScore = 0;
+  let focalPointDetails = null;
+
+  // Check for clear high point (climax)
+  if (highIndices.length === 1 && range >= FOCAL_POINT_MIN_RANGE) {
+    const idx = highIndices[0];
+    const relativePosition = idx / (subject.length - 1);
+    const isInMiddle = relativePosition >= FOCAL_POINT_MIDDLE_START && relativePosition <= FOCAL_POINT_MIDDLE_END;
+    const weight = metricWeight(subject[idx].onset, meter);
+    const isMetricallyStrong = weight >= STRONG_BEAT_WEIGHT;
+
+    if (isInMiddle) {
+      focalPointScore = 1.5;
+      if (isMetricallyStrong) focalPointScore += 1.0;
+      if (range >= 12) focalPointScore += 0.5;
+      focalPointScore = Math.min(focalPointScore, 3.0);
+
+      focalPointDetails = {
+        type: 'high',
+        pitch: maxPitch,
+        position: idx,
+        relativePosition,
+        metricallyStrong: isMetricallyStrong,
+        range,
+      };
+
+      const strengthLevel = focalPointScore >= 2.5 ? 'excellent' : focalPointScore >= 2.0 ? 'good' : 'present';
+      observations.push({
+        type: 'strength',
+        description: `Clear melodic climax (${strengthLevel}): high point at ${formatter.formatBeat(subject[idx].onset)}`,
+      });
+    }
+  }
+
+  // If no clear high point climax, check for expressive low point
+  if (focalPointScore === 0 && lowIndices.length === 1 && range >= FOCAL_POINT_MIN_RANGE) {
+    const idx = lowIndices[0];
+    const relativePosition = idx / (subject.length - 1);
+    const isInMiddle = relativePosition >= FOCAL_POINT_MIDDLE_START && relativePosition <= FOCAL_POINT_MIDDLE_END;
+    const weight = metricWeight(subject[idx].onset, meter);
+    const isMetricallyStrong = weight >= STRONG_BEAT_WEIGHT;
+
+    if (isInMiddle) {
+      focalPointScore = 0.5;
+      if (isMetricallyStrong) focalPointScore += 0.5;
+      focalPointScore = Math.min(focalPointScore, 1.5);
+
+      focalPointDetails = {
+        type: 'low',
+        pitch: minPitch,
+        position: idx,
+        relativePosition,
+        metricallyStrong: isMetricallyStrong,
+      };
+
+      observations.push({
+        type: 'info',
+        description: `Expressive low point at ${formatter.formatBeat(subject[idx].onset)}`,
+      });
+    }
+  }
+
+  return {
+    leapRecoveryScore,
+    leapRecoveries,
+    unresolvedLeaps,
+    focalPointScore,
+    focalPointDetails,
+    range,
+    observations,
   };
 }
 
 /**
  * Analyze harmonic implications of a subject
+ * Now focused purely on harmony: dominant arrival and chord analysis
  */
 export function testHarmonicImplication(subject, tonic, mode, formatter) {
   if (!subject.length) return { error: 'No notes' };
@@ -409,36 +554,7 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
   const degrees = subject.map((n) => n.scaleDegree);
   const observations = [];
 
-  // Opening analysis
-  const opening = degrees[0];
-  const isTonicChordTone = [[1, 0], [3, 0], [5, 0]].some(
-    ([d, a]) => opening.degree === d && opening.alteration === a
-  );
-  observations.push({
-    type: isTonicChordTone ? 'strength' : 'consideration',
-    description: isTonicChordTone
-      ? `Opens on ${opening}, a tonic chord tone`
-      : `Opens on ${opening}, not a tonic chord tone`,
-  });
-
-  // Terminal analysis
-  const terminal = degrees[degrees.length - 1];
-  const ti =
-    {
-      1: { q: 'strong', d: 'Ends on ^1—clean I→V' },
-      2: { q: 'good', d: 'Ends on ^2—pre-dominant' },
-      5: { q: 'ambiguous', d: 'Ends on ^5—V→V stasis' },
-      7: { q: 'strong', d: 'Ends on ^7—dominant pull' },
-      4: { q: 'workable', d: 'Ends on ^4' },
-      3: { q: 'workable', d: 'Ends on ^3' },
-    }[terminal.degree] || { q: 'unusual', d: `Ends on ${terminal}` };
-
-  observations.push({
-    type: ti.q === 'strong' ? 'strength' : ti.q === 'ambiguous' ? 'consideration' : 'info',
-    description: ti.d,
-  });
-
-  // Dominant arrival
+  // Dominant arrival detection
   let domArr = null;
   const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
 
@@ -465,145 +581,21 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     });
   }
 
-  // Melodic contour analysis: leap recovery and focal point
-
-  // 1. Leap recovery: penalize unrecovered leaps, small bonus for good recovery
-  let leapRecoveries = 0;
-  let unresolvedLeaps = 0;
-  for (let i = 1; i < subject.length - 1; i++) {
-    const interval1 = subject[i].pitch - subject[i - 1].pitch;
-    const interval2 = subject[i + 1].pitch - subject[i].pitch;
-    const absInt1 = Math.abs(interval1);
-
-    // Check if first interval is a leap (>4 semitones)
-    if (absInt1 > 4) {
-      const absInt2 = Math.abs(interval2);
-      // Recovery = step (1-2 semitones) in opposite direction
-      const isOppositeDirection = (interval1 > 0 && interval2 < 0) || (interval1 < 0 && interval2 > 0);
-      const isStep = absInt2 <= 2;
-
-      if (isStep && isOppositeDirection) {
-        leapRecoveries++;
-      } else if (absInt2 > 4) {
-        // Two consecutive leaps without recovery
-        unresolvedLeaps++;
-      }
-    }
-  }
-
-  let leapRecoveryScore = 0;
-  if (leapRecoveries > 0 && unresolvedLeaps === 0) {
-    leapRecoveryScore = 0.25; // User specified +0.25 instead of +0.5
-    observations.push({
-      type: 'strength',
-      description: `Good leap recovery (${leapRecoveries} recovered leap${leapRecoveries > 1 ? 's' : ''})`,
-    });
-  } else if (unresolvedLeaps > 0) {
-    observations.push({
-      type: 'consideration',
-      description: `${unresolvedLeaps} unrecovered leap${unresolvedLeaps > 1 ? 's' : ''}`,
-    });
-  }
-
-  // 2. Focal point/climax detection: bonus up to +3.0 based on clarity
-  // A clear focal point is: the single highest (or lowest) pitch, metrically strong,
-  // in the middle portion of the subject
-  // NOTE: approach by step or leap doesn't matter - a dramatic leap to climax is just as valid
-  const pitches = subject.map(n => n.pitch);
-  const maxPitch = Math.max(...pitches);
-  const minPitch = Math.min(...pitches);
-  const range = maxPitch - minPitch;
-
-  // Find all instances of highest and lowest pitch
-  const highIndices = pitches.map((p, i) => p === maxPitch ? i : -1).filter(i => i >= 0);
-  const lowIndices = pitches.map((p, i) => p === minPitch ? i : -1).filter(i => i >= 0);
-
-  let focalPointScore = 0;
-  let focalPointDetails = null;
-
-  // Check for clear high point (climax)
-  if (highIndices.length === 1 && range >= 5) {
-    const idx = highIndices[0];
-    const relativePosition = idx / (subject.length - 1);
-    const isInMiddle = relativePosition >= 0.25 && relativePosition <= 0.85;
-    const weight = metricWeight(subject[idx].onset, meter);
-    const isMetricallyStrong = weight >= 0.5;
-
-    // Calculate focal point score (up to +3.0)
-    // - Base: single clear high point in middle = +1.5
-    // - Metrically strong = +1.0
-    // - Good range (>octave) = +0.5
-    if (isInMiddle) {
-      focalPointScore = 1.5; // Base: clear single high point in middle
-      if (isMetricallyStrong) focalPointScore += 1.0; // Bonus: metrically strong
-      if (range >= 12) focalPointScore += 0.5; // Bonus: large range (octave+)
-      focalPointScore = Math.min(focalPointScore, 3.0);
-
-      focalPointDetails = {
-        type: 'high',
-        pitch: maxPitch,
-        position: idx,
-        relativePosition,
-        metricallyStrong: isMetricallyStrong,
-        range,
-      };
-
-      const strengthLevel = focalPointScore >= 2.5 ? 'excellent' : focalPointScore >= 2.0 ? 'good' : 'present';
-      observations.push({
-        type: 'strength',
-        description: `Clear melodic climax (${strengthLevel}): high point at ${formatter.formatBeat(subject[idx].onset)}`,
-      });
-    }
-  }
-
-  // If no clear high point climax, check for expressive low point
-  if (focalPointScore === 0 && lowIndices.length === 1 && range >= 5) {
-    const idx = lowIndices[0];
-    const relativePosition = idx / (subject.length - 1);
-    const isInMiddle = relativePosition >= 0.25 && relativePosition <= 0.85;
-    const weight = metricWeight(subject[idx].onset, meter);
-    const isMetricallyStrong = weight >= 0.5;
-
-    if (isInMiddle) {
-      focalPointScore = 0.5; // Low point focal is less common but valid
-      if (isMetricallyStrong) focalPointScore += 0.5;
-      focalPointScore = Math.min(focalPointScore, 1.5);
-
-      focalPointDetails = {
-        type: 'low',
-        pitch: minPitch,
-        position: idx,
-        relativePosition,
-        metricallyStrong: isMetricallyStrong,
-      };
-
-      observations.push({
-        type: 'info',
-        description: `Expressive low point at ${formatter.formatBeat(subject[idx].onset)}`,
-      });
-    }
-  }
-
-  // 3. Chord/Harmony analysis: analyze what harmonies the melody implies
-  // Uses the analyzeChords function from harmonicAnalysis.js
+  // Chord/Harmony analysis
   let chordAnalysis = null;
   let harmonicClarityScore = 0;
 
   try {
-    // Convert MIDI tonic to pitch class (0-11)
     const tonicPitchClass = typeof tonic === 'number' ? tonic % 12 : 0;
     chordAnalysis = analyzeChords(subject, meter, tonicPitchClass);
 
     if (chordAnalysis && chordAnalysis.summary) {
       const { harmonicClarity, startsOnTonic, endsOnTonic, impliesDominant, uniqueHarmonies } = chordAnalysis.summary;
 
-      // Score based on harmonic clarity (0-1 scale from analyzeChords)
-      // High clarity = consistent chord implications, scores 0 to +2
       harmonicClarityScore = harmonicClarity >= 0.8 ? 2.0 :
                             harmonicClarity >= 0.6 ? 1.0 :
                             harmonicClarity >= 0.4 ? 0.5 : 0;
 
-      // Bonus for strong tonal anchors
       if (startsOnTonic && endsOnTonic) {
         harmonicClarityScore += 0.5;
         observations.push({
@@ -617,7 +609,6 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
         });
       }
 
-      // Note dominant implication
       if (impliesDominant) {
         observations.push({
           type: 'info',
@@ -625,7 +616,6 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
         });
       }
 
-      // Observation about harmonic clarity
       if (harmonicClarity >= 0.7) {
         observations.push({
           type: 'strength',
@@ -639,17 +629,11 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
       }
     }
   } catch (e) {
-    // Chord analysis failed - not critical
     console.warn('Chord analysis failed:', e);
   }
 
   return {
-    opening: { degree: opening.toString(), isTonicChordTone },
-    terminal: { degree: terminal.toString(), ...ti },
     dominantArrival: domArr,
-    leapRecoveryScore,
-    focalPointScore,
-    focalPointDetails,
     chordAnalysis,
     harmonicClarityScore,
     observations,
