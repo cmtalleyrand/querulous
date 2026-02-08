@@ -7,16 +7,13 @@ import { metricWeight } from './formatter';
 import { ANALYSIS_THRESHOLDS } from './constants';
 
 // Complete chord vocabulary with semitone intervals
+// Note: sus2/sus4 removed - suspensions are non-chord tones handled separately
 const CHORD_TYPES = {
   // Triads (ordered by preference/simplicity)
   major: { intervals: [0, 4, 7], required: [0, 4], complexity: 1 },
   minor: { intervals: [0, 3, 7], required: [0, 3], complexity: 1 },
   diminished: { intervals: [0, 3, 6], required: [0, 3, 6], complexity: 2 },
   augmented: { intervals: [0, 4, 8], required: [0, 4, 8], complexity: 2 },
-
-  // Suspended
-  sus4: { intervals: [0, 5, 7], required: [0, 5], complexity: 2 },
-  sus2: { intervals: [0, 2, 7], required: [0, 2], complexity: 2 },
 
   // Seventh chords
   dominant_7: { intervals: [0, 4, 7, 10], required: [0, 4, 10], complexity: 3 },
@@ -30,6 +27,11 @@ const CHORD_TYPES = {
   major_6: { intervals: [0, 4, 7, 9], required: [0, 4, 9], complexity: 3 },
   minor_6: { intervals: [0, 3, 7, 9], required: [0, 3, 9], complexity: 3 },
 };
+
+// Bass position multipliers
+const BASS_ROOT_BONUS = 1.1;      // Bonus when lowest note is root
+const BASS_FIFTH_PENALTY = 0.9;   // Penalty when lowest note is fifth
+const BASS_SEVENTH_PENALTY = 0.8; // Penalty when lowest note is seventh
 
 /**
  * Get the metric multiplier for salience calculation
@@ -92,6 +94,10 @@ function calculateSalience(note, beatTime, meter, prevNote, decay = 1.0) {
 
 /**
  * Preprocess notes: split long notes at beat boundaries, merge repeated pitches
+ *
+ * Important: We do NOT merge segments from sustained notes (isSegment=true).
+ * A whole note spanning 4 beats should contribute to each beat's chord analysis.
+ * We only merge truly repeated notes (separate attacks on same pitch).
  */
 function preprocessNotes(notes, beatUnit) {
   const processed = [];
@@ -103,6 +109,7 @@ function preprocessNotes(notes, beatUnit) {
     // Find all beat boundaries this note crosses
     const startBeat = Math.floor(note.onset / beatUnit) * beatUnit;
     let currentOnset = note.onset;
+    const spansMultipleBeats = noteEnd > startBeat + beatUnit;
 
     for (let beat = startBeat; beat < noteEnd; beat += beatUnit) {
       const nextBeat = beat + beatUnit;
@@ -115,7 +122,8 @@ function preprocessNotes(notes, beatUnit) {
           onset: segmentStart,
           duration: segmentEnd - segmentStart,
           originalNote: note,
-          isSegment: note.duration > beatUnit,
+          isSegment: spansMultipleBeats,
+          originalOnset: note.onset, // Keep track of true onset for sustained notes
         });
       }
       currentOnset = segmentEnd;
@@ -125,14 +133,15 @@ function preprocessNotes(notes, beatUnit) {
   // Sort by onset
   processed.sort((a, b) => a.onset - b.onset);
 
-  // Merge consecutive notes with same pitch (repeated notes become one longer note)
+  // Merge consecutive notes with same pitch ONLY if they are truly repeated attacks
+  // (not segments from a sustained note)
   const merged = [];
   for (const note of processed) {
     const last = merged[merged.length - 1];
-    if (last && last.pitch === note.pitch) {
+    if (last && last.pitch === note.pitch && !note.isSegment && !last.isSegment) {
       const gap = note.onset - (last.onset + last.duration);
       if (gap < 0.01) {
-        // Merge: extend duration
+        // Merge truly repeated notes (separate attacks)
         last.duration = (note.onset + note.duration) - last.onset;
         continue;
       }
@@ -215,6 +224,7 @@ function getChordMemberWeight(interval) {
 /**
  * Score a chord candidate against beat notes
  * Returns total weighted salience of matching notes minus penalty for non-chord tones
+ * Includes bass position scoring: bonus for root in bass, penalty for 5th/7th in bass
  */
 function scoreChordCandidate(root, chordType, beatNotes) {
   const { NON_CHORD_TONE_PENALTY } = ANALYSIS_THRESHOLDS;
@@ -223,6 +233,16 @@ function scoreChordCandidate(root, chordType, beatNotes) {
   let unmatchedSalience = 0;
   const matches = [];
   const nonChordTones = [];
+
+  // Find the lowest note for bass position scoring
+  let lowestPitch = Infinity;
+  let lowestInterval = null;
+  for (const note of beatNotes) {
+    if (note.pitch < lowestPitch) {
+      lowestPitch = note.pitch;
+      lowestInterval = ((note.pitchClass - root) + 12) % 12;
+    }
+  }
 
   for (const note of beatNotes) {
     const interval = ((note.pitchClass - root) + 12) % 12;
@@ -249,8 +269,24 @@ function scoreChordCandidate(root, chordType, beatNotes) {
     }
   }
 
-  // Final score = matched salience - penalty for non-chord tones
-  const score = matchedSalience - (unmatchedSalience * NON_CHORD_TONE_PENALTY);
+  // Base score = matched salience - penalty for non-chord tones
+  let score = matchedSalience - (unmatchedSalience * NON_CHORD_TONE_PENALTY);
+
+  // Apply bass position multiplier
+  let bassMultiplier = 1.0;
+  if (lowestInterval !== null) {
+    if (lowestInterval === 0) {
+      // Root in bass - bonus
+      bassMultiplier = BASS_ROOT_BONUS;
+    } else if (lowestInterval === 7) {
+      // Fifth in bass - penalty
+      bassMultiplier = BASS_FIFTH_PENALTY;
+    } else if (lowestInterval === 10 || lowestInterval === 11) {
+      // Seventh in bass - larger penalty
+      bassMultiplier = BASS_SEVENTH_PENALTY;
+    }
+  }
+  score *= bassMultiplier;
 
   return {
     score,
@@ -259,6 +295,8 @@ function scoreChordCandidate(root, chordType, beatNotes) {
     matches,
     nonChordTones,
     matchCount: matches.length,
+    bassMultiplier,
+    lowestInterval,
   };
 }
 
@@ -506,8 +544,6 @@ function formatChordType(type) {
     minor: 'm',
     diminished: 'dim',
     augmented: 'aug',
-    sus2: 'sus2',
-    sus4: 'sus4',
     major_6: '6',
     minor_6: 'm6',
     major_7: 'maj7',
