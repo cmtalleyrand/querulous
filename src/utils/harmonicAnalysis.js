@@ -561,9 +561,11 @@ function formatChordType(type) {
  * @param {Object[]} notes - Array of NoteEvent objects
  * @param {number[]} meter - Time signature [num, denom]
  * @param {number} tonic - Tonic pitch class (0-11)
+ * @param {Object} options - Optional settings
+ * @param {Set<string>} options.suspensions - Set of "pitch-onset" keys for suspension notes to exclude
  * @returns {Object} Harmonic analysis results
  */
-export function analyzeHarmonicImplication(notes, meter, tonic = 0) {
+export function analyzeHarmonicImplication(notes, meter, tonic = 0, options = {}) {
   if (!meter || !Array.isArray(meter) || meter.length < 2) {
     throw new Error(`analyzeHarmonicImplication: meter is invalid (${JSON.stringify(meter)}). Must pass [numerator, denominator] array.`);
   }
@@ -571,12 +573,18 @@ export function analyzeHarmonicImplication(notes, meter, tonic = 0) {
     return { chords: [], summary: { error: 'No notes' } };
   }
 
+  const { suspensions = new Set() } = options;
+
   // Calculate beat unit
   const isCompound = meter[1] >= 8 && meter[0] % 3 === 0;
   const beatUnit = isCompound ? 1.5 : 1;
 
-  // Preprocess notes
-  const processedNotes = preprocessNotes(notes, beatUnit);
+  // Preprocess notes, excluding suspensions
+  const filteredNotes = notes.filter(n => {
+    const key = `${n.pitch}-${n.onset}`;
+    return !suspensions.has(key);
+  });
+  const processedNotes = preprocessNotes(filteredNotes, beatUnit);
 
   // Calculate number of beats
   const lastNote = notes[notes.length - 1];
