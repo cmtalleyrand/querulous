@@ -434,7 +434,7 @@ function approachC(segments, numBeats) {
           const noteBeat = Math.floor(n.onset);
           if (noteBeat < p1info.length && p1info[noteBeat].chordKey === candKey) return true;
           // Rule B: onset >= boundary
-          if (n.onset >= boundary) return true;
+          if (n.onset > boundary) return true;
           return false;
         });
 
@@ -514,7 +514,7 @@ function approachD(segments, numBeats) {
 
           const filtered = same
             ? allNotes
-            : allNotes.filter(n => n.onset >= prevBoundary);
+            : allNotes.filter(n => n.onset > prevBoundary);
 
           const result = scoreChord(root, typeName, filtered);
           if (!result) continue;
