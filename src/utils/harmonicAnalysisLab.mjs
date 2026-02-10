@@ -297,49 +297,146 @@ function backwardDP(beatData) {
   return dp;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// APPROACH A : Bidirectional lookback
-//
-// At each beat, collect notes from BOTH past and future, future decayed by
-// forward distance. Then run standard forward DP over these richer collections.
-// The DP itself is unchanged; only the note collection per beat is wider.
-// ═══════════════════════════════════════════════════════════════════════════════
+// ─── path-dependent DP (shared by approaches A and D) ────────────────────────
 
-function approachA(segments, numBeats) {
-  const beatData = [];
+/**
+ * Path-dependent forward Viterbi DP.
+ * State = (chordKey, boundary) where boundary = max onset of notes matched
+ * by the current chord.  Transitioning to a DIFFERENT chord filters notes
+ * to onset > prevBoundary.  Same chord: all notes available.
+ *
+ * collectFn(segments, beat) returns the note set visible at that beat.
+ * Use collectPast for past-only, collectBidirectional for past+future.
+ */
+function pathDependentDP(segments, numBeats, collectFn) {
+  const dp = Array.from({ length: numBeats }, () => new Map());
+
   for (let b = 0; b < numBeats; b++) {
-    const notes = collectBidirectional(segments, b);
-    const cands = findCandidates(notes);
-    beatData.push(cands.map(c => ({ key: `${c.root}-${c.type}`, ...c })));
+    const allNotes = collectFn(segments, b);
+
+    if (b === 0) {
+      dp[0].set('null|-Inf', { total: 0, prevSK: null, chord: null, chain: 0, boundary: -Infinity });
+      const cands = findCandidates(allNotes);
+      for (const c of cands) {
+        const bnd = c.matched.length > 0 ? Math.max(...c.matched.map(m => m.onset)) : -Infinity;
+        const sk = `${c.root}-${c.type}|${bnd}`;
+        const t = c.score - c.complexity * COMPLEXITY_PENALTY;
+        const ex = dp[0].get(sk);
+        if (!ex || t > ex.total) {
+          dp[0].set(sk, { total: t, prevSK: null, chord: c, chain: 1, boundary: bnd });
+        }
+      }
+      continue;
+    }
+
+    const updates = new Map();
+
+    for (const [prevSK, prevState] of dp[b - 1]) {
+      const prevChord = prevState.chord;
+      const prevBoundary = prevState.boundary;
+      const prevCK = prevChord ? `${prevChord.root}-${prevChord.type}` : 'null';
+
+      // Option: null (carry forward best predecessor)
+      {
+        const sk = `null|${prevBoundary}`;
+        const ex = updates.get(sk);
+        if (!ex || prevState.total > ex.total) {
+          updates.set(sk, { total: prevState.total, prevSK, chord: null, chain: 0, boundary: prevBoundary });
+        }
+      }
+
+      // Option: each chord candidate
+      const pcsAll = new Set(allNotes.map(n => n.pitchClass));
+      for (let root = 0; root < 12; root++) {
+        if (!pcsAll.has(root)) continue;
+        for (const [typeName] of Object.entries(CHORD_TYPES)) {
+          const candCK = `${root}-${typeName}`;
+          const same = (candCK === prevCK);
+
+          // Same chord: all notes available.  Different chord: only onset > prevBoundary.
+          const filtered = same
+            ? allNotes
+            : allNotes.filter(n => n.onset > prevBoundary);
+
+          const result = scoreChord(root, typeName, filtered);
+          if (!result) continue;
+
+          const chain = same ? prevState.chain + 1 : 1;
+          const t = prevState.total + result.score - result.complexity * COMPLEXITY_PENALTY;
+          const bnd = result.matched.length > 0 ? Math.max(...result.matched.map(m => m.onset)) : prevBoundary;
+          const sk = `${candCK}|${bnd}`;
+
+          const ex = updates.get(sk);
+          if (!ex || t > ex.total) {
+            updates.set(sk, { total: t, prevSK, chord: { key: candCK, root, type: typeName, ...result }, chain, boundary: bnd });
+          }
+        }
+      }
+    }
+
+    dp[b] = updates;
   }
-  const dp = forwardDP(beatData);
-  return { dp, path: backtrack(dp), beatData };
+
+  // Backtrack
+  const n = numBeats;
+  let bestSK = null, bestTotal = -Infinity;
+  for (const [sk, s] of dp[n - 1]) { if (s.total > bestTotal) { bestTotal = s.total; bestSK = sk; } }
+  const path = [];
+  let cur = bestSK;
+  for (let b = n - 1; b >= 0; b--) {
+    const s = dp[b].get(cur);
+    path.unshift({ beat: b, key: s.chord ? `${s.chord.root}-${s.chord.type}` : 'null', chord: s.chord, total: s.total, chain: s.chain, boundary: s.boundary });
+    cur = s.prevSK;
+  }
+
+  return { dp, path };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// APPROACH B : Forward + Backward DP
+// APPROACH A : Bidirectional lookback + path-dependent boundary
 //
-// Run forward DP (past-only notes) and backward DP (past-only notes) separately.
-// For each beat, combine: for each chord, the best combined score is
-//   max over all forward paths ending at (beat, chord) + backward paths starting
-//   at (beat, chord) — minus the chord's own score (counted in both).
-// This lets the forward pass "know" the future indirectly.
+// At each beat, collect notes from BOTH past and future (future decayed by
+// distance).  DP enforces note exclusivity: different chord at next beat
+// can only use notes with onset > boundary (max onset of previous chord's
+// matched notes).  Same chord retains all notes.
+//
+// Difference from D: sees future notes (decayed), so chords like Cmaj7 can
+// score well early because B is already visible.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function approachA(segments, numBeats) {
+  return pathDependentDP(segments, numBeats, collectBidirectional);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// APPROACH B : Forward + Backward combined two-pass
+//
+// Pass 1: Run forward DP AND backward DP (both unconstrained, past-only notes).
+// At each beat, pick the chord maximising fwd.total + bwd.total − localScore.
+// This gives a better initial assignment than forward-only (approach C) because
+// the backward pass provides future context.
+//
+// Pass 2: Re-run constrained DP using pass-1 assignments for boundary filtering
+// (same logic as approach C's pass 2).
+//
+// Difference from C: pass 1 uses bidirectional information (via fwd+bwd combine)
+// rather than forward-only.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function approachB(segments, numBeats) {
-  const beatData = [];
+  // Pass 1: unconstrained forward + backward, combined
+  const p1BeatData = [];
   for (let b = 0; b < numBeats; b++) {
     const notes = collectPast(segments, b);
     const cands = findCandidates(notes);
-    beatData.push(cands.map(c => ({ key: `${c.root}-${c.type}`, ...c })));
+    p1BeatData.push(cands.map(c => ({ key: `${c.root}-${c.type}`, ...c })));
   }
 
-  const fwd = forwardDP(beatData);
-  const bwd = backwardDP(beatData);
+  const fwd = forwardDP(p1BeatData);
+  const bwd = backwardDP(p1BeatData);
 
-  // Combine: at each beat, pick the chord that maximises fwd[b][chord].total + bwd[b][chord].total - chordScore
-  // (chordScore is counted in both, so subtract once)
-  const path = [];
+  // Combined pass-1 path: at each beat, pick chord maximising fwd + bwd - local
+  const p1path = [];
   for (let b = 0; b < numBeats; b++) {
     let bestKey = 'null', bestCombined = -Infinity, bestChord = null;
     const fwdMap = fwd[b];
@@ -348,18 +445,65 @@ function approachB(segments, numBeats) {
     for (const [key, fs] of fwdMap) {
       const bs = bwdMap.get(key);
       if (!bs) continue;
-      const chordScore = fs.chord ? fs.chord.score - fs.chord.complexity * COMPLEXITY_PENALTY : 0;
-      const combined = fs.total + bs.total - chordScore;
+      const localScore = fs.chord ? fs.chord.score - fs.chord.complexity * COMPLEXITY_PENALTY : 0;
+      const combined = fs.total + bs.total - localScore;
       if (combined > bestCombined) {
         bestCombined = combined;
         bestKey = key;
         bestChord = fs.chord;
       }
     }
-    path.push({ beat: b, key: bestKey, chord: bestChord, total: bestCombined, fwdTotal: fwdMap.get(bestKey)?.total, bwdTotal: bwdMap.get(bestKey)?.total });
+    p1path.push({ beat: b, key: bestKey, chord: bestChord, total: bestCombined });
   }
 
-  return { fwd, bwd, path, beatData };
+  // Build pass-1 info for boundary filtering
+  const p1info = p1path.map(p => {
+    if (!p.chord) return { chordKey: 'null', matchedOnsets: [] };
+    return {
+      chordKey: p.key,
+      matchedOnsets: p.chord.matched.map(m => m.onset),
+    };
+  });
+
+  // Pass 2: constrained DP (same logic as approach C's pass 2)
+  const p2BeatData = [];
+  for (let b = 0; b < numBeats; b++) {
+    const allNotes = collectPast(segments, b);
+    const pcs = new Set(allNotes.map(n => n.pitchClass));
+    const cands = [];
+
+    for (let root = 0; root < 12; root++) {
+      if (!pcs.has(root)) continue;
+      for (const [typeName] of Object.entries(CHORD_TYPES)) {
+        const candKey = `${root}-${typeName}`;
+
+        // Boundary: max onset of notes matched by pass-1 chords ≠ D, on beats < b
+        let boundary = -Infinity;
+        for (let pb = 0; pb < b; pb++) {
+          if (p1info[pb].chordKey === candKey || p1info[pb].chordKey === 'null') continue;
+          for (const onset of p1info[pb].matchedOnsets) {
+            if (onset > boundary) boundary = onset;
+          }
+        }
+
+        // Filter: rule A (same chord in pass 1) or rule B (onset > boundary)
+        const filtered = allNotes.filter(n => {
+          const noteBeat = Math.floor(n.onset);
+          if (noteBeat < p1info.length && p1info[noteBeat].chordKey === candKey) return true;
+          if (n.onset > boundary) return true;
+          return false;
+        });
+
+        const result = scoreChord(root, typeName, filtered);
+        if (result) cands.push({ key: candKey, root, type: typeName, ...result });
+      }
+    }
+    cands.sort((a, b) => b.score - a.score);
+    p2BeatData.push(cands);
+  }
+
+  const p2dp = forwardDP(p2BeatData);
+  return { p1path, fwd, bwd, p2dp, path: backtrack(p2dp), p1BeatData, p2BeatData };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -451,103 +595,19 @@ function approachC(segments, numBeats) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// APPROACH D : Single-pass path-dependent boundary
+// APPROACH D : Single-pass path-dependent boundary (past-only)
 //
-// The DP state is (chordKey, boundary) where boundary is the max onset of
-// notes matched by the current chord.  When the DP transitions to a DIFFERENT
-// chord at the next beat, only notes with onset >= boundary are available.
-// Same chord (rule A): all notes available.
+// Same algorithm as pathDependentDP but with past-only note collection.
+// This is the "exact" single-pass version: every live DP path carries its own
+// boundary, so different paths through the same beat have different available
+// note sets and different candidate scores.
 //
-// This is the exact version of approach C — every live path carries its own
-// boundary, so different paths through the same beat can have different
-// available note sets and therefore different candidate scores.
-//
-// State space: O(beats × chords × distinct_boundaries).
+// Difference from A: only sees past notes (no future lookahead).
+// Difference from B,C: exact boundary per path (no approximation from pass 1).
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function approachD(segments, numBeats) {
-  // dp[b] = Map<stateKey, {total, prevSK, chord, chain, boundary}>
-  // stateKey = `${chordKey}|${boundary}`
-  const dp = Array.from({ length: numBeats }, () => new Map());
-
-  for (let b = 0; b < numBeats; b++) {
-    const allNotes = collectPast(segments, b);
-
-    if (b === 0) {
-      dp[0].set('null|-Inf', { total: 0, prevSK: null, chord: null, chain: 0, boundary: -Infinity });
-      const cands = findCandidates(allNotes);
-      for (const c of cands) {
-        const bnd = c.matched.length > 0 ? Math.max(...c.matched.map(m => m.onset)) : -Infinity;
-        const sk = `${c.root}-${c.type}|${bnd}`;
-        const t = c.score - c.complexity * COMPLEXITY_PENALTY;
-        const ex = dp[0].get(sk);
-        if (!ex || t > ex.total) {
-          dp[0].set(sk, { total: t, prevSK: null, chord: c, chain: 1, boundary: bnd });
-        }
-      }
-      continue;
-    }
-
-    const updates = new Map();
-
-    for (const [prevSK, prevState] of dp[b - 1]) {
-      const prevChord = prevState.chord;
-      const prevBoundary = prevState.boundary;
-      const prevCK = prevChord ? `${prevChord.root}-${prevChord.type}` : 'null';
-
-      // Option: null
-      {
-        const sk = `null|${prevBoundary}`;
-        const ex = updates.get(sk);
-        if (!ex || prevState.total > ex.total) {
-          updates.set(sk, { total: prevState.total, prevSK, chord: null, chain: 0, boundary: prevBoundary });
-        }
-      }
-
-      // Option: each chord
-      const pcsAll = new Set(allNotes.map(n => n.pitchClass));
-      for (let root = 0; root < 12; root++) {
-        if (!pcsAll.has(root)) continue;
-        for (const [typeName] of Object.entries(CHORD_TYPES)) {
-          const candCK = `${root}-${typeName}`;
-          const same = (candCK === prevCK);
-
-          const filtered = same
-            ? allNotes
-            : allNotes.filter(n => n.onset > prevBoundary);
-
-          const result = scoreChord(root, typeName, filtered);
-          if (!result) continue;
-
-          const chain = same ? prevState.chain + 1 : 1;
-          const t = prevState.total + result.score - result.complexity * COMPLEXITY_PENALTY;
-          const bnd = result.matched.length > 0 ? Math.max(...result.matched.map(m => m.onset)) : prevBoundary;
-          const sk = `${candCK}|${bnd}`;
-
-          const ex = updates.get(sk);
-          if (!ex || t > ex.total) {
-            updates.set(sk, { total: t, prevSK, chord: { key: candCK, root, type: typeName, ...result }, chain, boundary: bnd });
-          }
-        }
-      }
-    }
-
-    dp[b] = updates;
-  }
-
-  // Backtrack
-  const n = numBeats;
-  let bestSK = null, bestTotal = -Infinity;
-  for (const [sk, s] of dp[n - 1]) { if (s.total > bestTotal) { bestTotal = s.total; bestSK = sk; } }
-  const path = [];
-  let cur = bestSK;
-  for (let b = n - 1; b >= 0; b--) {
-    const s = dp[b].get(cur);
-    path.unshift({ beat: b, key: s.chord ? `${s.chord.root}-${s.chord.type}` : 'null', chord: s.chord, total: s.total, chain: s.chain, boundary: s.boundary });
-    cur = s.prevSK;
-  }
-
-  return { dp, path };
+  return pathDependentDP(segments, numBeats, collectPast);
 }
 
 // ─── display ─────────────────────────────────────────────────────────────────
@@ -625,31 +685,20 @@ function runTest(pitchNames, duration, label) {
   }
 
   const a = approachA(segments, numBeats);
-  showResult('A — Bidirectional lookback', a.path, a.dp, a.beatData);
+  showResult('A — Bidirectional + path-dependent boundary', a.path, a.dp);
 
   const bRes = approachB(segments, numBeats);
-  // For approach B, show the combined path with fwd/bwd totals
-  console.log(`\n  B — Forward + Backward DP`);
-  for (const p of bRes.path) {
-    const name = p.chord ? cn(p.chord.root, p.chord.type) : '—';
-    console.log(`    beat ${p.beat}: ${name.padEnd(8)} combined=${p.total?.toFixed(3)}  fwd=${p.fwdTotal?.toFixed(3)}  bwd=${p.bwdTotal?.toFixed(3)}`);
-  }
-  const bRanges = [];
-  for (const r of bRes.path) {
-    const name = r.chord ? cn(r.chord.root, r.chord.type) : '—';
-    const last = bRanges[bRanges.length - 1];
-    if (last && last.name === name) { last.end = r.beat; }
-    else { bRanges.push({ start: r.beat, end: r.beat, name }); }
-  }
-  console.log(`\n  RESULT: ${bRanges.map(r => r.name).filter(n => n !== '—').join(' → ')}`);
+  console.log(`\n  B — Fwd+Bwd combined two-pass`);
+  console.log(`    Pass 1 (fwd+bwd): ${bRes.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '—').join(' | ')}`);
+  showResult('    Pass 2 (constrained):', bRes.path, bRes.p2dp, bRes.p2BeatData);
 
   const c = approachC(segments, numBeats);
-  console.log(`\n  C — Two-pass`);
-  console.log(`    Pass 1: ${c.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '—').join(' | ')}`);
+  console.log(`\n  C — Forward-only two-pass`);
+  console.log(`    Pass 1 (fwd): ${c.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '—').join(' | ')}`);
   showResult('    Pass 2 (constrained):', c.path, c.p2dp, c.p2BeatData);
 
   const d = approachD(segments, numBeats);
-  showResult('D — Path-dependent boundary', d.path, d.dp);
+  showResult('D — Path-dependent boundary (past-only)', d.path, d.dp);
 }
 
 console.log('Harmonic Analysis Lab');
