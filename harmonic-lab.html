@@ -8,46 +8,69 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Menlo', 'Consolas', 'Monaco', monospace; font-size: 13px; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
   h1 { font-size: 18px; color: #7ec8e3; margin-bottom: 12px; }
-  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .controls { margin-bottom: 10px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
   label { color: #aaa; }
   input, select, button { font-family: inherit; font-size: 13px; background: #16213e; color: #e0e0e0; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; }
   input:focus, select:focus { outline: none; border-color: #7ec8e3; }
+  input.wide { width: 400px; }
   button { background: #0f3460; cursor: pointer; border-color: #7ec8e3; }
   button:hover { background: #1a4a7a; }
   .presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
   .presets button { font-size: 11px; padding: 3px 8px; background: #1a1a3e; }
+  .help { color: #666; font-size: 11px; margin-bottom: 10px; }
   #output { white-space: pre; background: #0f0f1a; border: 1px solid #333; border-radius: 6px; padding: 16px; overflow-x: auto; line-height: 1.5; max-height: 80vh; overflow-y: auto; }
+  #error { color: #ff6b6b; margin-bottom: 8px; min-height: 1.2em; }
 </style>
 </head>
 <body>
 <h1>Harmonic Analysis Lab</h1>
 <div class="controls">
-  <label>Melody: <input id="mel" value="C E G B A F A C" size="30" /></label>
-  <label>Duration:
-    <select id="dur">
-      <option value="2">Half</option>
-      <option value="1" selected>Quarter</option>
-      <option value="0.5">Eighth</option>
-      <option value="0.25">Sixteenth</option>
-    </select>
-  </label>
-  <button onclick="runAll()">Run all durations</button>
-  <button onclick="runOne()">Run selected</button>
+  <div class="row">
+    <label>Voice 1: <input id="v1" class="wide" value="C4 E4 G4 B4 A4 F4 A4 C5" /></label>
+    <label>Dur:
+      <select id="dur1">
+        <option value="2">Half</option>
+        <option value="1" selected>Quarter</option>
+        <option value="0.5">Eighth</option>
+        <option value="0.25">Sixteenth</option>
+      </select>
+    </label>
+  </div>
+  <div class="row">
+    <label>Voice 2: <input id="v2" class="wide" value="" placeholder="(optional) e.g. G3 C4 E4 D4" /></label>
+    <label>Dur:
+      <select id="dur2">
+        <option value="2">Half</option>
+        <option value="1" selected>Quarter</option>
+        <option value="0.5">Eighth</option>
+        <option value="0.25">Sixteenth</option>
+      </select>
+    </label>
+  </div>
+  <div class="row">
+    <button onclick="doRunAll()">Run all durations (voice 1 only)</button>
+    <button onclick="doRunOne()">Run selected durations</button>
+  </div>
+</div>
+<div class="help">
+  Notes in SPN: C4, Eb3, F#5, Bb2, etc. Sharps: #, Flats: b. Middle C = C4.
 </div>
 <div class="presets">
   <label>Presets:</label>
-  <button onclick="setMel('C E G B A F A C')">C E G B A F A C</button>
-  <button onclick="setMel('C E G')">C E G</button>
-  <button onclick="setMel('C E G B')">C E G B</button>
-  <button onclick="setMel('C D E F G A B C')">Scale</button>
-  <button onclick="setMel('C E G C E G C')">Arp C</button>
-  <button onclick="setMel('D F A C')">Dm7</button>
+  <button onclick="preset('C4 E4 G4 B4 A4 F4 A4 C5','')">C E G B A F A C</button>
+  <button onclick="preset('C4 E4 G4','')">C E G</button>
+  <button onclick="preset('C4 E4 G4 B4','')">C E G B</button>
+  <button onclick="preset('C4 D4 E4 F4 G4 A4 B4 C5','')">Scale</button>
+  <button onclick="preset('C4 E4 G4 B4','G3 C4 E4 D4')">CEGB + bass</button>
+  <button onclick="preset('E4 F4 G4 A4 B4 C5','C3 C3 C3 G2 G2 C3')">Melody + bass</button>
 </div>
+<div id="error"></div>
 <pre id="output">Click "Run" to start.</pre>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
-// All lab code inlined below — no imports, no server needed.
+// Harmonic Analysis Lab — SPN input, two voices, full detail
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const DECAY_RATE = 0.3;
@@ -82,6 +105,55 @@ const TYPE_SHORT = {
 function cn(root, type) { return NOTE_NAMES[root] + (TYPE_SHORT[type] ?? type); }
 function pcName(pc) { return NOTE_NAMES[((pc % 12) + 12) % 12]; }
 
+// ─── SPN parsing ──────────────────────────────────────────────────────────
+
+/** Parse "C4", "Eb3", "F#5", "Bb2" etc. to MIDI pitch. Returns null on failure. */
+function parseSPN(str) {
+  const m = str.match(/^([A-Ga-g])(#{1,2}|b{1,2})?(-?\d)$/);
+  if (!m) return null;
+  const base = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+  let pc = base[m[1].toUpperCase()];
+  if (pc === undefined) return null;
+  const acc = m[2] || '';
+  if (acc === '#') pc += 1;
+  else if (acc === '##') pc += 2;
+  else if (acc === 'b') pc -= 1;
+  else if (acc === 'bb') pc -= 2;
+  const octave = parseInt(m[3]);
+  return (octave + 1) * 12 + pc;
+}
+
+/** Format MIDI pitch as SPN string for display. */
+function midiToSPN(midi) {
+  const pc = ((midi % 12) + 12) % 12;
+  const oct = Math.floor(midi / 12) - 1;
+  return NOTE_NAMES[pc] + oct;
+}
+
+/** Parse a voice input string. Returns array of {pitch, onset, duration} or throws. */
+function parseVoice(str, duration) {
+  const tokens = str.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return [];
+  const notes = [];
+  let onset = 0;
+  for (const tok of tokens) {
+    const midi = parseSPN(tok);
+    if (midi === null) throw new Error(`Cannot parse note "${tok}". Use SPN: C4, Eb3, F#5, etc.`);
+    notes.push({ pitch: midi, onset, duration });
+    onset += duration;
+  }
+  return notes;
+}
+
+/** Merge two voice note arrays into one sorted list. */
+function mergeVoices(v1notes, v2notes) {
+  const all = [...v1notes, ...v2notes];
+  all.sort((a, b) => a.onset - b.onset || a.pitch - b.pitch);
+  return all;
+}
+
+// ─── metric weight (4/4) ──────────────────────────────────────────────────
+
 function metricMult(onset) {
   const pos = ((onset % 4) + 4) % 4;
   if (pos < 0.01) return 1.2;
@@ -89,16 +161,6 @@ function metricMult(onset) {
   if (Math.abs(pos - 1) < 0.01 || Math.abs(pos - 3) < 0.01) return 0.75;
   if (Math.abs(pos % 0.5) < 0.01) return 0.5;
   return 0.4;
-}
-
-function makeNotes(pitchNames, duration) {
-  const map = { C:60, D:62, E:64, F:65, G:67, A:69, B:71 };
-  let onset = 0;
-  return pitchNames.map(name => {
-    const n = { pitch: map[name], onset, duration };
-    onset += duration;
-    return n;
-  });
 }
 
 function approachMult(interval) {
@@ -111,22 +173,36 @@ function approachMult(interval) {
   return 1.0;
 }
 
+/**
+ * Preprocess: split notes at beat boundaries.
+ * For multi-voice, notes is already the merged array.
+ * Approach multiplier computed per-voice (consecutive notes in same voice).
+ */
 function preprocessNotes(notes) {
   const segments = [];
+  // Group by voice for approach calculation: notes at same onset are different voices
+  // Simple heuristic: for each note, find previous note with strictly earlier onset
   for (let i = 0; i < notes.length; i++) {
     const note = notes[i];
-    const prev = i > 0 ? notes[i - 1] : null;
+    // Find the previous note at a strictly earlier onset (in any voice, closest onset)
+    let prev = null;
+    for (let j = i - 1; j >= 0; j--) {
+      if (notes[j].onset < note.onset) { prev = notes[j]; break; }
+    }
     const app = approachMult(prev ? note.pitch - prev.pitch : null);
     const end = note.onset + note.duration;
     for (let b = Math.floor(note.onset); b < end; b++) {
       const s = Math.max(note.onset, b);
       const e = Math.min(end, b + 1);
       if (e <= s) continue;
-      segments.push({ pitch: note.pitch, pitchClass: note.pitch % 12, onset: s, duration: e - s, approach: app });
+      segments.push({ pitch: note.pitch, pitchClass: ((note.pitch % 12) + 12) % 12, onset: s, duration: e - s, approach: app });
     }
   }
+  segments.sort((a, b) => a.onset - b.onset || a.pitch - b.pitch);
   return segments;
 }
+
+// ─── salience & collection ────────────────────────────────────────────────
 
 function salience(seg, decay) {
   const raw = (seg.duration - PASSING_NOTE_THRESHOLD) * metricMult(seg.onset) * seg.approach;
@@ -158,6 +234,8 @@ function collectBidirectional(segments, beat) {
   return out;
 }
 
+// ─── chord scoring ────────────────────────────────────────────────────────
+
 function memberWeight(interval) {
   const n = ((interval % 12) + 12) % 12;
   if (n === 0) return 1.1;
@@ -182,11 +260,11 @@ function scoreChord(root, typeName, notes) {
     if (def.intervals.includes(iv)) {
       const w = memberWeight(iv);
       matchedSal += n.salience * w;
-      matched.push({ onset: n.onset, pc: n.pitchClass, sal: n.salience, w, contrib: n.salience * w });
+      matched.push({ onset: n.onset, pc: n.pitchClass, pitch: n.pitch, sal: n.salience, w, contrib: n.salience * w });
     } else {
       const p = Math.max(n.salience - NON_CHORD_TONE_FLOOR, 0);
       nctPen += p;
-      nct.push({ onset: n.onset, pc: n.pitchClass, sal: n.salience, pen: p });
+      nct.push({ onset: n.onset, pc: n.pitchClass, pitch: n.pitch, sal: n.salience, pen: p });
     }
   }
   let bassMult = 1.0;
@@ -472,15 +550,16 @@ function approachD(segments, numBeats) {
   return pathDependentDP(segments, numBeats, collectPast);
 }
 
-// ─── display ──────────────────────────────────────────────────────────────
+// ─── display (ALL candidates, full detail) ────────────────────────────────
 
-function showBeatDetail(dp, beat, top) {
-  top = top || 4;
+let lines = [];
+function log(s) { lines.push(s); }
+
+function showBeatDetail(dp, beat) {
   const map = dp[beat];
   const entries = [...map.entries()]
     .filter(([k]) => k !== 'null' && !k.startsWith('null'))
-    .sort((a, b) => b[1].total - a[1].total)
-    .slice(0, top);
+    .sort((a, b) => b[1].total - a[1].total);
   if (entries.length === 0) { log(`    beat ${beat}: (no candidates)`); return; }
   const nullEntry = [...map.entries()].find(([k]) => k === 'null' || k.startsWith('null|'));
   const nullTotal = nullEntry ? nullEntry[1].total : -Infinity;
@@ -489,12 +568,13 @@ function showBeatDetail(dp, beat, top) {
     const name = s.chord ? cn(s.chord.root, s.chord.type) : '-';
     const local = s.chord ? s.chord.score.toFixed(3) : '0';
     const cplx = s.chord ? `cplx=${s.chord.complexity}` : '';
+    const bass = s.chord ? ` bass=${s.chord.bassMult.toFixed(1)}` : '';
     const nctInfo = s.chord && s.chord.nct.length > 0
-      ? ` nct=[${s.chord.nct.map(n => `${pcName(n.pc)}:${n.pen.toFixed(3)}`).join(',')}]` : '';
+      ? `\n             nct=[${s.chord.nct.map(n => `${midiToSPN(n.pitch)}:${n.pen.toFixed(3)}`).join(', ')}]` : '';
     const matchInfo = s.chord
-      ? ` match=[${s.chord.matched.map(m => `${pcName(m.pc)}@${m.onset}:${m.contrib.toFixed(3)}`).join(',')}]` : '';
+      ? `\n             match=[${s.chord.matched.map(m => `${midiToSPN(m.pitch)}@${m.onset}:sal=${m.sal.toFixed(3)}*w=${m.w}=${m.contrib.toFixed(3)}`).join(', ')}]` : '';
     const bndInfo = s.boundary !== undefined ? ` bnd=${s.boundary}` : '';
-    log(`      ${name.padEnd(8)} total=${s.total.toFixed(3)}  local=${local}  ${cplx}${nctInfo}${matchInfo}${bndInfo}`);
+    log(`      ${name.padEnd(8)} total=${s.total.toFixed(3)}  local=${local}  ${cplx}${bass}${bndInfo}${matchInfo}${nctInfo}`);
   }
 }
 
@@ -514,74 +594,101 @@ function showResult(label, result, dp) {
 
 // ─── run ──────────────────────────────────────────────────────────────────
 
-let lines = [];
-function log(s) { lines.push(s); }
+function runTestFromNotes(allNotes, label) {
+  const segments = preprocessNotes(allNotes);
+  const maxEnd = Math.max(...allNotes.map(n => n.onset + n.duration));
+  const numBeats = Math.ceil(maxEnd);
 
-function runTest(pitchNames, duration, label) {
-  const notes = makeNotes(pitchNames, duration);
-  const segments = preprocessNotes(notes);
-  const numBeats = Math.ceil(notes[notes.length - 1].onset + notes[notes.length - 1].duration);
+  const noteDesc = allNotes.map(n => midiToSPN(n.pitch)).join(' ');
   log(`\n${'='.repeat(78)}`);
-  log(`  ${label}  (${pitchNames.join(' ')}, dur=${duration}, ${numBeats} beats)`);
+  log(`  ${label}  (${noteDesc}, ${numBeats} beats)`);
   log('='.repeat(78));
+
   log('\n  Notes per beat:');
   for (let b = 0; b < numBeats; b++) {
     const past = collectPast(segments, b);
-    const desc = past.map(n => `${pcName(n.pitchClass)}@${n.onset}(${n.salience.toFixed(3)})`).join('  ');
+    const desc = past.map(n => `${midiToSPN(n.pitch)}@${n.onset}(sal=${n.salience.toFixed(3)})`).join('  ');
     log(`    beat ${b}: ${desc}`);
   }
+
   const a = approachA(segments, numBeats);
   showResult('A - Bidirectional + path-dependent boundary', a.path, a.dp);
+
   const bRes = approachB(segments, numBeats);
   log(`\n  B - Fwd+Bwd combined two-pass`);
   log(`    Pass 1 (fwd+bwd): ${bRes.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '-').join(' | ')}`);
   showResult('    Pass 2 (constrained):', bRes.path, bRes.p2dp);
+
   const c = approachC(segments, numBeats);
   log(`\n  C - Forward-only two-pass`);
   log(`    Pass 1 (fwd): ${c.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '-').join(' | ')}`);
   showResult('    Pass 2 (constrained):', c.path, c.p2dp);
+
   const d = approachD(segments, numBeats);
   showResult('D - Path-dependent boundary (past-only)', d.path, d.dp);
 }
 
 // ─── UI ───────────────────────────────────────────────────────────────────
 
-function setMel(s) { document.getElementById('mel').value = s; }
+function setError(msg) { document.getElementById('error').textContent = msg; }
 
-function parseMel() {
-  return document.getElementById('mel').value.trim().split(/\s+/).filter(Boolean);
+function preset(v1, v2) {
+  document.getElementById('v1').value = v1;
+  document.getElementById('v2').value = v2;
 }
 
-function flush() {
-  document.getElementById('output').textContent = lines.join('\n');
-  lines = [];
+function buildNotes(v1str, dur1, v2str, dur2) {
+  const v1 = parseVoice(v1str, dur1);
+  const v2 = v2str.trim() ? parseVoice(v2str, dur2) : [];
+  return mergeVoices(v1, v2);
 }
 
-function runAll() {
+function doRunAll() {
   lines = [];
-  const mel = parseMel();
-  if (mel.length < 2) { document.getElementById('output').textContent = 'Need at least 2 notes.'; return; }
-  log(`Harmonic Analysis Lab   Decay=${DECAY_RATE}, complexity_penalty=${COMPLEXITY_PENALTY}/level`);
-  runTest(mel, 2, 'HALF NOTES');
-  runTest(mel, 1, 'QUARTER NOTES');
-  runTest(mel, 0.5, 'EIGHTH NOTES');
-  runTest(mel, 0.25, 'SIXTEENTH NOTES');
-  flush();
+  setError('');
+  try {
+    const v1str = document.getElementById('v1').value;
+    const v2str = document.getElementById('v2').value;
+    const dur2 = parseFloat(document.getElementById('dur2').value);
+
+    log(`Harmonic Analysis Lab   Decay=${DECAY_RATE}, complexity_penalty=${COMPLEXITY_PENALTY}/level`);
+
+    for (const [dur, label] of [[2,'HALF NOTES'],[1,'QUARTER NOTES'],[0.5,'EIGHTH NOTES'],[0.25,'SIXTEENTH NOTES']]) {
+      const notes = buildNotes(v1str, dur, v2str, v2str.trim() ? dur2 : dur);
+      if (notes.length < 2) { setError('Need at least 2 notes total.'); return; }
+      runTestFromNotes(notes, label);
+    }
+
+    document.getElementById('output').textContent = lines.join('\n');
+    lines = [];
+  } catch (e) { setError(e.message); }
 }
 
-function runOne() {
+function doRunOne() {
   lines = [];
-  const mel = parseMel();
-  const dur = parseFloat(document.getElementById('dur').value);
-  if (mel.length < 2) { document.getElementById('output').textContent = 'Need at least 2 notes.'; return; }
-  const labels = { 2: 'HALF NOTES', 1: 'QUARTER NOTES', 0.5: 'EIGHTH NOTES', 0.25: 'SIXTEENTH NOTES' };
-  log(`Harmonic Analysis Lab   Decay=${DECAY_RATE}, complexity_penalty=${COMPLEXITY_PENALTY}/level`);
-  runTest(mel, dur, labels[dur] || `dur=${dur}`);
-  flush();
+  setError('');
+  try {
+    const v1str = document.getElementById('v1').value;
+    const v2str = document.getElementById('v2').value;
+    const dur1 = parseFloat(document.getElementById('dur1').value);
+    const dur2 = parseFloat(document.getElementById('dur2').value);
+    const notes = buildNotes(v1str, dur1, v2str, dur2);
+    if (notes.length < 2) { setError('Need at least 2 notes total.'); return; }
+
+    const labels = { 2: 'HALF', 1: 'QUARTER', 0.5: 'EIGHTH', 0.25: 'SIXTEENTH' };
+    let label = `V1:${labels[dur1]||dur1}`;
+    if (v2str.trim()) label += ` V2:${labels[dur2]||dur2}`;
+
+    log(`Harmonic Analysis Lab   Decay=${DECAY_RATE}, complexity_penalty=${COMPLEXITY_PENALTY}/level`);
+    runTestFromNotes(notes, label);
+
+    document.getElementById('output').textContent = lines.join('\n');
+    lines = [];
+  } catch (e) { setError(e.message); }
 }
 
 // Run on load
-runAll();
+doRunOne();
 </script>
 </body>
 </html>
