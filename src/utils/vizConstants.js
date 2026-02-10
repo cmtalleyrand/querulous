@@ -10,15 +10,21 @@ export const VIZ_COLORS = {
   repeatedInterval: '#a3a3a3',    // Neutral-400 - grey for repeated/unison same pitch
   consonant: '#84cc16',           // Alias for imperfect (backwards compat)
 
-  // Dissonance colors - revised spectrum per user spec
-  // Good resolution (teal/green) -> yellow-green -> yellow -> orange -> red
-  dissonantStrong: '#14b8a6',     // Teal-500 - excellent resolution (score >= 0.5)
-  dissonantGood: '#84cc16',       // Lime-500 - good resolution, yellow-green (score >= 0.25)
-  dissonantAcceptable: '#eab308', // Yellow-500 - acceptable resolution (score >= -0.25)
-  dissonantMarginal: '#f59e0b',   // Amber-500 - marginal, turning orange (score >= -0.5)
-  dissonantWeak: '#f97316',       // Orange-500 - weak handling (score >= -1.0)
+  // Dissonance colors - granular spectrum per user spec
+  // Very good (>=2) -> Good (>=1) -> Acceptable (>=0.25) -> Mediocre (>=-0.25) -> Poor (>=-0.5) -> Very poor (>=-1) -> Severe (<-1)
+  dissonantVeryGood: '#14b8a6',   // Teal-500 - very good resolution (score >= 2)
+  dissonantGood: '#10b981',       // Emerald-500 - good resolution (score >= 1)
+  dissonantAcceptable: '#84cc16', // Lime-500 - acceptable, yellow-green (score >= 0.25)
+  dissonantMediocre: '#eab308',   // Yellow-500 - mediocre (score >= -0.25)
+  dissonantPoor: '#f59e0b',       // Amber-500 - poor (score >= -0.5)
+  dissonantVeryPoor: '#f97316',   // Orange-500 - very poor (score >= -1.0)
   dissonantProblematic: '#f87171',// Red-400 - problematic (score >= -2.0)
   dissonantSevere: '#ef4444',     // Red-500 - severe issues (score < -2.0)
+
+  // Legacy aliases for backwards compatibility
+  dissonantStrong: '#14b8a6',
+  dissonantMarginal: '#f59e0b',
+  dissonantWeak: '#f97316',
 
   // Problem indicators - bright and prominent
   parallelFifthsOctaves: '#dc2626', // Red-600 - bright red for parallel 5ths/8ves
@@ -171,58 +177,68 @@ export function getIntervalStyle({
     };
   }
 
-  // Dissonant - grade by score, with resolution status affecting border/saturation
-  // New spectrum: teal (>= 0.5) -> yellow-green (>= 0.25) -> yellow (>= -0.25) -> orange (< -0.25)
+  // Dissonant - granular spectrum per user spec
+  // Very good (>=2) -> Good (>=1) -> Acceptable (>=0.25) -> Mediocre (>=-0.25) -> Poor (>=-0.5) -> Very poor (>=-1) -> Severe (<-1)
   const baseResolutionStyle = isResolved
     ? { borderStyle: 'solid', borderWidth: 1, opacity: 0.7 }
     : { borderStyle: 'dashed', borderWidth: 2, opacity: 0.55 };
 
-  if (score >= 0.5) {
+  if (score >= 2.0) {
     return {
-      color: VIZ_COLORS.dissonantStrong,
+      color: VIZ_COLORS.dissonantVeryGood,
       bg: '#ccfbf1',
       fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Excellent',
+      label: 'Very good',
+      ...baseResolutionStyle,
+      opacity: isResolved ? 0.8 : 0.6,
+    };
+  }
+  if (score >= 1.0) {
+    return {
+      color: VIZ_COLORS.dissonantGood,
+      bg: '#d1fae5',
+      fill: VIZ_COLORS.dissonantGoodFill,
+      label: 'Good',
       ...baseResolutionStyle,
       opacity: isResolved ? 0.75 : 0.55,
     };
   }
   if (score >= 0.25) {
     return {
-      color: VIZ_COLORS.dissonantGood,
+      color: VIZ_COLORS.dissonantAcceptable,
       bg: '#ecfccb',
       fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Good',
+      label: 'Acceptable',
       ...baseResolutionStyle,
       opacity: isResolved ? 0.7 : 0.5,
     };
   }
   if (score >= -0.25) {
     return {
-      color: VIZ_COLORS.dissonantAcceptable,
+      color: VIZ_COLORS.dissonantMediocre,
       bg: '#fef9c3',
       fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Acceptable',
+      label: 'Mediocre',
       ...baseResolutionStyle,
       opacity: isResolved ? 0.65 : 0.45,
     };
   }
   if (score >= -0.5) {
     return {
-      color: VIZ_COLORS.dissonantMarginal,
+      color: VIZ_COLORS.dissonantPoor,
       bg: '#fef3c7',
       fill: VIZ_COLORS.dissonantMarginalFill,
-      label: 'Marginal',
+      label: 'Poor',
       ...baseResolutionStyle,
       opacity: isResolved ? 0.65 : 0.45,
     };
   }
   if (score >= -1.0) {
     return {
-      color: VIZ_COLORS.dissonantWeak,
+      color: VIZ_COLORS.dissonantVeryPoor,
       bg: '#ffedd5',
       fill: VIZ_COLORS.dissonantBadFill,
-      label: 'Weak',
+      label: 'Very poor',
       borderStyle: 'dashed',
       borderWidth: 2,
       opacity: 0.6,
