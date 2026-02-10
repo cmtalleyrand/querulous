@@ -244,7 +244,7 @@ function memberWeight(interval) {
   return 0.6;
 }
 
-function scoreChord(root, typeName, notes) {
+function scoreChord(root, typeName, notes, positiveOnly) {
   const def = CHORD_TYPES[typeName];
   const pcs = new Set(notes.map(n => n.pitchClass));
   for (const req of def.required) { if (!pcs.has((root + req) % 12)) return null; }
@@ -262,7 +262,7 @@ function scoreChord(root, typeName, notes) {
       matchedSal += n.salience * w;
       matched.push({ onset: n.onset, pc: n.pitchClass, pitch: n.pitch, sal: n.salience, w, contrib: n.salience * w });
     } else {
-      const p = Math.max(n.salience - NON_CHORD_TONE_FLOOR, 0);
+      const p = positiveOnly ? 0 : Math.max(n.salience - NON_CHORD_TONE_FLOOR, 0);
       nctPen += p;
       nct.push({ onset: n.onset, pc: n.pitchClass, pitch: n.pitch, sal: n.salience, pen: p });
     }
@@ -275,13 +275,13 @@ function scoreChord(root, typeName, notes) {
   return { score, matched, nct, matchedSal, nctPen, bassMult, complexity: def.complexity };
 }
 
-function findCandidates(notes) {
+function findCandidates(notes, positiveOnly) {
   const pcs = new Set(notes.map(n => n.pitchClass));
   const cands = [];
   for (let root = 0; root < 12; root++) {
     if (!pcs.has(root)) continue;
     for (const [t] of Object.entries(CHORD_TYPES)) {
-      const r = scoreChord(root, t, notes);
+      const r = scoreChord(root, t, notes, positiveOnly);
       if (r) cands.push({ root, type: t, ...r });
     }
   }
@@ -447,10 +447,11 @@ function approachA(segments, numBeats) {
 }
 
 function approachB(segments, numBeats) {
+  // Pass 1: positive-only (no unharmonised penalties — assignment not yet known)
   const p1BeatData = [];
   for (let b = 0; b < numBeats; b++) {
     const notes = collectPast(segments, b);
-    const cands = findCandidates(notes);
+    const cands = findCandidates(notes, true);
     p1BeatData.push(cands.map(c => ({ key: `${c.root}-${c.type}`, ...c })));
   }
   const fwd = forwardDP(p1BeatData);
@@ -503,10 +504,11 @@ function approachB(segments, numBeats) {
 }
 
 function approachC(segments, numBeats) {
+  // Pass 1: positive-only (no unharmonised penalties — assignment not yet known)
   const p1BeatData = [];
   for (let b = 0; b < numBeats; b++) {
     const notes = collectPast(segments, b);
-    const cands = findCandidates(notes);
+    const cands = findCandidates(notes, true);
     p1BeatData.push(cands.map(c => ({ key: `${c.root}-${c.type}`, ...c })));
   }
   const p1dp = forwardDP(p1BeatData);
@@ -550,46 +552,217 @@ function approachD(segments, numBeats) {
   return pathDependentDP(segments, numBeats, collectPast);
 }
 
-// ─── display (ALL candidates, full detail) ────────────────────────────────
+// ─── harmony display helpers ──────────────────────────────────────────────
 
 let lines = [];
 function log(s) { lines.push(s); }
 
-function showBeatDetail(dp, beat) {
-  const map = dp[beat];
-  const entries = [...map.entries()]
-    .filter(([k]) => k !== 'null' && !k.startsWith('null'))
-    .sort((a, b) => b[1].total - a[1].total);
-  if (entries.length === 0) { log(`    beat ${beat}: (no candidates)`); return; }
-  const nullEntry = [...map.entries()].find(([k]) => k === 'null' || k.startsWith('null|'));
-  const nullTotal = nullEntry ? nullEntry[1].total : -Infinity;
-  log(`    beat ${beat}: (null total=${nullTotal.toFixed(3)})`);
-  for (const [k, s] of entries) {
-    const name = s.chord ? cn(s.chord.root, s.chord.type) : '-';
-    const local = s.chord ? s.chord.score.toFixed(3) : '0';
-    const cplx = s.chord ? `cplx=${s.chord.complexity}` : '';
-    const bass = s.chord ? ` bass=${s.chord.bassMult.toFixed(1)}` : '';
-    const nctInfo = s.chord && s.chord.nct.length > 0
-      ? `\n             nct=[${s.chord.nct.map(n => `${midiToSPN(n.pitch)}:${n.pen.toFixed(3)}`).join(', ')}]` : '';
-    const matchInfo = s.chord
-      ? `\n             match=[${s.chord.matched.map(m => `${midiToSPN(m.pitch)}@${m.onset}:sal=${m.sal.toFixed(3)}*w=${m.w}=${m.contrib.toFixed(3)}`).join(', ')}]` : '';
-    const bndInfo = s.boundary !== undefined ? ` bnd=${s.boundary}` : '';
-    log(`      ${name.padEnd(8)} total=${s.total.toFixed(3)}  local=${local}  ${cplx}${bass}${bndInfo}${matchInfo}${nctInfo}`);
+/** Backtrack path-dependent DP from a state at beat b. */
+function backtrackPD(dp, beat, stateKey) {
+  const path = [];
+  let cur = stateKey;
+  for (let b = beat; b >= 0; b--) {
+    const s = dp[b].get(cur);
+    if (!s) break;
+    path.unshift({ beat: b, chord: s.chord, boundary: s.boundary, total: s.total });
+    cur = s.prevSK;
   }
+  return path;
 }
 
-function showResult(label, result, dp) {
-  log(`\n  ${label}`);
-  for (let b = 0; b < dp.length; b++) showBeatDetail(dp, b);
-  const ranges = [];
-  for (const r of result) {
-    const name = r.chord ? cn(r.chord.root, r.chord.type) : '-';
-    const last = ranges[ranges.length - 1];
-    if (last && last.name === name) last.end = r.beat;
-    else ranges.push({ start: r.beat, end: r.beat, name });
+/** Backtrack simple DP from a state at beat b. */
+function backtrackFrom(dp, beat, key) {
+  const path = [];
+  let cur = key;
+  for (let b = beat; b >= 0; b--) {
+    const s = dp[b].get(cur);
+    if (!s) break;
+    path.unshift({ beat: b, chord: s.chord, total: s.total });
+    cur = s.prev;
   }
-  const prog = ranges.map(r => r.name).filter(n => n !== '-').join(' -> ');
-  log(`\n  RESULT: ${prog}  (total=${result[result.length - 1].total.toFixed(3)})`);
+  return path;
+}
+
+/** Format a harmony path as a chord progression string. */
+function fmtHarmony(path) {
+  const parts = [];
+  for (const p of path) {
+    const name = p.chord ? cn(p.chord.root, p.chord.type) : '-';
+    const last = parts[parts.length - 1];
+    if (last && last.name === name) last.count++;
+    else parts.push({ name, count: 1 });
+  }
+  return parts.filter(p => p.name !== '-')
+    .map(p => p.count > 1 ? `${p.name}(x${p.count})` : p.name)
+    .join(' -> ') || '(none)';
+}
+
+/** Collect all unharmonised notes across a full harmony path. */
+function getUnharmonised(path) {
+  const notes = [];
+  for (const p of path) {
+    if (p.chord && p.chord.nct) {
+      for (const n of p.chord.nct) {
+        if (n.pen > 0) notes.push(n);
+      }
+    }
+  }
+  return notes;
+}
+
+/** Format a chord's scoring detail. */
+function fmtChordDetail(chord) {
+  if (!chord) return '(null)';
+  const name = cn(chord.root, chord.type);
+  const matchStr = chord.matched.map(m =>
+    `${midiToSPN(m.pitch)}@${m.onset}: sal=${m.sal.toFixed(3)} * w=${m.w} = ${m.contrib.toFixed(3)}`
+  ).join(', ');
+  const unhStr = chord.nct.filter(n => n.pen > 0).map(n =>
+    `${midiToSPN(n.pitch)}@${n.onset}: sal=${n.sal.toFixed(3)} pen=${n.pen.toFixed(3)}`
+  ).join(', ');
+  let s = `${name}  local=${chord.score.toFixed(3)}  cplx=${chord.complexity}  bass=${chord.bassMult.toFixed(1)}`;
+  s += `\n               matched: [${matchStr}]`;
+  if (unhStr) s += `\n               unharmonised: [${unhStr}]`;
+  return s;
+}
+
+/** Show one harmony entry with full detail. */
+function showHarmonyEntry(idx, path, total) {
+  const prog = fmtHarmony(path);
+  const unh = getUnharmonised(path);
+  const unhStr = unh.length > 0
+    ? unh.map(n => `${midiToSPN(n.pitch)}@${n.onset}(${n.pen.toFixed(3)})`).join(', ')
+    : '(none)';
+  log(`      #${idx}  ${prog}    total=${total.toFixed(3)}`);
+
+  // Show each chord in the path
+  const seen = new Set();
+  for (const p of path) {
+    if (!p.chord) continue;
+    const key = `${p.beat}-${p.chord.root}-${p.chord.type}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const name = cn(p.chord.root, p.chord.type);
+    const bndStr = p.boundary !== undefined ? `  bnd=${p.boundary}` : '';
+    log(`            beat ${p.beat}: ${fmtChordDetail(p.chord)}${bndStr}`);
+  }
+  log(`            unharmonised in harmony: [${unhStr}]`);
+}
+
+// ─── approach display: path-dependent (A, D) ─────────────────────────────
+
+function showApproachPD(label, dp, bestPath, numBeats) {
+  log(`\n  ${label}`);
+
+  for (let b = 0; b < numBeats; b++) {
+    const map = dp[b];
+    const states = [...map.entries()]
+      .filter(([k]) => !k.startsWith('null'))
+      .sort((a, b) => b[1].total - a[1].total);
+
+    if (states.length === 0) { log(`    beat ${b}: (no candidates)`); continue; }
+
+    log(`    beat ${b}:`);
+
+    // (a) Top 3 harmonies up to this beat
+    log(`      Top 3 harmonies to this beat:`);
+    const shown = Math.min(3, states.length);
+    for (let i = 0; i < shown; i++) {
+      const [sk, s] = states[i];
+      const path = backtrackPD(dp, b, sk);
+      showHarmonyEntry(i + 1, path, s.total);
+    }
+
+    // (c) Best harmony for each of top 3 chords
+    const byChord = new Map();
+    for (const [sk, s] of states) {
+      if (!s.chord) continue;
+      const ck = `${s.chord.root}-${s.chord.type}`;
+      const ex = byChord.get(ck);
+      if (!ex || s.total > ex.total) byChord.set(ck, { sk, s });
+    }
+    const topChords = [...byChord.entries()]
+      .sort((a, b) => b[1].s.total - a[1].s.total)
+      .slice(0, 3);
+
+    log(`      Best harmony per chord:`);
+    for (const [ck, { sk, s }] of topChords) {
+      const name = cn(s.chord.root, s.chord.type);
+      const path = backtrackPD(dp, b, sk);
+      log(`        ${name.padEnd(8)} via ${fmtHarmony(path).padEnd(24)} total=${s.total.toFixed(3)}`);
+    }
+  }
+
+  // (b) Top 3 harmonies overall (at final beat)
+  const lastMap = dp[numBeats - 1];
+  const finalStates = [...lastMap.entries()]
+    .filter(([k]) => !k.startsWith('null'))
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 3);
+
+  log(`\n    Top 3 complete harmonies:`);
+  for (let i = 0; i < finalStates.length; i++) {
+    const [sk, s] = finalStates[i];
+    const path = backtrackPD(dp, numBeats - 1, sk);
+    showHarmonyEntry(i + 1, path, s.total);
+  }
+
+  // Best path result
+  const prog = fmtHarmony(bestPath);
+  log(`\n  RESULT: ${prog}  (total=${bestPath[bestPath.length - 1].total.toFixed(3)})`);
+}
+
+// ─── approach display: simple DP (B, C pass 2) ───────────────────────────
+
+function showApproachSimple(label, dp, bestPath, numBeats) {
+  log(`\n  ${label}`);
+
+  for (let b = 0; b < numBeats; b++) {
+    const map = dp[b];
+    const states = [...map.entries()]
+      .filter(([k]) => k !== 'null')
+      .sort((a, b) => b[1].total - a[1].total);
+
+    if (states.length === 0) { log(`    beat ${b}: (no candidates)`); continue; }
+
+    log(`    beat ${b}:`);
+
+    // (a) Top 3 harmonies to this beat
+    log(`      Top 3 harmonies to this beat:`);
+    const shown = Math.min(3, states.length);
+    for (let i = 0; i < shown; i++) {
+      const [key, s] = states[i];
+      const path = backtrackFrom(dp, b, key);
+      showHarmonyEntry(i + 1, path, s.total);
+    }
+
+    // (c) Best harmony per chord (for simple DP, key = chord, so top 3 states = top 3 chords)
+    log(`      Best harmony per chord:`);
+    for (let i = 0; i < shown; i++) {
+      const [key, s] = states[i];
+      if (!s.chord) continue;
+      const name = cn(s.chord.root, s.chord.type);
+      const path = backtrackFrom(dp, b, key);
+      log(`        ${name.padEnd(8)} via ${fmtHarmony(path).padEnd(24)} total=${s.total.toFixed(3)}`);
+    }
+  }
+
+  // (b) Top 3 complete harmonies
+  const lastMap = dp[numBeats - 1];
+  const finalStates = [...lastMap.entries()]
+    .filter(([k]) => k !== 'null')
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 3);
+
+  log(`\n    Top 3 complete harmonies:`);
+  for (let i = 0; i < finalStates.length; i++) {
+    const [key, s] = finalStates[i];
+    const path = backtrackFrom(dp, numBeats - 1, key);
+    showHarmonyEntry(i + 1, path, s.total);
+  }
+
+  const prog = fmtHarmony(bestPath);
+  log(`\n  RESULT: ${prog}  (total=${bestPath[bestPath.length - 1].total.toFixed(3)})`);
 }
 
 // ─── run ──────────────────────────────────────────────────────────────────
@@ -607,25 +780,27 @@ function runTestFromNotes(allNotes, label) {
   log('\n  Notes per beat:');
   for (let b = 0; b < numBeats; b++) {
     const past = collectPast(segments, b);
-    const desc = past.map(n => `${midiToSPN(n.pitch)}@${n.onset}(sal=${n.salience.toFixed(3)})`).join('  ');
+    const desc = past.map(n =>
+      `${midiToSPN(n.pitch)}@${n.onset}(sal=${n.salience.toFixed(3)}, decay=${n.decay.toFixed(1)})`
+    ).join('  ');
     log(`    beat ${b}: ${desc}`);
   }
 
   const a = approachA(segments, numBeats);
-  showResult('A - Bidirectional + path-dependent boundary', a.path, a.dp);
+  showApproachPD('A - Bidirectional + path-dependent boundary', a.dp, a.path, numBeats);
 
   const bRes = approachB(segments, numBeats);
   log(`\n  B - Fwd+Bwd combined two-pass`);
-  log(`    Pass 1 (fwd+bwd): ${bRes.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '-').join(' | ')}`);
-  showResult('    Pass 2 (constrained):', bRes.path, bRes.p2dp);
+  log(`    Pass 1 (positive-only, fwd+bwd): ${bRes.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '-').join(' | ')}`);
+  showApproachSimple('    Pass 2 (constrained, full scoring):', bRes.p2dp, bRes.path, numBeats);
 
   const c = approachC(segments, numBeats);
   log(`\n  C - Forward-only two-pass`);
-  log(`    Pass 1 (fwd): ${c.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '-').join(' | ')}`);
-  showResult('    Pass 2 (constrained):', c.path, c.p2dp);
+  log(`    Pass 1 (positive-only, fwd): ${c.p1path.map(p => p.chord ? cn(p.chord.root, p.chord.type) : '-').join(' | ')}`);
+  showApproachSimple('    Pass 2 (constrained, full scoring):', c.p2dp, c.path, numBeats);
 
   const d = approachD(segments, numBeats);
-  showResult('D - Path-dependent boundary (past-only)', d.path, d.dp);
+  showApproachPD('D - Path-dependent boundary (past-only)', d.dp, d.path, numBeats);
 }
 
 // ─── UI ───────────────────────────────────────────────────────────────────
