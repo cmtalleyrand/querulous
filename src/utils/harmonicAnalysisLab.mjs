@@ -701,11 +701,26 @@ function runTest(pitchNames, duration, label) {
   showResult('D — Path-dependent boundary (past-only)', d.path, d.dp);
 }
 
-console.log('Harmonic Analysis Lab');
-console.log(`Decay=${DECAY_RATE}, complexity_penalty=${COMPLEXITY_PENALTY}/level\n`);
+// ─── exports (for browser / test page) ──────────────────────────────────────
 
-const melody = ['C', 'E', 'G', 'B', 'A', 'F', 'A', 'C'];
+export {
+  makeNotes, preprocessNotes, collectPast, collectBidirectional,
+  findCandidates, scoreChord, cn, pcName,
+  approachA, approachB, approachC, approachD,
+  runTest, showResult, showBeatDetail,
+  DECAY_RATE, COMPLEXITY_PENALTY, CHORD_TYPES, NOTE_NAMES,
+};
 
-runTest(melody, 1,    'QUARTER NOTES');
-runTest(melody, 0.5,  'EIGHTH NOTES');
-runTest(melody, 0.25, 'SIXTEENTH NOTES');
+// ─── auto-run when executed directly via Node ───────────────────────────────
+
+const isNode = typeof process !== 'undefined' && process.argv?.[1]?.endsWith('harmonicAnalysisLab.mjs');
+if (isNode) {
+  console.log('Harmonic Analysis Lab');
+  console.log(`Decay=${DECAY_RATE}, complexity_penalty=${COMPLEXITY_PENALTY}/level\n`);
+
+  const melody = ['C', 'E', 'G', 'B', 'A', 'F', 'A', 'C'];
+
+  runTest(melody, 1,    'QUARTER NOTES');
+  runTest(melody, 0.5,  'EIGHTH NOTES');
+  runTest(melody, 0.25, 'SIXTEENTH NOTES');
+}

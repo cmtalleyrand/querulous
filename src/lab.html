@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Harmonic Analysis Lab</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Menlo', 'Consolas', monospace; font-size: 13px; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+    h1 { font-size: 18px; color: #7ec8e3; margin-bottom: 16px; }
+    .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    label { color: #aaa; }
+    input, select, button { font-family: inherit; font-size: 13px; background: #16213e; color: #e0e0e0; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; }
+    input:focus, select:focus { outline: none; border-color: #7ec8e3; }
+    button { background: #0f3460; cursor: pointer; border-color: #7ec8e3; }
+    button:hover { background: #1a4a7a; }
+    #output { white-space: pre; background: #0f0f1a; border: 1px solid #333; border-radius: 6px; padding: 16px; overflow-x: auto; line-height: 1.5; max-height: 80vh; overflow-y: auto; }
+    .section-label { color: #7ec8e3; }
+    .preset-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .preset-row button { font-size: 11px; padding: 4px 8px; background: #1a1a3e; }
+  </style>
+</head>
+<body>
+  <h1>Harmonic Analysis Lab</h1>
+
+  <div class="controls">
+    <label>Melody: <input id="melody" value="C E G B A F A C" size="30" /></label>
+    <label>Duration:
+      <select id="duration">
+        <option value="2">Half notes</option>
+        <option value="1" selected>Quarter notes</option>
+        <option value="0.5">Eighth notes</option>
+        <option value="0.25">Sixteenth notes</option>
+      </select>
+    </label>
+    <button id="run">Run (all durations)</button>
+    <button id="runOne">Run (selected duration)</button>
+  </div>
+
+  <div class="preset-row">
+    <label>Presets:</label>
+    <button data-mel="C E G B A F A C">C E G B A F A C</button>
+    <button data-mel="C E G">C E G</button>
+    <button data-mel="C E G B">C E G B</button>
+    <button data-mel="C D E F G A B C">Scale</button>
+    <button data-mel="C E G C E G C">Arpeggiated C</button>
+    <button data-mel="D F A C">Dm7</button>
+  </div>
+
+  <pre id="output"></pre>
+
+  <script type="module">
+    import { runTest, DECAY_RATE, COMPLEXITY_PENALTY } from './utils/harmonicAnalysisLab.mjs';
+
+    const output = document.getElementById('output');
+    const melodyInput = document.getElementById('melody');
+    const durationSelect = document.getElementById('duration');
+
+    function capture(fn) {
+      const lines = [];
+      const orig = console.log;
+      console.log = (...args) => lines.push(args.join(' '));
+      try { fn(); } finally { console.log = orig; }
+      return lines.join('\n');
+    }
+
+    function parseMelody(str) {
+      return str.trim().split(/\s+/).filter(Boolean);
+    }
+
+    function runAll() {
+      const mel = parseMelody(melodyInput.value);
+      if (mel.length < 2) { output.textContent = 'Need at least 2 notes.'; return; }
+      output.textContent = capture(() => {
+        console.log('Harmonic Analysis Lab');
+        console.log(`Decay=${DECAY_RATE}, complexity_penalty=${COMPLEXITY_PENALTY}/level\n`);
+        runTest(mel, 2,    'HALF NOTES');
+        runTest(mel, 1,    'QUARTER NOTES');
+        runTest(mel, 0.5,  'EIGHTH NOTES');
+        runTest(mel, 0.25, 'SIXTEENTH NOTES');
+      });
+    }
+
+    function runSingle() {
+      const mel = parseMelody(melodyInput.value);
+      const dur = parseFloat(durationSelect.value);
+      if (mel.length < 2) { output.textContent = 'Need at least 2 notes.'; return; }
+      const labels = { 2: 'HALF NOTES', 1: 'QUARTER NOTES', 0.5: 'EIGHTH NOTES', 0.25: 'SIXTEENTH NOTES' };
+      output.textContent = capture(() => {
+        console.log('Harmonic Analysis Lab');
+        console.log(`Decay=${DECAY_RATE}, complexity_penalty=${COMPLEXITY_PENALTY}/level\n`);
+        runTest(mel, dur, labels[dur] || `dur=${dur}`);
+      });
+    }
+
+    document.getElementById('run').addEventListener('click', runAll);
+    document.getElementById('runOne').addEventListener('click', runSingle);
+
+    // Presets
+    for (const btn of document.querySelectorAll('[data-mel]')) {
+      btn.addEventListener('click', () => {
+        melodyInput.value = btn.dataset.mel;
+      });
+    }
+
+    // Run on load
+    runAll();
+  </script>
+</body>
+</html>
