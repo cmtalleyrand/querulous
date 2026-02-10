@@ -296,9 +296,13 @@ export function checkParallelPerfects(sims, formatter) {
 
   for (let i = 0; i < uniqueSims.length; i++) {
     const curr = uniqueSims[i];
-    if (![5, 8].includes(curr.interval.class)) continue;
+    // Only check perfect 5ths and octaves (unisons are class 1 for octaves reduced mod 12)
+    if (![1, 5].includes(curr.interval.class)) continue;
+    // Must be consonant (not a dissonance like augmented/diminished)
+    if (!curr.interval.isConsonant()) continue;
 
-    // Find the next simultaneity where BOTH voices have moved
+    // Find the IMMEDIATELY next simultaneity where BOTH voices have moved
+    let foundNext = false;
     for (let j = i + 1; j < uniqueSims.length; j++) {
       const next = uniqueSims[j];
 
@@ -306,6 +310,15 @@ export function checkParallelPerfects(sims, formatter) {
       const v2Moved = next.voice2Note !== curr.voice2Note;
       if (!v1Moved || !v2Moved) continue;
 
+      // Found the next simultaneity where both voices moved
+      foundNext = true;
+
+      // BOTH intervals must be perfect 5ths or octaves (class 1 or 5)
+      // AND both must be consonant (perfect quality, not augmented/diminished)
+      if (![1, 5].includes(next.interval.class)) break;
+      if (!next.interval.isConsonant()) break;
+
+      // Both must be the same interval class (5th to 5th, or 8ve to 8ve)
       if (next.interval.class !== curr.interval.class) break;
 
       const d1 = Math.sign(next.voice1Note.pitch - curr.voice1Note.pitch);
@@ -316,7 +329,7 @@ export function checkParallelPerfects(sims, formatter) {
         const checkKey = `${curr.voice1Note.pitch}-${curr.voice2Note.pitch}-${next.voice1Note.pitch}-${next.voice2Note.pitch}`;
         if (!checked.has(checkKey)) {
           checked.add(checkKey);
-          const names = { 5: '5ths', 8: '8ves' };
+          const names = { 1: '8ves', 5: '5ths' };
           const dir = d1 > 0 ? '↑' : '↓';
           violations.push({
             onset: curr.onset,
@@ -1056,27 +1069,40 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     }
     uniqueSims.sort((a, b) => a.onset - b.onset);
 
-    // Check direct motion into perfect intervals (warning)
+    // Check direct motion into perfect intervals (5ths/octaves)
+    // Scoring: -0.5 if strong/medium beat, -0.25 if weak beat, additional -0.25 if upper voice leaps/skips
     for (let i = 0; i < uniqueSims.length - 1; i++) {
       const curr = uniqueSims[i];
       const next = uniqueSims[i + 1];
 
-      if ([5, 8].includes(next.interval.class)) {
+      // Only check perfect 5ths and octaves (class 1 for octaves, 5 for fifths)
+      // Note: class 1/5 with quality 'perfect' are always consonant, no need to check isConsonant()
+      if ([1, 5].includes(next.interval.class)) {
         const v1Dir = next.voice1Note.pitch - curr.voice1Note.pitch;
         const v2Dir = next.voice2Note.pitch - curr.voice2Note.pitch;
 
-        // Similar motion into a perfect interval with upper voice leap
+        // Similar motion (both voices moving in same direction) into a perfect interval
         if (v1Dir !== 0 && v2Dir !== 0 && Math.sign(v1Dir) === Math.sign(v2Dir)) {
-          const upperLeap = Math.abs(v1Dir > v2Dir ? v1Dir : v2Dir) > 2;
-          if (upperLeap) {
-            const dir = v1Dir > 0 ? 'ascending' : 'descending';
-            warnings.push({
-              onset: next.onset,
-              description: `Direct ${next.interval.class === 5 ? '5th' : '8ve'} (${dir}): ${pitchName(curr.voice1Note.pitch)}-${pitchName(curr.voice2Note.pitch)} to ${pitchName(next.voice1Note.pitch)}-${pitchName(next.voice2Note.pitch)} at ${formatter.formatBeat(next.onset)}`,
-              type: 'direct',
-              interval: next.interval.toString(),
-            });
-          }
+          const dir = v1Dir > 0 ? 'ascending' : 'descending';
+          const upperVoiceInterval = Math.abs(v1Dir > v2Dir ? v1Dir : v2Dir);
+          const upperLeapOrSkip = upperVoiceInterval > 2; // > major 2nd
+
+          // Calculate penalty
+          const isStrongBeat = next.metricWeight >= 0.75; // strong or medium strong
+          let penalty = isStrongBeat ? -0.5 : -0.25;
+          if (upperLeapOrSkip) penalty -= 0.25;
+
+          warnings.push({
+            onset: next.onset,
+            description: `Direct ${next.interval.class === 5 ? '5th' : '8ve'} (${dir}): ${pitchName(curr.voice1Note.pitch)}-${pitchName(curr.voice2Note.pitch)} to ${pitchName(next.voice1Note.pitch)}-${pitchName(next.voice2Note.pitch)} at ${formatter.formatBeat(next.onset)}`,
+            type: 'direct',
+            interval: next.interval.toString(),
+            score: penalty,
+            details: [
+              `Beat strength: ${isStrongBeat ? 'strong/medium' : 'weak'} (${penalty >= -0.5 ? penalty : penalty + 0.25})`,
+              upperLeapOrSkip ? `Upper voice ${upperVoiceInterval > 4 ? 'leap' : 'skip'}: -0.25` : null,
+            ].filter(Boolean),
+          });
         }
       }
     }

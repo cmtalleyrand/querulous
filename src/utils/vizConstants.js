@@ -2,22 +2,29 @@
  * Shared visualization constants and utilities
  */
 
-// Unified semantic color scheme - muted, professional palette
+// Unified semantic color scheme - more saturated and brighter
 export const VIZ_COLORS = {
-  // Consonance colors (updated per spec)
-  perfectConsonant: '#2dd4bf',    // Teal-400 - blue-green for P1, P5, P8
-  imperfectConsonant: '#84cc16',  // Lime-500 - yellow-green for 3rds, 6ths
+  // Consonance colors - brighter and more saturated
+  perfectConsonant: '#14b8a6',    // Teal-500 - brighter blue-green for P1, P5, P8
+  imperfectConsonant: '#84cc16',  // Lime-500 - yellow-green for 3rds, 6ths (kept same, already vibrant)
   repeatedInterval: '#a3a3a3',    // Neutral-400 - grey for repeated/unison same pitch
   consonant: '#84cc16',           // Alias for imperfect (backwards compat)
 
-  // Dissonance colors - gradient from well-handled to problematic
-  dissonantStrong: '#8b5cf6',     // Violet-500 - well-handled dissonance (score >= 2)
-  dissonantGood: '#a78bfa',       // Violet-400 - good dissonance handling (score >= 1)
-  dissonantAcceptable: '#c4b5fd', // Violet-300 - acceptable (score >= 0)
-  dissonantMarginal: '#e879f9',   // Fuchsia-400 - marginal (score >= -1)
-  dissonantWeak: '#fb923c',       // Orange-400 - weak handling (score > -2)
-  dissonantProblematic: '#f87171',// Red-400 - problematic (score > -3)
-  dissonantSevere: '#ef4444',     // Red-500 - severe issues (score <= -3)
+  // Dissonance colors - granular spectrum per user spec
+  // Very good (>=2) -> Good (>=1) -> Acceptable (>=0.25) -> Mediocre (>=-0.25) -> Poor (>=-0.5) -> Very poor (>=-1) -> Severe (<-1)
+  dissonantVeryGood: '#14b8a6',   // Teal-500 - very good resolution (score >= 2)
+  dissonantGood: '#10b981',       // Emerald-500 - good resolution (score >= 1)
+  dissonantAcceptable: '#84cc16', // Lime-500 - acceptable, yellow-green (score >= 0.25)
+  dissonantMediocre: '#eab308',   // Yellow-500 - mediocre (score >= -0.25)
+  dissonantPoor: '#f59e0b',       // Amber-500 - poor (score >= -0.5)
+  dissonantVeryPoor: '#f97316',   // Orange-500 - very poor (score >= -1.0)
+  dissonantProblematic: '#f87171',// Red-400 - problematic (score >= -2.0)
+  dissonantSevere: '#ef4444',     // Red-500 - severe issues (score < -2.0)
+
+  // Legacy aliases for backwards compatibility
+  dissonantStrong: '#14b8a6',
+  dissonantMarginal: '#f59e0b',
+  dissonantWeak: '#f97316',
 
   // Problem indicators - bright and prominent
   parallelFifthsOctaves: '#dc2626', // Red-600 - bright red for parallel 5ths/8ves
@@ -170,63 +177,74 @@ export function getIntervalStyle({
     };
   }
 
-  // Dissonant - grade by score, with resolution status affecting border/saturation
+  // Dissonant - granular spectrum per user spec
+  // Very good (>=2) -> Good (>=1) -> Acceptable (>=0.25) -> Mediocre (>=-0.25) -> Poor (>=-0.5) -> Very poor (>=-1) -> Severe (<-1)
   const baseResolutionStyle = isResolved
     ? { borderStyle: 'solid', borderWidth: 1, opacity: 0.7 }
     : { borderStyle: 'dashed', borderWidth: 2, opacity: 0.55 };
 
   if (score >= 2.0) {
     return {
-      color: VIZ_COLORS.dissonantStrong,
-      bg: '#ddd6fe',
+      color: VIZ_COLORS.dissonantVeryGood,
+      bg: '#ccfbf1',
       fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Strong',
+      label: 'Very good',
       ...baseResolutionStyle,
-      opacity: isResolved ? 0.75 : 0.55,
+      opacity: isResolved ? 0.8 : 0.6,
     };
   }
   if (score >= 1.0) {
     return {
       color: VIZ_COLORS.dissonantGood,
-      bg: '#ede9fe',
+      bg: '#d1fae5',
       fill: VIZ_COLORS.dissonantGoodFill,
       label: 'Good',
+      ...baseResolutionStyle,
+      opacity: isResolved ? 0.75 : 0.55,
+    };
+  }
+  if (score >= 0.25) {
+    return {
+      color: VIZ_COLORS.dissonantAcceptable,
+      bg: '#ecfccb',
+      fill: VIZ_COLORS.dissonantGoodFill,
+      label: 'Acceptable',
       ...baseResolutionStyle,
       opacity: isResolved ? 0.7 : 0.5,
     };
   }
-  if (score >= 0) {
+  if (score >= -0.25) {
     return {
-      color: VIZ_COLORS.dissonantAcceptable,
-      bg: '#f3f0ff',
+      color: VIZ_COLORS.dissonantMediocre,
+      bg: '#fef9c3',
       fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Acceptable',
+      label: 'Mediocre',
+      ...baseResolutionStyle,
+      opacity: isResolved ? 0.65 : 0.45,
+    };
+  }
+  if (score >= -0.5) {
+    return {
+      color: VIZ_COLORS.dissonantPoor,
+      bg: '#fef3c7',
+      fill: VIZ_COLORS.dissonantMarginalFill,
+      label: 'Poor',
       ...baseResolutionStyle,
       opacity: isResolved ? 0.65 : 0.45,
     };
   }
   if (score >= -1.0) {
     return {
-      color: VIZ_COLORS.dissonantMarginal,
-      bg: '#fae8ff',
-      fill: VIZ_COLORS.dissonantMarginalFill,
-      label: 'Marginal',
-      ...baseResolutionStyle,
-      opacity: isResolved ? 0.65 : 0.45,
-    };
-  }
-  if (score >= -2.0) {
-    return {
-      color: VIZ_COLORS.dissonantWeak,
+      color: VIZ_COLORS.dissonantVeryPoor,
       bg: '#ffedd5',
       fill: VIZ_COLORS.dissonantBadFill,
-      label: 'Weak',
+      label: 'Very poor',
       borderStyle: 'dashed',
       borderWidth: 2,
       opacity: 0.6,
     };
   }
-  if (score >= -3.0) {
+  if (score >= -2.0) {
     return {
       color: VIZ_COLORS.dissonantProblematic,
       bg: '#fee2e2',

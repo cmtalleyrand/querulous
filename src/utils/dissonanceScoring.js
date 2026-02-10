@@ -571,8 +571,8 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   }
 
   // Check if this is actually a resolution (D → C) or just movement (D → D)
-  const isConsonant = nextSim.interval.isConsonant() ||
-    (nextSim.interval.class === 4 && !ctx.treatP4AsDissonant); // P4 can be consonant
+  // NOTE: P4 is ALWAYS dissonant in two-voice counterpoint (one voice is always the bass)
+  const isConsonant = nextSim.interval.isConsonant();
 
   // Differentiate between perfect and imperfect consonance resolution
   // Perfect consonances: unison (1), P5 (5), P8 (8)
@@ -591,7 +591,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     score = 0.5;
     details.push('Resolves to perfect consonance: +0.5');
   } else if (isConsonant) {
-    // Other consonances (P4 treated as consonant in some contexts)
+    // Other consonances (should not reach here in two-voice counterpoint)
     score = 0.5;
     details.push('Resolves to consonance: +0.5');
   } else {

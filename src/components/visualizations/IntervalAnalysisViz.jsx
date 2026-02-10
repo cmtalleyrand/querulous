@@ -717,9 +717,23 @@ export function IntervalAnalysisViz({
                 }}>
                   <div style={{ fontWeight: '600', marginBottom: '8px', color: '#374151' }}>Entry into dissonance:</div>
                   <div>Motion type: <strong>{selectedInterval.entry.motion?.type || 'unknown'}</strong></div>
-                  {selectedInterval.entry.details?.map((d, i) => (
-                    <div key={i} style={{ marginTop: '4px' }}>{d}</div>
-                  ))}
+                  {selectedInterval.entry.details?.map((d, i) => {
+                    // Parse detail string to extract score and color accordingly
+                    const scoreMatch = d.match(/([+-]?\d+\.?\d*)\s*$/);
+                    const score = scoreMatch ? parseFloat(scoreMatch[1]) : 0;
+                    const isPositive = score > 0;
+                    const isNegative = score < 0;
+
+                    let textColor = '#4b5563'; // neutral
+                    if (isPositive) textColor = '#059669'; // green-600
+                    if (isNegative) textColor = '#dc2626'; // red-600
+
+                    return (
+                      <div key={i} style={{ marginTop: '4px', color: textColor, fontWeight: (isPositive || isNegative) ? '500' : '400' }}>
+                        {d}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -734,9 +748,23 @@ export function IntervalAnalysisViz({
                 }}>
                   <div style={{ fontWeight: '600', marginBottom: '8px', color: '#374151' }}>Exit from dissonance:</div>
                   <div>Motion type: <strong>{selectedInterval.exit.motion?.type || 'unknown'}</strong></div>
-                  {selectedInterval.exit.details?.map((d, i) => (
-                    <div key={i} style={{ marginTop: '4px' }}>{d}</div>
-                  ))}
+                  {selectedInterval.exit.details?.map((d, i) => {
+                    // Parse detail string to extract score and color accordingly
+                    const scoreMatch = d.match(/([+-]?\d+\.?\d*)\s*$/);
+                    const score = scoreMatch ? parseFloat(scoreMatch[1]) : 0;
+                    const isPositive = score > 0;
+                    const isNegative = score < 0;
+
+                    let textColor = '#4b5563'; // neutral
+                    if (isPositive) textColor = '#059669'; // green-600
+                    if (isNegative) textColor = '#dc2626'; // red-600
+
+                    return (
+                      <div key={i} style={{ marginTop: '4px', color: textColor, fontWeight: (isPositive || isNegative) ? '500' : '400' }}>
+                        {d}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
