@@ -296,9 +296,13 @@ export function checkParallelPerfects(sims, formatter) {
 
   for (let i = 0; i < uniqueSims.length; i++) {
     const curr = uniqueSims[i];
-    if (![5, 8].includes(curr.interval.class)) continue;
+    // Only check perfect 5ths and octaves (unisons are class 1 for octaves reduced mod 12)
+    if (![1, 5].includes(curr.interval.class)) continue;
+    // Must be consonant (not a dissonance like augmented/diminished)
+    if (!curr.interval.isConsonant()) continue;
 
-    // Find the next simultaneity where BOTH voices have moved
+    // Find the IMMEDIATELY next simultaneity where BOTH voices have moved
+    let foundNext = false;
     for (let j = i + 1; j < uniqueSims.length; j++) {
       const next = uniqueSims[j];
 
@@ -306,6 +310,15 @@ export function checkParallelPerfects(sims, formatter) {
       const v2Moved = next.voice2Note !== curr.voice2Note;
       if (!v1Moved || !v2Moved) continue;
 
+      // Found the next simultaneity where both voices moved
+      foundNext = true;
+
+      // BOTH intervals must be perfect 5ths or octaves (class 1 or 5)
+      // AND both must be consonant (perfect quality, not augmented/diminished)
+      if (![1, 5].includes(next.interval.class)) break;
+      if (!next.interval.isConsonant()) break;
+
+      // Both must be the same interval class (5th to 5th, or 8ve to 8ve)
       if (next.interval.class !== curr.interval.class) break;
 
       const d1 = Math.sign(next.voice1Note.pitch - curr.voice1Note.pitch);
@@ -316,7 +329,7 @@ export function checkParallelPerfects(sims, formatter) {
         const checkKey = `${curr.voice1Note.pitch}-${curr.voice2Note.pitch}-${next.voice1Note.pitch}-${next.voice2Note.pitch}`;
         if (!checked.has(checkKey)) {
           checked.add(checkKey);
-          const names = { 5: '5ths', 8: '8ves' };
+          const names = { 1: '8ves', 5: '5ths' };
           const dir = d1 > 0 ? '↑' : '↓';
           violations.push({
             onset: curr.onset,
@@ -1061,7 +1074,9 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       const curr = uniqueSims[i];
       const next = uniqueSims[i + 1];
 
-      if ([5, 8].includes(next.interval.class)) {
+      // Only check perfect 5ths and octaves (class 1 for octaves, 5 for fifths)
+      // AND must be consonant (not augmented/diminished)
+      if ([1, 5].includes(next.interval.class) && next.interval.isConsonant()) {
         const v1Dir = next.voice1Note.pitch - curr.voice1Note.pitch;
         const v2Dir = next.voice2Note.pitch - curr.voice2Note.pitch;
 
