@@ -2,47 +2,66 @@
  * Shared visualization constants and utilities
  */
 
-// Unified semantic color scheme - more saturated and brighter
+// Unified semantic color scheme - NEW SYSTEM:
+// A) Dissonances: purple → red (based on ENTRY score + pattern bonus)
+// B) Consonant resolutions: emerald → amber (based on EXIT score)
+// C) Red reserved for: parallel fifths/octaves, consecutive non-passing dissonances
 export const VIZ_COLORS = {
-  // Consonance colors - brighter and more saturated
-  perfectConsonant: '#14b8a6',    // Teal-500 - brighter blue-green for P1, P5, P8
-  imperfectConsonant: '#84cc16',  // Lime-500 - yellow-green for 3rds, 6ths (kept same, already vibrant)
-  repeatedInterval: '#a3a3a3',    // Neutral-400 - grey for repeated/unison same pitch
-  consonant: '#84cc16',           // Alias for imperfect (backwards compat)
+  // Consonance colors (for standalone consonances, not resolutions)
+  perfectConsonant: '#14b8a6',    // Teal-500 - for P1, P5, P8
+  imperfectConsonant: '#84cc16',  // Lime-500 - for 3rds, 6ths
+  repeatedInterval: '#a3a3a3',    // Neutral-400 - grey for repeated
+  consonant: '#84cc16',           // Alias for imperfect
 
-  // Dissonance colors - granular spectrum per user spec
-  // Very good (>=2) -> Good (>=1) -> Acceptable (>=0.25) -> Mediocre (>=-0.25) -> Poor (>=-0.5) -> Very poor (>=-1) -> Severe (<-1)
-  dissonantVeryGood: '#14b8a6',   // Teal-500 - very good resolution (score >= 2)
-  dissonantGood: '#10b981',       // Emerald-500 - good resolution (score >= 1)
-  dissonantAcceptable: '#84cc16', // Lime-500 - acceptable, yellow-green (score >= 0.25)
-  dissonantMediocre: '#eab308',   // Yellow-500 - mediocre (score >= -0.25)
-  dissonantPoor: '#f59e0b',       // Amber-500 - poor (score >= -0.5)
-  dissonantVeryPoor: '#f97316',   // Orange-500 - very poor (score >= -1.0)
-  dissonantProblematic: '#f87171',// Red-400 - problematic (score >= -2.0)
-  dissonantSevere: '#ef4444',     // Red-500 - severe issues (score < -2.0)
+  // DISSONANCE colors (purple → red based on entry + pattern score)
+  // Blue-purple if well-entered/patterned, red-purple if poorly entered
+  // Score 0 is on the red side of purple
+  dissonantExcellent: '#6366f1',  // Indigo-500 - excellent entry+pattern (score >= 2.0)
+  dissonantVeryGood: '#7c3aed',   // Violet-600 - very good (score >= 1.5)
+  dissonantGood: '#8b5cf6',       // Violet-500 - good (score >= 1.0)
+  dissonantAcceptable: '#a855f7', // Purple-500 - acceptable (score >= 0.5)
+  dissonantMarginal: '#c026d3',   // Fuchsia-600 - marginal (score >= 0)
+  dissonantPoor: '#db2777',       // Pink-600 - poor, red side of purple (score >= -0.5)
+  dissonantBad: '#e11d48',        // Rose-600 - bad (score >= -1.0)
+  dissonantVeryBad: '#dc2626',    // Red-600 - very bad (score < -1.0)
 
-  // Legacy aliases for backwards compatibility
-  dissonantStrong: '#14b8a6',
-  dissonantMarginal: '#f59e0b',
-  dissonantWeak: '#f97316',
+  // RESOLUTION colors (emerald → amber based on exit score)
+  // Only as bad as amber, never red (red reserved for violations)
+  resolutionExcellent: '#10b981',  // Emerald-500 - excellent resolution (score >= 1.0)
+  resolutionVeryGood: '#22c55e',   // Green-500 - very good (score >= 0.75)
+  resolutionGood: '#84cc16',       // Lime-500 - good (score >= 0.5)
+  resolutionAcceptable: '#eab308', // Yellow-500 - acceptable (score >= 0.25)
+  resolutionMarginal: '#f59e0b',   // Amber-500 - marginal (score >= 0)
+  resolutionPoor: '#f97316',       // Orange-500 - poor (score >= -0.5)
+  resolutionWeak: '#fb923c',       // Orange-400 - weak (score < -0.5)
 
-  // Problem indicators - bright and prominent
-  parallelFifthsOctaves: '#dc2626', // Red-600 - bright red for parallel 5ths/8ves
-  unresolvedDissonance: '#f59e0b',  // Amber-500 - warning orange for unresolved
+  // VIOLATION colors - RED reserved for serious issues
+  parallelFifthsOctaves: '#dc2626', // Red-600 - parallel 5ths/8ves
+  consecutiveDissonance: '#ef4444', // Red-500 - consecutive non-passing dissonances
+  unresolvedDissonance: '#f59e0b',  // Amber-500 - unresolved
 
-  // Semi-transparent fills for interval regions (always visible, subtle)
-  perfectFill: 'rgba(45, 212, 191, 0.20)',      // Teal, slightly more visible
+  // Semi-transparent fills for interval regions
+  perfectFill: 'rgba(20, 184, 166, 0.20)',      // Teal
   imperfectFill: 'rgba(132, 204, 22, 0.18)',    // Lime
   repeatedFill: 'rgba(163, 163, 163, 0.15)',    // Grey
   consonantFill: 'rgba(132, 204, 22, 0.18)',    // Alias
-  dissonantGoodFill: 'rgba(139, 92, 246, 0.22)',
-  dissonantMarginalFill: 'rgba(232, 121, 249, 0.22)',
-  dissonantBadFill: 'rgba(251, 146, 60, 0.25)',
-  dissonantSevereFill: 'rgba(248, 113, 113, 0.28)',
 
-  // Problem fills - more prominent
-  parallelFill: 'rgba(220, 38, 38, 0.35)',      // Bright red fill
-  unresolvedFill: 'rgba(245, 158, 11, 0.30)',   // Warning orange fill
+  // Dissonance fills (purple spectrum)
+  dissonantExcellentFill: 'rgba(99, 102, 241, 0.25)',   // Indigo
+  dissonantGoodFill: 'rgba(139, 92, 246, 0.24)',        // Violet
+  dissonantMarginalFill: 'rgba(192, 38, 211, 0.23)',    // Fuchsia
+  dissonantBadFill: 'rgba(219, 39, 119, 0.25)',         // Pink
+  dissonantVeryBadFill: 'rgba(220, 38, 38, 0.28)',      // Red
+
+  // Resolution fills (green to amber spectrum)
+  resolutionExcellentFill: 'rgba(16, 185, 129, 0.22)',  // Emerald
+  resolutionGoodFill: 'rgba(132, 204, 22, 0.20)',       // Lime
+  resolutionMarginalFill: 'rgba(245, 158, 11, 0.22)',   // Amber
+  resolutionPoorFill: 'rgba(251, 146, 60, 0.24)',       // Orange
+
+  // Violation fills - prominent red
+  parallelFill: 'rgba(220, 38, 38, 0.35)',              // Bright red
+  unresolvedFill: 'rgba(245, 158, 11, 0.30)',           // Amber
 
   // Voice colors (muted, distinct)
   voiceSubject: '#6366f1',        // Indigo-500 - subject
@@ -77,14 +96,51 @@ export const VIZ_COLORS = {
 };
 
 /**
+ * Get dissonance color based on entry + pattern score (purple → red spectrum)
+ * Blue-purple if well-entered/patterned, red-purple if poorly entered
+ * Score 0 is on the red side of purple
+ */
+function getDissonanceColorByEntryScore(score) {
+  if (score >= 2.0) return { color: VIZ_COLORS.dissonantExcellent, fill: VIZ_COLORS.dissonantExcellentFill, label: 'Excellent' };
+  if (score >= 1.5) return { color: VIZ_COLORS.dissonantVeryGood, fill: VIZ_COLORS.dissonantExcellentFill, label: 'Very good' };
+  if (score >= 1.0) return { color: VIZ_COLORS.dissonantGood, fill: VIZ_COLORS.dissonantGoodFill, label: 'Good' };
+  if (score >= 0.5) return { color: VIZ_COLORS.dissonantAcceptable, fill: VIZ_COLORS.dissonantGoodFill, label: 'Acceptable' };
+  if (score >= 0) return { color: VIZ_COLORS.dissonantMarginal, fill: VIZ_COLORS.dissonantMarginalFill, label: 'Marginal' };
+  if (score >= -0.5) return { color: VIZ_COLORS.dissonantPoor, fill: VIZ_COLORS.dissonantBadFill, label: 'Poor' };
+  if (score >= -1.0) return { color: VIZ_COLORS.dissonantBad, fill: VIZ_COLORS.dissonantBadFill, label: 'Bad' };
+  return { color: VIZ_COLORS.dissonantVeryBad, fill: VIZ_COLORS.dissonantVeryBadFill, label: 'Very bad' };
+}
+
+/**
+ * Get resolution color based on exit score (emerald → amber spectrum)
+ * Only as bad as amber/orange, never red (red reserved for violations)
+ */
+function getResolutionColorByExitScore(score) {
+  if (score >= 1.0) return { color: VIZ_COLORS.resolutionExcellent, fill: VIZ_COLORS.resolutionExcellentFill, label: 'Excellent' };
+  if (score >= 0.75) return { color: VIZ_COLORS.resolutionVeryGood, fill: VIZ_COLORS.resolutionExcellentFill, label: 'Very good' };
+  if (score >= 0.5) return { color: VIZ_COLORS.resolutionGood, fill: VIZ_COLORS.resolutionGoodFill, label: 'Good' };
+  if (score >= 0.25) return { color: VIZ_COLORS.resolutionAcceptable, fill: VIZ_COLORS.resolutionGoodFill, label: 'Acceptable' };
+  if (score >= 0) return { color: VIZ_COLORS.resolutionMarginal, fill: VIZ_COLORS.resolutionMarginalFill, label: 'Marginal' };
+  if (score >= -0.5) return { color: VIZ_COLORS.resolutionPoor, fill: VIZ_COLORS.resolutionPoorFill, label: 'Poor' };
+  return { color: VIZ_COLORS.resolutionWeak, fill: VIZ_COLORS.resolutionPoorFill, label: 'Weak' };
+}
+
+/**
  * Get interval style based on consonance, score, and resolution status
- * @param {Object} options - { isConsonant, isPerfect, score, category, isRepeated, isResolved, isParallel }
+ * NEW SYSTEM:
+ * - Dissonances colored by entry+pattern score (purple→red)
+ * - Resolutions colored by exit score (emerald→amber)
+ * - Regular consonances keep original colors (teal/lime)
+ *
+ * @param {Object} options - { isConsonant, isPerfect, score, entryScore, exitScore, category, isRepeated, isResolved, isParallel }
  * @returns {Object} { color, bg, fill, label, borderStyle, borderWidth, opacity }
  */
 export function getIntervalStyle({
   isConsonant,
   isPerfect,
   score = 0,
+  entryScore,    // NEW: for coloring dissonances by entry
+  exitScore,     // NEW: for coloring resolutions by exit
   category,
   isRepeated = false,
   isResolved = true,
@@ -104,7 +160,20 @@ export function getIntervalStyle({
   }
 
   if (isConsonant) {
-    // Check for specific categories first
+    // RESOLUTION: consonance following a dissonance - color by exit score (emerald → amber)
+    if (category === 'consonant_resolution' || category === 'consonant_good_resolution' || category === 'consonant_bad_resolution') {
+      const useScore = exitScore !== undefined ? exitScore : score;
+      const colorInfo = getResolutionColorByExitScore(useScore);
+      return {
+        ...colorInfo,
+        bg: useScore >= 0.5 ? '#d1fae5' : (useScore >= 0 ? '#fef3c7' : '#fed7aa'),
+        borderStyle: useScore >= 0 ? 'solid' : 'dashed',
+        borderWidth: useScore >= 0.75 ? 2 : 1,
+        opacity: useScore >= 0.5 ? 0.85 : 0.7,
+      };
+    }
+
+    // PREPARATION: consonance before a dissonance
     if (category === 'consonant_preparation') {
       return {
         color: '#0891b2',
@@ -114,28 +183,6 @@ export function getIntervalStyle({
         borderStyle: 'solid',
         borderWidth: 1,
         opacity: 0.7,
-      };
-    }
-    if (category === 'consonant_good_resolution') {
-      return {
-        color: '#0d9488', // Teal-600 - more saturated
-        bg: '#99f6e4', // Teal-200 - bright background
-        fill: 'rgba(20, 184, 166, 0.65)', // Teal-500 at higher opacity - MUCH brighter
-        label: 'Good resolution',
-        borderStyle: 'solid',
-        borderWidth: 3,
-        opacity: 0.95, // Very prominent
-      };
-    }
-    if (category === 'consonant_bad_resolution') {
-      return {
-        color: VIZ_COLORS.unresolvedDissonance,
-        bg: '#fed7aa',
-        fill: VIZ_COLORS.unresolvedFill,
-        label: 'After leap resolution', // Clarify: THIS consonance follows a dissonance resolved by leap
-        borderStyle: 'dashed',
-        borderWidth: 2,
-        opacity: 0.6,
       };
     }
 
@@ -177,92 +224,20 @@ export function getIntervalStyle({
     };
   }
 
-  // Dissonant - granular spectrum per user spec
-  // Very good (>=2) -> Good (>=1) -> Acceptable (>=0.25) -> Mediocre (>=-0.25) -> Poor (>=-0.5) -> Very poor (>=-1) -> Severe (<-1)
-  const baseResolutionStyle = isResolved
-    ? { borderStyle: 'solid', borderWidth: 1, opacity: 0.7 }
-    : { borderStyle: 'dashed', borderWidth: 2, opacity: 0.55 };
+  // DISSONANCE - color by entry + pattern score (purple → red spectrum)
+  // Use entryScore if provided, otherwise fall back to total score
+  const useEntryScore = entryScore !== undefined ? entryScore : score;
+  const colorInfo = getDissonanceColorByEntryScore(useEntryScore);
 
-  if (score >= 2.0) {
-    return {
-      color: VIZ_COLORS.dissonantVeryGood,
-      bg: '#ccfbf1',
-      fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Very good',
-      ...baseResolutionStyle,
-      opacity: isResolved ? 0.8 : 0.6,
-    };
-  }
-  if (score >= 1.0) {
-    return {
-      color: VIZ_COLORS.dissonantGood,
-      bg: '#d1fae5',
-      fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Good',
-      ...baseResolutionStyle,
-      opacity: isResolved ? 0.75 : 0.55,
-    };
-  }
-  if (score >= 0.25) {
-    return {
-      color: VIZ_COLORS.dissonantAcceptable,
-      bg: '#ecfccb',
-      fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Acceptable',
-      ...baseResolutionStyle,
-      opacity: isResolved ? 0.7 : 0.5,
-    };
-  }
-  if (score >= -0.25) {
-    return {
-      color: VIZ_COLORS.dissonantMediocre,
-      bg: '#fef9c3',
-      fill: VIZ_COLORS.dissonantGoodFill,
-      label: 'Mediocre',
-      ...baseResolutionStyle,
-      opacity: isResolved ? 0.65 : 0.45,
-    };
-  }
-  if (score >= -0.5) {
-    return {
-      color: VIZ_COLORS.dissonantPoor,
-      bg: '#fef3c7',
-      fill: VIZ_COLORS.dissonantMarginalFill,
-      label: 'Poor',
-      ...baseResolutionStyle,
-      opacity: isResolved ? 0.65 : 0.45,
-    };
-  }
-  if (score >= -1.0) {
-    return {
-      color: VIZ_COLORS.dissonantVeryPoor,
-      bg: '#ffedd5',
-      fill: VIZ_COLORS.dissonantBadFill,
-      label: 'Very poor',
-      borderStyle: 'dashed',
-      borderWidth: 2,
-      opacity: 0.6,
-    };
-  }
-  if (score >= -2.0) {
-    return {
-      color: VIZ_COLORS.dissonantProblematic,
-      bg: '#fee2e2',
-      fill: VIZ_COLORS.dissonantSevereFill,
-      label: 'Problematic',
-      borderStyle: 'dashed',
-      borderWidth: 2,
-      opacity: 0.7,
-    };
-  }
+  const baseResolutionStyle = isResolved
+    ? { borderStyle: 'solid', borderWidth: 1, opacity: 0.75 }
+    : { borderStyle: 'dashed', borderWidth: 2, opacity: 0.6 };
+
   return {
-    color: VIZ_COLORS.dissonantSevere,
-    bg: '#fecaca',
-    fill: VIZ_COLORS.dissonantSevereFill,
-    label: 'Severe',
-    borderStyle: 'dashed',
-    borderWidth: 3,
-    opacity: 0.8,
+    ...colorInfo,
+    bg: useEntryScore >= 1.0 ? '#e0e7ff' : (useEntryScore >= 0 ? '#f3e8ff' : '#fce7f3'),
+    ...baseResolutionStyle,
+    opacity: isResolved ? (useEntryScore >= 0.5 ? 0.8 : 0.7) : 0.55,
   };
 }
 
