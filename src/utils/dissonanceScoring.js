@@ -1284,17 +1284,20 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
   // Check patterns
   const patternInfo = checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx);
 
-  // Calculate total score
-  let totalScore = entryInfo.score + exitInfo.score + patternInfo.bonus;
-
-  // P4 is less severe than other dissonances - add bonus
-  // P4 (perfect 4th) has interval class 4 and quality 'perfect'
+  // P4 is less severe than other dissonances - add bonus to entry (it's a quality of the interval itself)
   const isP4 = currSim.interval.class === 4 && currSim.interval.quality === 'perfect';
-  let p4Bonus = 0;
-  if (isP4) {
-    p4Bonus = 0.5; // P4 is milder dissonance
-    totalScore += p4Bonus;
-  }
+  const p4Bonus = isP4 ? 0.5 : 0;
+
+  // Calculate ENTRY score: entry motion + entry-allocated pattern bonuses + P4 bonus
+  const entryBonusTotal = (patternInfo.entryBonuses || []).reduce((sum, b) => sum + b.amount, 0);
+  const entryScore = entryInfo.score + entryBonusTotal + p4Bonus;
+
+  // Calculate EXIT score: exit motion + exit-allocated pattern bonuses
+  const exitBonusTotal = (patternInfo.exitBonuses || []).reduce((sum, b) => sum + b.amount, 0);
+  const exitScore = exitInfo.score + exitBonusTotal;
+
+  // Total score (for backwards compatibility and overall assessment)
+  const totalScore = entryScore + exitScore;
 
   // Determine type label and semantic category
   let type = 'unprepared';
@@ -1344,6 +1347,8 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
     type,
     category,
     score: totalScore,
+    entryScore,      // NEW: separate entry score for purple-red coloring
+    exitScore,       // NEW: separate exit score (used for resolution coloring)
     label,
     isConsonant: false,
     interval: currSim.interval.toString(),
@@ -1357,10 +1362,9 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
     patterns: patternInfo.patterns,
     description,
     details: [
-      `Entry: ${entryInfo.score.toFixed(1)} (${entryInfo.details.join(', ')})`,
-      `Exit: ${exitInfo.score.toFixed(1)} (${exitInfo.details.join(', ')})`,
-      patternInfo.patterns.length > 0 ? `Pattern: ${patternInfo.patterns.map(p => `${p.type} +${p.bonus}`).join(', ')}` : 'No pattern match',
-      isP4 ? `P4 (mild dissonance): +${p4Bonus.toFixed(1)}` : null,
+      `Entry: ${entryScore.toFixed(1)} (base: ${entryInfo.score.toFixed(1)}${entryBonusTotal > 0 ? `, patterns: +${entryBonusTotal.toFixed(1)}` : ''}${p4Bonus > 0 ? `, P4: +${p4Bonus.toFixed(1)}` : ''})`,
+      `Exit: ${exitScore.toFixed(1)} (base: ${exitInfo.score.toFixed(1)}${exitBonusTotal > 0 ? `, patterns: +${exitBonusTotal.toFixed(1)}` : ''})`,
+      patternInfo.patterns.length > 0 ? `Patterns: ${patternInfo.patterns.map(p => `${p.type} (entry: +${p.entryBonus || 0}, exit: +${p.exitBonus || 0})`).join(', ')}` : null,
       `Total: ${totalScore.toFixed(1)}`,
     ].filter(Boolean),
   };
