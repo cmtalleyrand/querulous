@@ -460,29 +460,31 @@ export function isParallelFifthOrOctave(prevInterval, currInterval) {
   const prevClass = prevInterval.intervalClass;
   const currClass = currInterval.intervalClass;
 
-  // Both must be perfect 5ths (7 semitones / class 5) or octaves (12 semitones / class 1/8)
-  const isPerfectFifth = (ic) => ic === 5 || ic === 7;
-  const isPerfectOctave = (ic) => ic === 1 || ic === 8 || ic === 0;
+  // Both must be perfect 5ths (class 5) or unisons/octaves (class 1)
+  // NOTE: In mod-12 system, octaves are reduced to class 1 (unison)
+  // Class 7 is a SEVENTH (m7/M7), NOT a fifth!
+  const isPerfectFifth = (ic) => ic === 5;
+  const isPerfectOctaveOrUnison = (ic) => ic === 1;
 
   // Parallel 5ths
   if (isPerfectFifth(prevClass) && isPerfectFifth(currClass)) {
     // Check both voices moved in same direction
-    const v1Moved = currInterval.v1Pitch !== prevInterval.v1Pitch;
-    const v2Moved = currInterval.v2Pitch !== prevInterval.v2Pitch;
+    const v1Moved = currInterval.duxPitch !== prevInterval.duxPitch;
+    const v2Moved = currInterval.comesPitch !== prevInterval.comesPitch;
     if (v1Moved && v2Moved) {
-      const v1Dir = Math.sign(currInterval.v1Pitch - prevInterval.v1Pitch);
-      const v2Dir = Math.sign(currInterval.v2Pitch - prevInterval.v2Pitch);
+      const v1Dir = Math.sign(currInterval.duxPitch - prevInterval.duxPitch);
+      const v2Dir = Math.sign(currInterval.comesPitch - prevInterval.comesPitch);
       if (v1Dir === v2Dir) return true;
     }
   }
 
   // Parallel octaves/unisons
-  if (isPerfectOctave(prevClass) && isPerfectOctave(currClass)) {
-    const v1Moved = currInterval.v1Pitch !== prevInterval.v1Pitch;
-    const v2Moved = currInterval.v2Pitch !== prevInterval.v2Pitch;
+  if (isPerfectOctaveOrUnison(prevClass) && isPerfectOctaveOrUnison(currClass)) {
+    const v1Moved = currInterval.duxPitch !== prevInterval.duxPitch;
+    const v2Moved = currInterval.comesPitch !== prevInterval.comesPitch;
     if (v1Moved && v2Moved) {
-      const v1Dir = Math.sign(currInterval.v1Pitch - prevInterval.v1Pitch);
-      const v2Dir = Math.sign(currInterval.v2Pitch - prevInterval.v2Pitch);
+      const v1Dir = Math.sign(currInterval.duxPitch - prevInterval.duxPitch);
+      const v2Dir = Math.sign(currInterval.comesPitch - prevInterval.comesPitch);
       if (v1Dir === v2Dir) return true;
     }
   }
