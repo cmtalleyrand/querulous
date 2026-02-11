@@ -785,21 +785,70 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
   }
 
   let bonus = 0;
+  const entryBonuses = []; // Track bonuses allocated to entry
+  const exitBonuses = [];  // Track bonuses allocated to exit
 
-  // SUSPENSION: Entry=Oblique+Strong, Exit=Step Down by the voice that held
+  // SUSPENSION/RETARDATION: Oblique entry (one voice held), step resolution by the held voice
+  // Split bonuses: +0.75 for oblique entry pattern, +0.5 for step resolution, +0.25 for downward (vs upward)
   if (entryInfo.motion.type === 'oblique' && isStrongBeat(currSim.onset, ctx)) {
-    // Check which voice held and which moved
     const heldVoice = !entryInfo.motion.v1Moved ? 1 : (!entryInfo.motion.v2Moved ? 2 : null);
     if (heldVoice) {
       const resolution = heldVoice === 1 ? exitInfo.v1Resolution : exitInfo.v2Resolution;
-      if (resolution && resolution.magnitude.type === 'step' && resolution.direction < 0) {
-        bonus += 1.5;
-        patterns.push({ type: 'suspension', bonus: 1.5, description: 'Suspension (oblique entry, step down resolution)' });
+      if (resolution && resolution.magnitude.type === 'step') {
+        const isDownward = resolution.direction < 0;
+        const patternType = isDownward ? 'suspension' : 'retardation';
+
+        // Entry bonus: oblique motion with preparation
+        const entryBonus = 0.75;
+        entryBonuses.push({ amount: entryBonus, reason: `${patternType} preparation (oblique)` });
+
+        // Exit bonus: step resolution
+        const stepBonus = 0.5;
+        exitBonuses.push({ amount: stepBonus, reason: 'step resolution' });
+
+        // Exit bonus: direction bonus (downward is more traditional)
+        const dirBonus = isDownward ? 0.25 : 0;
+        if (isDownward) {
+          exitBonuses.push({ amount: dirBonus, reason: 'downward resolution' });
+        }
+
+        const totalBonus = entryBonus + stepBonus + dirBonus;
+        bonus += totalBonus;
+        patterns.push({
+          type: patternType,
+          bonus: totalBonus,
+          entryBonus,
+          exitBonus: stepBonus + dirBonus,
+          description: `${isDownward ? 'Suspension' : 'Retardation'} (oblique entry, step ${isDownward ? 'down' : 'up'} resolution)`
+        });
+      }
+    }
+  }
+
+  // ANTICIPATION: Early arrival creating momentary dissonance (typically oblique, weak beat)
+  // Like suspension but reversed - the moving voice anticipates the next harmony
+  if (entryInfo.motion.type === 'oblique' && !isStrongBeat(currSim.onset, ctx)) {
+    const movingVoice = entryInfo.motion.v1Moved ? 1 : (entryInfo.motion.v2Moved ? 2 : null);
+    if (movingVoice) {
+      const resolution = movingVoice === 1 ? exitInfo.v1Resolution : exitInfo.v2Resolution;
+      // Anticipation typically "resolves" by the other voice moving (oblique exit) or both moving
+      if (exitInfo.motion && exitInfo.motion.type !== 'parallel') {
+        const anticipationBonus = 0.5; // Moderate bonus for recognized pattern
+        bonus += anticipationBonus;
+        entryBonuses.push({ amount: anticipationBonus, reason: 'anticipation pattern' });
+        patterns.push({
+          type: 'anticipation',
+          bonus: anticipationBonus,
+          entryBonus: anticipationBonus,
+          exitBonus: 0,
+          description: 'Anticipation (early arrival on weak beat)'
+        });
       }
     }
   }
 
   // APPOGGIATURA: Entry=Leap/Skip+Strong, Exit=Step Opposite by the voice that leaped
+  // Allocate more to entry to offset leap penalty: +2.0 entry, +0.5 exit
   if (isStrongBeat(currSim.onset, ctx)) {
     // Check if V1 leaped in and steps out opposite
     if (entryInfo.v1MelodicInterval !== 0) {
@@ -807,8 +856,20 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
       if ((entryMag.type === 'skip' || entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap') && exitInfo.v1Resolution) {
         const entryDir = Math.sign(entryInfo.v1MelodicInterval);
         if (exitInfo.v1Resolution.magnitude.type === 'step' && exitInfo.v1Resolution.direction === -entryDir) {
-          bonus += 2.5;
-          patterns.push({ type: 'appoggiatura', bonus: 2.0, voice: 1, description: 'Appoggiatura (V1 leaps in, steps out opposite)' });
+          const entryBonus = 2.0; // Offset leap penalty
+          const exitBonus = 0.5;  // Acknowledge good resolution
+          const totalBonus = entryBonus + exitBonus;
+          bonus += totalBonus;
+          entryBonuses.push({ amount: entryBonus, reason: 'appoggiatura leap entry' });
+          exitBonuses.push({ amount: exitBonus, reason: 'opposite step resolution' });
+          patterns.push({
+            type: 'appoggiatura',
+            bonus: totalBonus,
+            entryBonus,
+            exitBonus,
+            voice: 1,
+            description: 'Appoggiatura (V1 leaps in, steps out opposite)'
+          });
         }
       }
     }
@@ -818,8 +879,20 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
       if ((entryMag.type === 'skip' || entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap') && exitInfo.v2Resolution) {
         const entryDir = Math.sign(entryInfo.v2MelodicInterval);
         if (exitInfo.v2Resolution.magnitude.type === 'step' && exitInfo.v2Resolution.direction === -entryDir) {
-          bonus += 2.5;
-          patterns.push({ type: 'appoggiatura', bonus: 2.0, voice: 2, description: 'Appoggiatura (V2 leaps in, steps out opposite)' });
+          const entryBonus = 2.0;
+          const exitBonus = 0.5;
+          const totalBonus = entryBonus + exitBonus;
+          bonus += totalBonus;
+          entryBonuses.push({ amount: entryBonus, reason: 'appoggiatura leap entry' });
+          exitBonuses.push({ amount: exitBonus, reason: 'opposite step resolution' });
+          patterns.push({
+            type: 'appoggiatura',
+            bonus: totalBonus,
+            entryBonus,
+            exitBonus,
+            voice: 2,
+            description: 'Appoggiatura (V2 leaps in, steps out opposite)'
+          });
         }
       }
     }
@@ -827,18 +900,18 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
 
   // CAMBIATA (NOTA CAMBIATA) DETECTION
   // Traditional cambiata: 5-note figure where the 2nd note is dissonant
-  // Pattern: consonance → step down to dissonance → skip down 3rd → step up → resolution
-  // We detect at the dissonance point (note 2 of 5):
-  //   - Entry: step down from consonance
-  //   - Exit: skip down a third (m3 or M3, 3-4 semitones)
-  //   - Typically on weak beat
+  // Pattern: consonance → step to dissonance → skip down 3rd → step up → resolution
+  // Entry: step from consonance (controlled entry, +0.3)
+  // Exit: skip down a third (unusual but part of pattern, +1.0 to offset skip penalty)
   //
   // Variants:
   //   - cambiata_proper: Traditional form (step down, skip down 3rd) on weak beat
   //   - cambiata_inverted: Inverted form (step up, skip up 3rd)
-  //   - cambiata_simple: Core pattern on strong beat (less traditional)
+  //   - cambiata_strong: On strong beat (less traditional, smaller bonus)
 
   // Helper to check cambiata for a voice
+  // Entry bonus: small reward for controlled step entry
+  // Exit bonus: larger reward to offset skip penalty and recognize the melodic figure
   const checkCambiataForVoice = (voice, melodicInterval, resolution) => {
     if (!resolution) return null;
 
@@ -852,37 +925,53 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
     const isWeakBeat = !isStrongBeat(currSim.onset, ctx);
 
     if (isDescending && isWeakBeat) {
-      // Traditional cambiata: step down, skip down, weak beat
+      // Traditional cambiata: step down, skip down, weak beat (most idiomatic)
+      const entryBonus = 0.3;
+      const exitBonus = 1.2;
       return {
         type: 'cambiata_proper',
-        bonus: 1.5,
+        bonus: entryBonus + exitBonus,
+        entryBonus,
+        exitBonus,
         voice,
         label: 'Cam',
         description: 'Cambiata (step down → skip down 3rd, weak beat)',
       };
     } else if (!isDescending && isWeakBeat) {
-      // Inverted cambiata: step up, skip up, weak beat
+      // Inverted cambiata: step up, skip up, weak beat (less common but acceptable)
+      const entryBonus = 0.2;
+      const exitBonus = 0.8;
       return {
         type: 'cambiata_inverted',
-        bonus: 1.0,
+        bonus: entryBonus + exitBonus,
+        entryBonus,
+        exitBonus,
         voice,
         label: 'Cam↑',
         description: 'Inverted cambiata (step up → skip up 3rd)',
       };
     } else if (isDescending) {
-      // Cambiata-like on strong beat (less idiomatic)
+      // Cambiata-like on strong beat (less idiomatic, smaller reward)
+      const entryBonus = 0.1;
+      const exitBonus = 0.4;
       return {
         type: 'cambiata_strong',
-        bonus: 0.5,
+        bonus: entryBonus + exitBonus,
+        entryBonus,
+        exitBonus,
         voice,
         label: 'Cam?',
         description: 'Cambiata figure on strong beat (non-traditional)',
       };
     } else {
       // Inverted on strong beat
+      const entryBonus = 0.1;
+      const exitBonus = 0.4;
       return {
         type: 'cambiata_inverted_strong',
-        bonus: 0.5,
+        bonus: entryBonus + exitBonus,
+        entryBonus,
+        exitBonus,
         voice,
         label: 'Cam↑?',
         description: 'Inverted cambiata on strong beat (non-traditional)',
@@ -894,6 +983,8 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
   const v1Cambiata = checkCambiataForVoice(1, entryInfo.v1MelodicInterval, exitInfo.v1Resolution);
   if (v1Cambiata) {
     bonus += v1Cambiata.bonus;
+    entryBonuses.push({ amount: v1Cambiata.entryBonus, reason: `${v1Cambiata.description} entry` });
+    exitBonuses.push({ amount: v1Cambiata.exitBonus, reason: `${v1Cambiata.description} exit` });
     patterns.push(v1Cambiata);
   }
 
@@ -902,6 +993,8 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
     const v2Cambiata = checkCambiataForVoice(2, entryInfo.v2MelodicInterval, exitInfo.v2Resolution);
     if (v2Cambiata) {
       bonus += v2Cambiata.bonus;
+      entryBonuses.push({ amount: v2Cambiata.entryBonus, reason: `${v2Cambiata.description} entry` });
+      exitBonuses.push({ amount: v2Cambiata.exitBonus, reason: `${v2Cambiata.description} exit` });
       patterns.push(v2Cambiata);
     }
   }
@@ -976,12 +1069,13 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
     }
   }
 
-  // ANTICIPATION: Entry=Oblique+Weak, Exit=Oblique (same note repeated)
-  if (entryInfo.motion.type === 'oblique' && !isStrongBeat(currSim.onset, ctx) && exitInfo.motion.type === 'oblique') {
-    patterns.push({ type: 'anticipation', bonus: 0, description: 'Anticipation (oblique entry and exit on weak beat)' });
-  }
-
-  return { bonus, patterns };
+  // Return pattern analysis with entry/exit bonus allocation
+  return {
+    bonus,
+    patterns,
+    entryBonuses,   // Array of {amount, reason} for entry
+    exitBonuses,    // Array of {amount, reason} for exit
+  };
 }
 
 /**
