@@ -1155,7 +1155,13 @@ function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
 
   // If this consonance follows a dissonance, get the exit score for proper coloring
   let resolutionExitScore = undefined;
-  if (prevSim && !prevSim.interval.isConsonant()) {
+  // Check if previous interval was dissonant (including P4 in context)
+  let prevWasDissonant = prevSim && !prevSim.interval.isConsonant();
+  if (prevSim && prevSim.interval.class === 4 && prevSim.interval.quality === 'perfect') {
+    prevWasDissonant = isP4DissonantInContext(prevSim, ctx);
+  }
+
+  if (prevWasDissonant) {
     // Score the previous dissonance to get its exit score
     const prevDissonanceScore = _scoreDissonance(prevSim, allSims, index - 1, intervalHistory, ctx);
     resolutionExitScore = prevDissonanceScore.exitScore;

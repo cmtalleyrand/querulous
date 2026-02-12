@@ -378,6 +378,8 @@ export function CounterpointComparisonViz({
           metricWeight: sim.metricWeight,
           category: scoring.category || 'consonant_normal',
           score: scoring.score,
+          entryScore: scoring.entryScore,  // NEW: for dissonance coloring
+          exitScore: scoring.exitScore,    // NEW: for resolution coloring
           scoreDetails: displayDetails,
           type: scoring.type,
           isResolved: scoring.isResolved !== false,
@@ -1036,6 +1038,34 @@ export function CounterpointComparisonViz({
               );
             })()}
 
+            {/* Dissonance-resolution grouping backgrounds */}
+            {intervalPoints.map((pt, i) => {
+              // If this is a dissonance followed by a resolution, draw a subtle grouping background
+              if (!pt.isConsonant) {
+                const nextPt = intervalPoints[i + 1];
+                if (nextPt && nextPt.category === 'consonant_resolution') {
+                  const x = tToX(pt.onset);
+                  const groupWidth = (nextPt.onset - pt.onset + (intervalPoints[i + 2] ? (intervalPoints[i + 2].onset - nextPt.onset) : 0.5)) * tScale;
+                  return (
+                    <rect
+                      key={`group-${i}`}
+                      x={x - 2}
+                      y={headerHeight}
+                      width={groupWidth + 4}
+                      height={h - headerHeight - 18}
+                      fill="rgba(139, 92, 246, 0.08)"
+                      stroke="rgba(139, 92, 246, 0.15)"
+                      strokeWidth={1}
+                      strokeDasharray="3,3"
+                      rx={4}
+                      pointerEvents="none"
+                    />
+                  );
+                }
+              }
+              return null;
+            })}
+
             {/* ALWAYS VISIBLE interval regions - subtle by default, prominent for problems */}
             {intervalPoints.map((pt, i) => {
               const x = tToX(pt.onset);
@@ -1117,15 +1147,28 @@ export function CounterpointComparisonViz({
                       >
                         {pt.intervalClass}
                       </text>
-                      {!pt.isConsonant && (
+                      {!pt.isConsonant && pt.entryScore !== undefined && (
                         <text
                           x={x + regionWidth / 2}
                           y={(pToY(pt.v1Pitch) + pToY(pt.v2Pitch)) / 2 + 14}
                           fontSize="9"
+                          fontWeight="600"
                           fill={style.color}
                           textAnchor="middle"
                         >
-                          {(pt.score || 0) >= 0 ? '+' : ''}{(pt.score || 0).toFixed(1)}
+                          Entry: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(1)}
+                        </text>
+                      )}
+                      {pt.category === 'consonant_resolution' && pt.exitScore !== undefined && (
+                        <text
+                          x={x + regionWidth / 2}
+                          y={(pToY(pt.v1Pitch) + pToY(pt.v2Pitch)) / 2 + 14}
+                          fontSize="9"
+                          fontWeight="600"
+                          fill={style.color}
+                          textAnchor="middle"
+                        >
+                          Exit: {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
                         </text>
                       )}
                     </g>
@@ -1327,16 +1370,28 @@ export function CounterpointComparisonViz({
                         Unresolved
                       </span>
                     )}
-                    {!pt.isConsonant && (
+                    {!pt.isConsonant && pt.entryScore !== undefined && (
                       <span style={{
                         padding: '3px 8px',
-                        backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
-                        color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                        backgroundColor: pt.entryScore >= 0 ? '#e0e7ff' : '#fee2e2',
+                        color: pt.entryScore >= 0 ? '#4f46e5' : '#dc2626',
                         borderRadius: '4px',
                         fontSize: '12px',
                         fontWeight: '600',
                       }}>
-                        {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
+                        Entry: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(1)}
+                      </span>
+                    )}
+                    {pt.category === 'consonant_resolution' && pt.exitScore !== undefined && (
+                      <span style={{
+                        padding: '3px 8px',
+                        backgroundColor: pt.exitScore >= 0 ? '#d1fae5' : '#fed7aa',
+                        color: pt.exitScore >= 0 ? '#059669' : '#ea580c',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                      }}>
+                        Exit: {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
                       </span>
                     )}
                     <button
@@ -1444,8 +1499,57 @@ export function CounterpointComparisonViz({
                           );
                         })}
                       </div>
-                      {/* Show total score for dissonances */}
-                      {!pt.isConsonant && (
+                      {/* Show entry/exit scores */}
+                      {!pt.isConsonant && pt.entryScore !== undefined && (
+                        <div style={{
+                          marginTop: '10px',
+                          paddingTop: '8px',
+                          borderTop: '2px solid #e5e7eb',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: '600', color: '#6366f1' }}>Entry Score</span>
+                            <span style={{
+                              fontSize: '15px',
+                              fontWeight: '700',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: pt.entryScore >= 0 ? '#e0e7ff' : '#fee2e2',
+                              color: pt.entryScore >= 0 ? '#4f46e5' : '#dc2626',
+                            }}>
+                              {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(1)}
+                            </span>
+                          </div>
+                          {pt.exitScore !== undefined && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: '600', color: '#059669' }}>Exit Score</span>
+                              <span style={{
+                                fontSize: '15px',
+                                fontWeight: '700',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                backgroundColor: pt.exitScore >= 0 ? '#d1fae5' : '#fed7aa',
+                                color: pt.exitScore >= 0 ? '#059669' : '#ea580c',
+                              }}>
+                                {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
+                              </span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>Total</span>
+                            <span style={{
+                              fontSize: '15px',
+                              fontWeight: '700',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
+                              color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                            }}>
+                              {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+                      {/* Show exit score for resolutions */}
+                      {pt.category === 'consonant_resolution' && pt.exitScore !== undefined && (
                         <div style={{
                           marginTop: '10px',
                           paddingTop: '8px',
@@ -1454,16 +1558,16 @@ export function CounterpointComparisonViz({
                           justifyContent: 'space-between',
                           alignItems: 'center',
                         }}>
-                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>Total Score</span>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#059669' }}>Exit Score (Resolution)</span>
                           <span style={{
-                            fontSize: '16px',
+                            fontSize: '15px',
                             fontWeight: '700',
                             padding: '2px 8px',
                             borderRadius: '4px',
-                            backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
-                            color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                            backgroundColor: pt.exitScore >= 0 ? '#d1fae5' : '#fed7aa',
+                            color: pt.exitScore >= 0 ? '#059669' : '#ea580c',
                           }}>
-                            {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
+                            {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
                           </span>
                         </div>
                       )}

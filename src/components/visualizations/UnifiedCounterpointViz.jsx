@@ -130,6 +130,8 @@ export function UnifiedCounterpointViz({
           isStrong: sim.metricWeight >= 0.75,
           category: scoring.category || 'consonant_normal',
           score: scoring.score,
+          entryScore: scoring.entryScore,  // NEW: for dissonance coloring
+          exitScore: scoring.exitScore,    // NEW: for resolution coloring
           scoreDetails: scoring.details,
           type: scoring.type,
         };
@@ -402,6 +404,34 @@ export function UnifiedCounterpointViz({
               );
             })}
 
+            {/* Dissonance-resolution grouping backgrounds */}
+            {intervalPoints.map((pt, i) => {
+              // If this is a dissonance followed by a resolution, draw a subtle grouping background
+              if (!pt.isConsonant) {
+                const nextPt = intervalPoints[i + 1];
+                if (nextPt && nextPt.category === 'consonant_resolution') {
+                  const x = tToX(pt.onset);
+                  const groupWidth = (nextPt.onset - pt.onset + (intervalPoints[i + 2] ? (intervalPoints[i + 2].onset - nextPt.onset) : 0.5)) * tScale;
+                  return (
+                    <rect
+                      key={`group-${i}`}
+                      x={x - 2}
+                      y={headerHeight}
+                      width={groupWidth + 4}
+                      height={h - headerHeight - 18}
+                      fill="rgba(139, 92, 246, 0.08)"
+                      stroke="rgba(139, 92, 246, 0.15)"
+                      strokeWidth={1}
+                      strokeDasharray="3,3"
+                      rx={4}
+                      pointerEvents="none"
+                    />
+                  );
+                }
+              }
+              return null;
+            })}
+
             {/* Interval regions - subtle, only show label on hover */}
             {intervalPoints.map((pt, i) => {
               const x = tToX(pt.onset);
@@ -477,16 +507,29 @@ export function UnifiedCounterpointViz({
                       >
                         {label}
                       </text>
-                      {/* Score indicator for dissonances */}
-                      {!pt.isConsonant && (
+                      {/* Score indicator - show entry for dissonances, exit for resolutions */}
+                      {!pt.isConsonant && pt.entryScore !== undefined && (
                         <text
                           x={x + regionWidth / 2}
                           y={midY + 20}
                           fontSize="9"
+                          fontWeight="600"
                           fill={style.color}
                           textAnchor="middle"
                         >
-                          {(pt.score || 0) >= 0 ? '+' : ''}{(pt.score || 0).toFixed(1)}
+                          Entry: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(1)}
+                        </text>
+                      )}
+                      {pt.category === 'consonant_resolution' && pt.exitScore !== undefined && (
+                        <text
+                          x={x + regionWidth / 2}
+                          y={midY + 20}
+                          fontSize="9"
+                          fontWeight="600"
+                          fill={style.color}
+                          textAnchor="middle"
+                        >
+                          Exit: {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
                         </text>
                       )}
                     </g>
@@ -534,16 +577,28 @@ export function UnifiedCounterpointViz({
                     }}>
                       {pt.intervalName} — {style.label}
                     </span>
-                    {!pt.isConsonant && (
+                    {!pt.isConsonant && pt.entryScore !== undefined && (
                       <span style={{
                         padding: '4px 10px',
-                        backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
-                        color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                        backgroundColor: pt.entryScore >= 0 ? '#e0e7ff' : '#fee2e2',
+                        color: pt.entryScore >= 0 ? '#4f46e5' : '#dc2626',
                         borderRadius: '6px',
-                        fontSize: '13px',
+                        fontSize: '12px',
                         fontWeight: '700',
                       }}>
-                        {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
+                        Entry: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(1)}
+                      </span>
+                    )}
+                    {pt.category === 'consonant_resolution' && pt.exitScore !== undefined && (
+                      <span style={{
+                        padding: '4px 10px',
+                        backgroundColor: pt.exitScore >= 0 ? '#d1fae5' : '#fed7aa',
+                        color: pt.exitScore >= 0 ? '#059669' : '#ea580c',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                      }}>
+                        Exit: {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
                       </span>
                     )}
                     <button
