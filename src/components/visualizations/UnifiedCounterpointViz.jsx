@@ -422,6 +422,8 @@ export function UnifiedCounterpointViz({
                 isConsonant: pt.isConsonant,
                 isPerfect,
                 score: pt.score || 0,
+                entryScore: pt.entryScore,  // NEW: for purple-red dissonance coloring
+                exitScore: pt.exitScore,    // NEW: for emerald-amber resolution coloring
                 category: pt.category,
               });
 
@@ -510,6 +512,8 @@ export function UnifiedCounterpointViz({
             const style = getIntervalStyle({
               isConsonant: pt.isConsonant,
               isPerfect: [1, 5, 8].includes(pt.intervalClass),
+              entryScore: pt.entryScore,  // NEW
+              exitScore: pt.exitScore,    // NEW
               score: pt.score,
               category: pt.category,
             });

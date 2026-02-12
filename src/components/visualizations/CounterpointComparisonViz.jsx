@@ -1052,6 +1052,8 @@ export function CounterpointComparisonViz({
                 isConsonant: pt.isConsonant,
                 isPerfect,
                 score: pt.score || 0,
+                entryScore: pt.entryScore,  // NEW
+                exitScore: pt.exitScore,    // NEW
                 category: pt.category,
                 isRepeated: pt.isRepeated,
                 isResolved: pt.isResolved,
@@ -1266,6 +1268,8 @@ export function CounterpointComparisonViz({
               isConsonant: pt.isConsonant,
               isPerfect,
               score: pt.score,
+              entryScore: pt.entryScore,  // NEW
+              exitScore: pt.exitScore,    // NEW
               category: pt.category,
               isRepeated: pt.isRepeated,
               isResolved: pt.isResolved,
