@@ -1130,6 +1130,10 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
           dissonanceLabel: scoring.label,
           dissonanceType: scoring.type,
           score: scoring.score,
+          entryScore: scoring.entryScore,  // NEW: for purple-red coloring
+          exitScore: scoring.exitScore,    // NEW: for emerald-amber coloring
+          entry: scoring.entry,            // NEW: for detailed display
+          exit: scoring.exit,              // NEW: for detailed display
           scoreDetails: scoring.details,
           patterns: scoring.patterns,
         });
