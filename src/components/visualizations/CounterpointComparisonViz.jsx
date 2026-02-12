@@ -382,6 +382,10 @@ export function CounterpointComparisonViz({
           exitScore: scoring.exitScore,    // NEW: for resolution coloring
           scoreDetails: displayDetails,
           type: scoring.type,
+          // Full scoring breakdown for detailed display
+          entry: scoring.entry,            // Entry motion details
+          exit: scoring.exit,              // Exit/resolution details
+          patterns: scoring.patterns,      // Pattern information
           isResolved: scoring.isResolved !== false,
           isParallel: false,
           isRepeated,
@@ -1459,130 +1463,250 @@ export function CounterpointComparisonViz({
                     </div>
                   )}
 
-                  {/* Score/Analysis breakdown - show for ALL intervals */}
-                  {pt.scoreDetails && pt.scoreDetails.length > 0 && (
-                    <div style={{
-                      backgroundColor: pt.isConsonant ? '#f0fdf4' : '#fafafa',
-                      borderRadius: '6px',
-                      padding: '10px',
-                      border: `1px solid ${pt.isConsonant ? '#bbf7d0' : '#e5e7eb'}`,
-                    }}>
-                      <div style={{ fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
-                        {pt.isConsonant ? 'Interval Analysis' : 'Score Breakdown'}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {pt.scoreDetails.map((detail, i) => {
-                          const text = typeof detail === 'object' ? detail.text : detail;
-                          const isWarning = text.includes('⚠️') || text.includes('REPEATED') || text.includes('PARALLEL');
-                          // Detect positive scores (e.g., "+0.5", "+1.0") and negative scores
-                          const hasPositive = /\+\d/.test(text) || text.includes('good') || text.includes('Good');
-                          const hasNegative = /-\d/.test(text) && !text.includes('m2') && !text.includes('-m'); // Avoid interval names
-                          let textColor = '#475569'; // Default dark gray
-                          if (isWarning || hasNegative) {
-                            textColor = '#dc2626'; // Red for warnings/negatives
-                          } else if (hasPositive) {
-                            textColor = '#16a34a'; // Green for positives
-                          }
-                          return (
-                            <div key={i} style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              fontSize: '12px',
-                              padding: '3px 0',
-                              borderBottom: i < pt.scoreDetails.length - 1 ? '1px solid #f3f4f6' : 'none',
-                              color: textColor,
-                              fontWeight: (isWarning || hasPositive || hasNegative) ? '500' : '400',
-                            }}>
-                              <span style={{ flex: 1 }}>{text}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {/* Show entry/exit scores */}
-                      {!pt.isConsonant && pt.entryScore !== undefined && (
-                        <div style={{
-                          marginTop: '10px',
-                          paddingTop: '8px',
-                          borderTop: '2px solid #e5e7eb',
-                        }}>
+                  {/* Detailed Score Breakdown */}
+                  <div style={{ backgroundColor: '#f8fafc', borderRadius: '8px', padding: '14px', fontSize: '12px' }}>
+                    <div style={{ fontWeight: '700', marginBottom: '12px', color: '#1e293b', fontSize: '14px', borderBottom: '2px solid #cbd5e1', paddingBottom: '6px' }}>
+                      Score Breakdown
+                    </div>
+
+                    {/* For Dissonances: Show complete Entry, Patterns, Exit breakdown */}
+                    {!pt.isConsonant && pt.entry && pt.exit && (
+                      <>
+                        {/* ENTRY SECTION */}
+                        <div style={{ marginBottom: '12px', backgroundColor: '#ede9fe', borderLeft: '3px solid #6366f1', borderRadius: '4px', padding: '10px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: '600', color: '#6366f1' }}>Entry Score</span>
+                            <span style={{ fontWeight: '700', color: '#6366f1', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              Entry Motion
+                            </span>
                             <span style={{
-                              fontSize: '15px',
                               fontWeight: '700',
-                              padding: '2px 8px',
+                              color: '#1e293b',
+                              backgroundColor: '#f1f5f9',
+                              padding: '3px 8px',
                               borderRadius: '4px',
-                              backgroundColor: pt.entryScore >= 0 ? '#e0e7ff' : '#fee2e2',
-                              color: pt.entryScore >= 0 ? '#4f46e5' : '#dc2626',
+                              fontSize: '11px'
                             }}>
-                              {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(1)}
+                              Base: {pt.entry.score >= 0 ? '+' : ''}{pt.entry.score.toFixed(2)}
                             </span>
                           </div>
-                          {pt.exitScore !== undefined && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                              <span style={{ fontSize: '13px', fontWeight: '600', color: '#059669' }}>Exit Score</span>
+                          {pt.entry.details && pt.entry.details.map((detail, i) => (
+                            <div key={i} style={{
+                              fontSize: '11px',
+                              color: '#475569',
+                              marginBottom: '2px',
+                              paddingLeft: '8px',
+                              display: 'flex',
+                              alignItems: 'flex-start'
+                            }}>
+                              <span style={{ color: '#6366f1', marginRight: '6px', fontWeight: '600' }}>•</span>
+                              <span>{detail}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* PATTERN SECTION */}
+                        {pt.patterns && pt.patterns.length > 0 && (
+                          <div style={{ marginBottom: '12px', backgroundColor: '#f3e8ff', borderLeft: '3px solid #a855f7', borderRadius: '4px', padding: '10px' }}>
+                            <div style={{ fontWeight: '700', color: '#a855f7', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                              Recognized Patterns
+                            </div>
+                            {pt.patterns.map((pattern, i) => (
+                              <div key={i} style={{ marginBottom: '8px', backgroundColor: 'white', borderRadius: '4px', padding: '8px' }}>
+                                <div style={{ fontWeight: '600', color: '#7c3aed', fontSize: '11px', marginBottom: '4px' }}>
+                                  {pattern.type.replace(/_/g, ' ').toUpperCase()}
+                                </div>
+                                <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', fontStyle: 'italic' }}>
+                                  {pattern.description}
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', fontSize: '10px', flexWrap: 'wrap' }}>
+                                  <span style={{
+                                    backgroundColor: '#ddd6fe',
+                                    color: '#6366f1',
+                                    padding: '2px 6px',
+                                    borderRadius: '3px',
+                                    fontWeight: '600'
+                                  }}>
+                                    Entry: +{(pattern.entryBonus || 0).toFixed(2)}
+                                  </span>
+                                  <span style={{
+                                    backgroundColor: '#d1fae5',
+                                    color: '#059669',
+                                    padding: '2px 6px',
+                                    borderRadius: '3px',
+                                    fontWeight: '600'
+                                  }}>
+                                    Exit: +{(pattern.exitBonus || 0).toFixed(2)}
+                                  </span>
+                                  <span style={{
+                                    backgroundColor: '#fef3c7',
+                                    color: '#b45309',
+                                    padding: '2px 6px',
+                                    borderRadius: '3px',
+                                    fontWeight: '600'
+                                  }}>
+                                    Total: +{pattern.bonus.toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* EXIT SECTION */}
+                        <div style={{ marginBottom: '12px', backgroundColor: '#d1fae5', borderLeft: '3px solid #059669', borderRadius: '4px', padding: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontWeight: '700', color: '#059669', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              Exit/Resolution
+                            </span>
+                            <span style={{
+                              fontWeight: '700',
+                              color: '#1e293b',
+                              backgroundColor: '#f1f5f9',
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px'
+                            }}>
+                              Base: {pt.exit.score >= 0 ? '+' : ''}{pt.exit.score.toFixed(2)}
+                            </span>
+                          </div>
+                          {pt.exit.details && pt.exit.details.map((detail, i) => (
+                            <div key={i} style={{
+                              fontSize: '11px',
+                              color: '#475569',
+                              marginBottom: '2px',
+                              paddingLeft: '8px',
+                              display: 'flex',
+                              alignItems: 'flex-start'
+                            }}>
+                              <span style={{ color: '#059669', marginRight: '6px', fontWeight: '600' }}>•</span>
+                              <span>{detail}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* SCORE SUMMARY */}
+                        <div style={{ backgroundColor: '#ffffff', border: '2px solid #e2e8f0', borderRadius: '6px', padding: '10px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontWeight: '600', color: '#64748b', fontSize: '11px' }}>Entry Score</span>
+                            <span style={{
+                              fontWeight: '700',
+                              color: pt.entryScore >= 0 ? '#4f46e5' : '#dc2626',
+                              fontSize: '12px'
+                            }}>
+                              {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(2)}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontWeight: '600', color: '#64748b', fontSize: '11px' }}>Exit Score</span>
+                            <span style={{
+                              fontWeight: '700',
+                              color: pt.exitScore >= 0 ? '#059669' : '#ea580c',
+                              fontSize: '12px'
+                            }}>
+                              {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(2)}
+                            </span>
+                          </div>
+                          <div style={{ borderTop: '2px solid #e2e8f0', paddingTop: '6px', marginTop: '6px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '13px' }}>TOTAL</span>
                               <span style={{
-                                fontSize: '15px',
-                                fontWeight: '700',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                backgroundColor: pt.exitScore >= 0 ? '#d1fae5' : '#fed7aa',
-                                color: pt.exitScore >= 0 ? '#059669' : '#ea580c',
+                                fontWeight: '800',
+                                color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                                fontSize: '16px'
                               }}>
-                                {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
+                                {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
                               </span>
                             </div>
-                          )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* For Consonant Resolutions: Show resolution details */}
+                    {pt.isConsonant && pt.category === 'consonant_resolution' && (
+                      <>
+                        <div style={{ backgroundColor: '#d1fae5', borderLeft: '3px solid #059669', borderRadius: '4px', padding: '10px', marginBottom: '12px' }}>
+                          <div style={{ fontWeight: '700', color: '#059669', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                            Resolution Quality
+                          </div>
+                          {pt.scoreDetails && pt.scoreDetails.map((detail, i) => (
+                            <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '4px', paddingLeft: '8px' }}>
+                              {typeof detail === 'object' ? (
+                                <>
+                                  <div style={{ fontWeight: '600', marginBottom: '2px', display: 'flex', alignItems: 'flex-start' }}>
+                                    <span style={{ color: '#059669', marginRight: '6px' }}>•</span>
+                                    <span>{detail.text}</span>
+                                  </div>
+                                  {detail.subtext && (
+                                    <div style={{ paddingLeft: '20px', fontSize: '10px', color: '#64748b', fontStyle: 'italic' }}>
+                                      {detail.subtext}
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                                  <span style={{ color: '#059669', marginRight: '6px', fontWeight: '600' }}>•</span>
+                                  <span>{detail}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ backgroundColor: '#ffffff', border: '2px solid #e2e8f0', borderRadius: '6px', padding: '10px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>Total</span>
+                            <span style={{ fontWeight: '700', color: '#059669', fontSize: '12px', textTransform: 'uppercase' }}>Exit Score</span>
                             <span style={{
-                              fontSize: '15px',
-                              fontWeight: '700',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              backgroundColor: pt.score >= 0 ? '#dcfce7' : '#fee2e2',
-                              color: pt.score >= 0 ? '#16a34a' : '#dc2626',
+                              fontWeight: '800',
+                              color: pt.exitScore >= 0 ? '#059669' : '#ea580c',
+                              fontSize: '16px'
                             }}>
-                              {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(1)}
-                          </span>
+                              {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
-                      )}
-                      {/* Show exit score for resolutions */}
-                      {pt.category === 'consonant_resolution' && pt.exitScore !== undefined && (
-                        <div style={{
-                          marginTop: '10px',
-                          paddingTop: '8px',
-                          borderTop: '2px solid #e5e7eb',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}>
-                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#059669' }}>Exit Score (Resolution)</span>
-                          <span style={{
-                            fontSize: '15px',
-                            fontWeight: '700',
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            backgroundColor: pt.exitScore >= 0 ? '#d1fae5' : '#fed7aa',
-                            color: pt.exitScore >= 0 ? '#059669' : '#ea580c',
-                          }}>
-                            {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
-                          </span>
-                        </div>
-                      )}
-                      {/* Show metric weight info */}
-                      <div style={{
-                        marginTop: '6px',
-                        paddingTop: '6px',
-                        borderTop: '1px solid #e5e7eb',
-                        fontSize: '10px',
-                        color: '#94a3b8',
-                      }}>
-                        Metric weight: {(pt.metricWeight * 100).toFixed(0)}% ({pt.isStrong ? 'strong beat' : 'weak beat'})
+                      </>
+                    )}
+
+                    {/* For regular consonances */}
+                    {pt.isConsonant && pt.category !== 'consonant_resolution' && pt.scoreDetails && (
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>
+                        {pt.scoreDetails.map((detail, i) => (
+                          <div key={i} style={{ marginBottom: '4px', paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
+                            {typeof detail === 'object' ? (
+                              <>
+                                <span style={{ color: '#0891b2', marginRight: '6px', fontWeight: '600' }}>•</span>
+                                <div>
+                                  <div style={{ fontWeight: '600', color: '#475569' }}>{detail.text}</div>
+                                  {detail.subtext && (
+                                    <div style={{ paddingLeft: '0px', fontSize: '10px', color: '#94a3b8', marginTop: '2px', fontStyle: 'italic' }}>
+                                      {detail.subtext}
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ color: '#0891b2', marginRight: '6px', fontWeight: '600' }}>•</span>
+                                <span>{detail}</span>
+                              </>
+                            )}
+                          </div>
+                        ))}
                       </div>
+                    )}
+
+                    {/* Metric weight info */}
+                    <div style={{
+                      marginTop: '12px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid #cbd5e1',
+                      fontSize: '10px',
+                      color: '#94a3b8',
+                      fontStyle: 'italic'
+                    }}>
+                      Metric weight: {(pt.metricWeight * 100).toFixed(0)}% ({pt.isStrong ? 'strong beat' : 'weak beat'})
                     </div>
-                  )}
+                  </div>
                 </div>
               </>
             );
