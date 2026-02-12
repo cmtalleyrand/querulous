@@ -1153,7 +1153,13 @@ function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
     isPreparation = nextIsDissonant;
   }
 
+  // If this consonance follows a dissonance, get the exit score for proper coloring
+  let resolutionExitScore = undefined;
   if (prevSim && !prevSim.interval.isConsonant()) {
+    // Score the previous dissonance to get its exit score
+    const prevDissonanceScore = _scoreDissonance(prevSim, allSims, index - 1, intervalHistory, ctx);
+    resolutionExitScore = prevDissonanceScore.exitScore;
+
     const prevV1 = pitchName(prevSim.voice1Note.pitch);
     const prevV2 = pitchName(prevSim.voice2Note.pitch);
     const prevInterval = prevSim.interval.toString();
@@ -1189,14 +1195,13 @@ function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
       resolutionDetails.push(`Voice 2 held (${v2Pitch})`);
     }
 
-    // Resolution quality tracked for visualization but no score impact
-    // (already scored in the dissonance's exit scoring - avoid double counting)
-    if (goodResolution) {
-      category = 'consonant_good_resolution';
-      details.push({
-        text: `Good resolution: ${prevInterval} (${prevV1}/${prevV2}) → ${intervalName} (${v1Pitch}/${v2Pitch})`,
-        subtext: resolutionDetails.join('; '),
-        impact: 0,
+    // Set category for resolution - use generic 'consonant_resolution'
+    // Color will be determined by resolutionExitScore
+    category = 'consonant_resolution';
+    details.push({
+      text: `Resolution from ${prevInterval}: exit score ${resolutionExitScore !== undefined ? resolutionExitScore.toFixed(1) : '?'}`,
+      subtext: resolutionDetails.join('; '),
+      impact: 0,
         type: 'info',
       });
     } else {
@@ -1233,6 +1238,7 @@ function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
     type: 'consonant',
     category,
     score,
+    exitScore: resolutionExitScore,  // NEW: exit score from previous dissonance for resolution coloring
     label: intervalClass.toString(),
     isConsonant: true,
     intervalClass,
