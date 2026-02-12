@@ -1203,11 +1203,12 @@ function scoreConsonance(currSim, allSims, index, intervalHistory, ctx) {
 
     // Set category for resolution - use generic 'consonant_resolution'
     // Color will be determined by resolutionExitScore
-    category = 'consonant_resolution';
-    details.push({
-      text: `Resolution from ${prevInterval}: exit score ${resolutionExitScore !== undefined ? resolutionExitScore.toFixed(1) : '?'}`,
-      subtext: resolutionDetails.join('; '),
-      impact: 0,
+    if (goodResolution) {
+      category = 'consonant_resolution';
+      details.push({
+        text: `Resolution from ${prevInterval}: exit score ${resolutionExitScore !== undefined ? resolutionExitScore.toFixed(1) : '?'}`,
+        subtext: resolutionDetails.join('; '),
+        impact: 0,
         type: 'info',
       });
     } else {
