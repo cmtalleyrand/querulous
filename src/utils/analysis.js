@@ -1508,20 +1508,26 @@ export function testModulatoryRobustness(subject, cs, formatter) {
     observations.push({ type: 'strength', description: 'No parallel 5ths or 8ves against answer' });
   }
 
-  // Check for strong-beat dissonances
-  const strongDissonances = strongSims.filter((s) => !s.interval.isConsonant());
-  if (strongDissonances.length > 0) {
-    for (const s of strongDissonances.slice(0, 3)) {
-      observations.push({
-        type: 'consideration',
-        description: `Dissonance on strong beat: ${s.interval} at ${formatter.formatBeat(s.onset)}`,
-      });
-    }
-    if (strongDissonances.length > 3) {
-      observations.push({
-        type: 'consideration',
-        description: `...and ${strongDissonances.length - 3} more strong-beat dissonances`,
-      });
+  // Check for strong-beat dissonances - only flag those that are poorly handled
+  // Well-handled dissonances (suspensions, passing tones, etc.) are not issues
+  if (detailedScoring?.dissonances) {
+    const poorDissonances = detailedScoring.dissonances.filter(d =>
+      d.isStrongBeat && d.score < -1.0
+    );
+    if (poorDissonances.length > 0) {
+      for (const d of poorDissonances.slice(0, 3)) {
+        observations.push({
+          type: 'issue',
+          description: `Poorly handled dissonance vs answer: ${d.interval} at ${formatter.formatBeat(d.onset)} (score: ${d.score.toFixed(1)})`,
+          onset: d.onset,
+        });
+      }
+      if (poorDissonances.length > 3) {
+        observations.push({
+          type: 'issue',
+          description: `...and ${poorDissonances.length - 3} more poorly handled dissonances vs answer`,
+        });
+      }
     }
   }
 

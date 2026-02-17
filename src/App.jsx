@@ -24,7 +24,7 @@ import {
   AVAILABLE_MODES,
   NOTE_LENGTH_OPTIONS,
   STRETTO_STEP_OPTIONS,
-  OCTAVE_OPTIONS,
+  STRETTO_TRANSPOSITION_OPTIONS,
   CS_POSITION_OPTIONS,
   TIME_SIGNATURE_OPTIONS,
   BeatFormatter,
@@ -32,6 +32,7 @@ import {
   extractABCHeaders,
   parseABC,
   generateAnswerABC,
+  generateAnswerABCSameKey,
   formatSubjectABC,
   validateABCTiming,
   findSimultaneities,
@@ -67,6 +68,7 @@ export default function App() {
   // Input state
   const [subjectInput, setSubjectInput] = useState(DEFAULT_SUBJECT);
   const [csInput, setCsInput] = useState(DEFAULT_CS);
+  const [cs2Input, setCs2Input] = useState('');
   const [answerInput, setAnswerInput] = useState('');
 
   // Settings state
@@ -83,6 +85,7 @@ export default function App() {
   const [treatP4Dissonant, setTreatP4Dissonant] = useState(false);
   const [csPos, setCsPos] = useState('above');
   const [csShift, setCsShift] = useState('0');
+  const [answerMode, setAnswerMode] = useState('tonal'); // 'tonal' or 'real'
 
   // Results state
   const [results, setResults] = useState(null);
@@ -160,12 +163,14 @@ export default function App() {
     // Include ABC headers (K, L, M) in the saved text
     const subjectWithHeaders = prependABCHeaders(subjectInput, selKey, selMode, selNoteLen, selTimeSig);
     const csWithHeaders = csInput.trim() ? prependABCHeaders(csInput, selKey, selMode, selNoteLen, selTimeSig) : '';
+    const cs2WithHeaders = cs2Input.trim() ? prependABCHeaders(cs2Input, selKey, selMode, selNoteLen, selTimeSig) : '';
     const answerWithHeaders = answerInput.trim() ? prependABCHeaders(answerInput, selKey, selMode, selNoteLen, selTimeSig) : '';
 
     const preset = {
       name: saveName.trim(),
       subject: subjectWithHeaders,
       countersubject: csWithHeaders,
+      countersubject2: cs2WithHeaders,
       answer: answerWithHeaders,
       settings: {
         key: selKey,
@@ -268,14 +273,17 @@ export default function App() {
 
       const formatter = new BeatFormatter(effNL, meter);
 
-      // Parse countersubject if provided (use spelling key for accidentals)
+      // Parse countersubjects if provided (use spelling key for accidentals)
       const cs = csInput.trim() ? parseABC(csInput, tonic, analysisMode, effNL, spellingKeySig).notes : null;
       const csWarnings = csInput.trim() ? validateABCTiming(csInput, meter, effNL) : [];
+      const cs2 = cs2Input.trim() ? parseABC(cs2Input, tonic, analysisMode, effNL, spellingKeySig).notes : null;
+      const cs2Warnings = cs2Input.trim() ? validateABCTiming(cs2Input, meter, effNL) : [];
 
       // Combine all timing warnings
       const allWarnings = [
         ...subjectWarnings.map(w => ({ ...w, source: 'Subject' })),
-        ...csWarnings.map(w => ({ ...w, source: 'Countersubject' })),
+        ...csWarnings.map(w => ({ ...w, source: 'Countersubject 1' })),
+        ...cs2Warnings.map(w => ({ ...w, source: 'Countersubject 2' })),
       ];
       setTimingWarnings(allWarnings);
 
@@ -289,6 +297,11 @@ export default function App() {
         ? cs.map(n => ({ ...n, pitch: n.pitch + csOctaveShiftVal }))
         : null;
 
+      // Shift CS2 by the same amount as CS1
+      const shiftedCs2 = cs2?.length
+        ? cs2.map(n => ({ ...n, pitch: n.pitch + csOctaveShiftVal }))
+        : null;
+
       // Build results object
       const res = {
         keyInfo,
@@ -296,6 +309,8 @@ export default function App() {
         subject,
         countersubject: shiftedCs, // Store shifted CS - analysis and visualization use the same data
         countersubjectOriginal: cs, // Keep original for reference
+        countersubject2: shiftedCs2, // Second countersubject
+        countersubject2Original: cs2,
         countersubjectShift: csOctaveShiftVal, // Store shift value for display
         defaultNoteLength: effNL,
         meter,
@@ -307,6 +322,7 @@ export default function App() {
           defaultNoteLength: effNL,
           subjectNotes: subject.length,
           csNotes: cs?.length || 0,
+          cs2Notes: cs2?.length || 0,
           csOctaveShift: csOctaveShiftVal, // Include shift info in parsed info
         },
       };
@@ -337,6 +353,9 @@ export default function App() {
       res.stretto = testStrettoViability(subject, formatter, 0.5, parseFloat(strettoStep), parseInt(strettoOctave));
       res.tonalAnswer = testTonalAnswer(subject, analysisMode, keyInfo, formatter);
       res.answerABC = generateAnswerABC(subject, keyInfo, res.tonalAnswer, effNL, meter);
+      // Same-key versions for display (avoids confusion by keeping subject key signature)
+      res.tonalAnswerSameKey = generateAnswerABCSameKey(subject, keyInfo, res.tonalAnswer, effNL, meter, false);
+      res.realAnswerSameKey = generateAnswerABCSameKey(subject, keyInfo, res.tonalAnswer, effNL, meter, true);
       res.subjectABC = formatSubjectABC(subject, keyInfo, effNL, meter);
 
       // Generate answer if not provided
@@ -369,6 +388,20 @@ export default function App() {
         res.modulatoryRobustness = testModulatoryRobustness(subject, shiftedCs, formatter);
         res.subjectCsSims = findSimultaneities(subject, shiftedCs, meter);
         res.answerCsSims = findSimultaneities(answerNotes, shiftedCs, meter);
+      }
+
+      // Run CS2 analyses if provided
+      if (shiftedCs2?.length) {
+        res.sequences.countersubject2 = testSequentialPotential(shiftedCs2, formatter);
+        res.cs2DoubleCounterpoint = testDoubleCounterpoint(subject, shiftedCs2, formatter);
+        res.cs2RhythmicComplementarity = testRhythmicComplementarity(subject, shiftedCs2, meter);
+        res.cs2ContourIndependence = testContourIndependence(subject, shiftedCs2, formatter);
+
+        // CS2 vs CS1 interaction
+        if (shiftedCs?.length) {
+          res.cs1Cs2Counterpoint = testDoubleCounterpoint(shiftedCs, shiftedCs2, formatter);
+          res.cs1Cs2Sims = findSimultaneities(shiftedCs, shiftedCs2, meter);
+        }
       }
 
       // Calculate scores
@@ -702,6 +735,36 @@ export default function App() {
                 fontSize: '12px',
               }}
             >
+              Countersubject 2
+            </label>
+            <textarea
+              value={cs2Input}
+              onChange={(e) => setCs2Input(e.target.value)}
+              style={{
+                width: '100%',
+                height: '60px',
+                padding: '9px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                resize: 'vertical',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Optional"
+              aria-label="Second countersubject in ABC notation (optional)"
+            />
+          </div>
+          <div>
+            <label
+              style={{
+                display: 'block',
+                marginBottom: '5px',
+                fontWeight: '600',
+                color: '#2c3e50',
+                fontSize: '12px',
+              }}
+            >
               Answer (auto if empty)
             </label>
             <textarea
@@ -804,7 +867,10 @@ export default function App() {
               {' · '}Subject: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.subjectNotes} notes</strong>
               {' · '}L: <strong style={{ color: '#2c3e50' }}>1/{Math.round(1 / results.parsedInfo.defaultNoteLength)}</strong>
               {results.parsedInfo.csNotes > 0 && (
-                <> · CS: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.csNotes} notes</strong></>
+                <> · CS1: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.csNotes} notes</strong></>
+              )}
+              {results.parsedInfo.cs2Notes > 0 && (
+                <> · CS2: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.cs2Notes} notes</strong></>
               )}
             </div>
 
@@ -840,6 +906,7 @@ export default function App() {
                       subject: results.subject,
                       answer: results.answerNotes,
                       cs1: results.countersubject,
+                      ...(results.countersubject2 ? { cs2: results.countersubject2 } : {}),
                     }}
                     formatter={results.formatter}
                     meter={results.meter}
@@ -1053,18 +1120,61 @@ export default function App() {
               );
             })()}
 
-            {/* Tonal Answer */}
-            <Section title="Tonal Answer" helpKey="tonalAnswer">
+            {/* Answer */}
+            <Section title="Answer" helpKey="tonalAnswer">
               <DataRow
                 data={{
-                  Type: results.tonalAnswer.answerType,
+                  'Recommended type': results.tonalAnswer.answerType,
                   Junction: `${results.tonalAnswer.junction.p} (${results.tonalAnswer.junction.q})`,
                 }}
               />
               <ObservationList observations={results.tonalAnswer.observations} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
+
+              {/* Answer type selector */}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px', marginBottom: '10px' }}>
+                <button
+                  onClick={() => setAnswerMode('tonal')}
+                  style={{
+                    padding: '5px 14px',
+                    fontSize: '12px',
+                    fontWeight: answerMode === 'tonal' ? '600' : '400',
+                    backgroundColor: answerMode === 'tonal' ? '#1f2937' : '#f3f4f6',
+                    color: answerMode === 'tonal' ? 'white' : '#374151',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Tonal answer
+                </button>
+                <button
+                  onClick={() => setAnswerMode('real')}
+                  style={{
+                    padding: '5px 14px',
+                    fontSize: '12px',
+                    fontWeight: answerMode === 'real' ? '600' : '400',
+                    backgroundColor: answerMode === 'real' ? '#1f2937' : '#f3f4f6',
+                    color: answerMode === 'real' ? 'white' : '#374151',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Real answer
+                </button>
+                {answerMode === 'real' && results.tonalAnswer.answerType === 'tonal' && (
+                  <span style={{ fontSize: '11px', color: '#b45309', alignSelf: 'center' }}>
+                    Tonal recommended for this subject
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <ABCBox abc={results.subjectABC} label="Subject:" />
-                <ABCBox abc={results.answerABC} label="Generated Answer:" />
+                <ABCBox
+                  abc={answerMode === 'real' ? results.realAnswerSameKey : results.tonalAnswerSameKey}
+                  label={`${answerMode === 'real' ? 'Real' : 'Tonal'} answer (in subject key):`}
+                />
               </div>
             </Section>
 
@@ -1098,11 +1208,58 @@ export default function App() {
                 );
               })()}
 
+              {/* Viable stretto detail table */}
+              {(() => {
+                const viableStrettos = results.stretto.viableStrettos || [];
+                if (viableStrettos.length === 0) return null;
+
+                // Group viable strettos by transposition class
+                const byTransp = {};
+                const transpNames = { 0: 'Unison/Octave', 5: 'P4', 7: 'P5' };
+                for (const s of viableStrettos) {
+                  const cls = s.transpositionClass || 0;
+                  const name = transpNames[cls] || `${cls} semitones`;
+                  if (!byTransp[name]) byTransp[name] = [];
+                  byTransp[name].push(s);
+                }
+
+                return (
+                  <div style={{
+                    marginBottom: '16px',
+                    fontSize: '12px',
+                  }}>
+                    <div style={{ fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                      Viable stretto entries:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {Object.entries(byTransp).map(([transpName, strettos]) => (
+                        <div key={transpName} style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '6px',
+                        }}>
+                          <span style={{ fontWeight: '600', color: '#475569', marginRight: '8px' }}>
+                            {transpName}:
+                          </span>
+                          <span style={{ color: '#059669' }}>
+                            {strettos.map(s => s.distanceFormatted).join(', ')}
+                          </span>
+                          <span style={{ color: '#94a3b8', marginLeft: '8px' }}>
+                            ({strettos.filter(s => s.clean).length} clean, {strettos.filter(s => !s.clean).length} with warnings)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Settings row */}
               <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'flex-end' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '10px', color: '#546e7a', marginBottom: '4px' }}>
-                    Octave Displacement
+                    Transposition
                   </label>
                   <select
                     value={strettoOctave}
@@ -1112,7 +1269,7 @@ export default function App() {
                     }}
                     style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}
                   >
-                    {OCTAVE_OPTIONS.map((o) => (
+                    {STRETTO_TRANSPOSITION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
@@ -1411,6 +1568,43 @@ export default function App() {
                     ]}
                   />
                 </Section>
+
+                {/* CS2 analysis sections */}
+                {results.countersubject2 && (
+                  <>
+                    <Section title="CS2 vs Subject" defaultCollapsed={true}>
+                      {results.cs2DoubleCounterpoint && (
+                        <ObservationList observations={results.cs2DoubleCounterpoint.observations} />
+                      )}
+                      {results.cs2RhythmicComplementarity && (
+                        <ObservationList observations={results.cs2RhythmicComplementarity.observations} />
+                      )}
+                      {results.cs2ContourIndependence && (
+                        <>
+                          <DataRow
+                            data={{
+                              Parallel: `${results.cs2ContourIndependence.parallelMotions} (${Math.round(results.cs2ContourIndependence.parallelRatio * 100)}%)`,
+                              Contrary: `${results.cs2ContourIndependence.contraryMotions} (${Math.round(results.cs2ContourIndependence.contraryRatio * 100)}%)`,
+                              Similar: `${results.cs2ContourIndependence.similarMotions} (${Math.round(results.cs2ContourIndependence.similarRatio * 100)}%)`,
+                              Oblique: `${results.cs2ContourIndependence.obliqueMotions} (${Math.round(results.cs2ContourIndependence.obliqueRatio * 100)}%)`,
+                            }}
+                          />
+                          <ObservationList
+                            observations={[
+                              { type: 'info', description: results.cs2ContourIndependence.assessment },
+                            ]}
+                          />
+                        </>
+                      )}
+                    </Section>
+
+                    {results.cs1Cs2Counterpoint && (
+                      <Section title="CS1 vs CS2" defaultCollapsed={true}>
+                        <ObservationList observations={results.cs1Cs2Counterpoint.observations} />
+                      </Section>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>

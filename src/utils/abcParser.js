@@ -459,6 +459,113 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
 }
 
 /**
+ * Generate ABC notation for the answer in the SAME key as the subject.
+ * This avoids confusion by keeping the same key signature.
+ * @param {Array} subject - Array of NoteEvents
+ * @param {Object} keyInfo - Key information {key, keySignature, mode}
+ * @param {Object} answerData - Answer analysis {tonalMotions, mutationPoint, answerType}
+ * @param {number} defaultNoteLength - Note length as decimal
+ * @param {number[]} meter - Time signature
+ * @param {boolean} forceReal - If true, generate a real (non-tonal) answer
+ * @param {number[]} noteLengthFraction - Optional note length fraction
+ */
+export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNoteLength, meter, forceReal = false, noteLengthFraction = null) {
+  if (!meter || !Array.isArray(meter) || meter.length < 2) {
+    throw new Error(`generateAnswerABCSameKey: meter is invalid (${JSON.stringify(meter)})`);
+  }
+  const { key, keySignature, mode } = keyInfo;
+
+  let modeSuffix = ['natural_minor', 'harmonic_minor'].includes(mode)
+    ? 'm'
+    : mode === 'dorian'
+      ? ' dor'
+      : '';
+
+  // Use the fraction directly if provided
+  let lNumDisplay, lDenomDisplay;
+  if (noteLengthFraction && noteLengthFraction[0] && noteLengthFraction[1]) {
+    lNumDisplay = noteLengthFraction[0];
+    lDenomDisplay = noteLengthFraction[1];
+  } else {
+    const commonFractions = [
+      [1, 1], [1, 2], [1, 4], [1, 8], [1, 16], [1, 32],
+      [3, 4], [3, 8], [3, 16]
+    ];
+    let found = false;
+    for (const [n, d] of commonFractions) {
+      if (Math.abs(defaultNoteLength - n / d) < 0.001) {
+        lNumDisplay = n;
+        lDenomDisplay = d;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      lNumDisplay = Math.round(defaultNoteLength * 16);
+      lDenomDisplay = 16;
+    }
+  }
+
+  const measDur = (meter[0] * 4) / meter[1];
+  const { tonalMotions, mutationPoint } = answerData;
+
+  const tokens = [];
+  let measCount = 0;
+
+  for (let i = 0; i < subject.length; i++) {
+    const n = subject[i];
+    let newPitch;
+
+    if (forceReal) {
+      // Real answer: always transpose up a 5th (7 semitones)
+      newPitch = n.pitch + 7;
+    } else {
+      // Tonal answer: apply mutation
+      newPitch = n.pitch + 7;
+      if (tonalMotions.length > 0 && mutationPoint !== null && i < mutationPoint) {
+        const d = n.scaleDegree;
+        if (d.degree === 1 && d.alteration === 0) newPitch = n.pitch + 7;
+        else if (d.degree === 5 && d.alteration === 0) newPitch = n.pitch + 5;
+      }
+    }
+
+    const durMatch = n.abcNote.match(/[\d\/]+$/);
+    const noteMeas = Math.floor(n.onset / measDur);
+
+    if (noteMeas > measCount && tokens.length > 0) {
+      while (measCount < noteMeas) {
+        measCount++;
+        tokens.push(measCount % 4 === 0 ? '|\n' : '|');
+      }
+    }
+
+    // Write in subject key, using accidentals as needed
+    tokens.push(midiToABC(newPitch, keySignature) + (durMatch ? durMatch[0] : ''));
+  }
+
+  tokens.push('|]');
+
+  let body = '';
+  let line = '';
+
+  for (const t of tokens) {
+    if (t === '|\n') {
+      body += line + ' |\n';
+      line = '';
+    } else if (t === '|' || t === '|]') {
+      line += ' ' + t;
+    } else {
+      line += (line && !line.endsWith('|') ? ' ' : '') + t;
+    }
+  }
+
+  if (line.trim()) body += line;
+
+  const answerLabel = forceReal ? 'Real' : 'Tonal';
+  return `K:${key}${modeSuffix}\nL:${lNumDisplay}/${lDenomDisplay}\n${body.trim()}`;
+}
+
+/**
  * Format the subject as ABC notation
  * @param {Array} subject - Array of NoteEvents
  * @param {Object} keyInfo - Key information {key, mode}
