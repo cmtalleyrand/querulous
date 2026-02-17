@@ -125,15 +125,26 @@ export const STRETTO_STEP_OPTIONS = [
 ];
 
 /**
- * Octave displacement options
+ * Stretto transposition options
+ * Includes octave displacements and interval transpositions (P4, P5)
+ * These are the transposition classes tested in testStrettoViability
  */
-export const OCTAVE_OPTIONS = [
-  { value: '0', label: 'Unison' },
-  { value: '12', label: '+1 octave' },
-  { value: '-12', label: '-1 octave' },
-  { value: '24', label: '+2 octaves' },
-  { value: '-24', label: '-2 octaves' },
+export const STRETTO_TRANSPOSITION_OPTIONS = [
+  { value: '0', label: 'Unison', intervalClass: 0 },
+  { value: '12', label: '+1 octave', intervalClass: 0 },
+  { value: '-12', label: '-1 octave', intervalClass: 0 },
+  { value: '7', label: '+P5 (at the 5th)', intervalClass: 7 },
+  { value: '-7', label: '-P5 (at the 5th below)', intervalClass: 7 },
+  { value: '5', label: '+P4 (at the 4th)', intervalClass: 5 },
+  { value: '-5', label: '-P4 (at the 4th below)', intervalClass: 5 },
+  { value: '24', label: '+2 octaves', intervalClass: 0 },
+  { value: '-24', label: '-2 octaves', intervalClass: 0 },
 ];
+
+/**
+ * @deprecated Use STRETTO_TRANSPOSITION_OPTIONS
+ */
+export const OCTAVE_OPTIONS = STRETTO_TRANSPOSITION_OPTIONS;
 
 /**
  * Countersubject position options

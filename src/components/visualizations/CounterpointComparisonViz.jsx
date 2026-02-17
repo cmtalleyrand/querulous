@@ -12,9 +12,11 @@ import {
 
 // Tab definitions for comparison modes
 const COMPARISON_TABS = [
-  { key: 'subject_cs', label: 'Subject + CS', v1: 'subject', v2: 'cs1' },
-  { key: 'answer_cs', label: 'Answer + CS', v1: 'answer', v2: 'cs1' },
-  { key: 'answer_subject', label: 'Answer + Subject', v1: 'answer', v2: 'subject' },
+  { key: 'subject_cs', label: 'S + CS1', v1: 'subject', v2: 'cs1' },
+  { key: 'answer_cs', label: 'A + CS1', v1: 'answer', v2: 'cs1' },
+  { key: 'answer_subject', label: 'A + S', v1: 'answer', v2: 'subject' },
+  { key: 'subject_cs2', label: 'S + CS2', v1: 'subject', v2: 'cs2' },
+  { key: 'cs1_cs2', label: 'CS1 + CS2', v1: 'cs1', v2: 'cs2' },
 ];
 
 /**
@@ -76,6 +78,7 @@ export function CounterpointComparisonViz({
       case 'subject': return VIZ_COLORS.voiceSubject;
       case 'answer': return VIZ_COLORS.voiceAnswer;
       case 'cs1': return VIZ_COLORS.voiceCS;
+      case 'cs2': return '#f59e0b'; // Amber for CS2
       default: return '#6b7280';
     }
   };
@@ -84,7 +87,8 @@ export function CounterpointComparisonViz({
     switch (key) {
       case 'subject': return 'Subject';
       case 'answer': return 'Answer';
-      case 'cs1': return 'Countersubject';
+      case 'cs1': return 'CS1';
+      case 'cs2': return 'CS2';
       default: return key;
     }
   };
@@ -128,6 +132,7 @@ export function CounterpointComparisonViz({
     // Map voice keys to sequence keys (voices use 'cs1', sequences use 'countersubject')
     const voiceToSequenceKey = (voiceKey) => {
       if (voiceKey === 'cs1') return 'countersubject';
+      if (voiceKey === 'cs2') return 'countersubject2';
       return voiceKey;
     };
 

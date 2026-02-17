@@ -11,6 +11,7 @@ export {
   parseABC,
   midiToABC,
   generateAnswerABC,
+  generateAnswerABCSameKey,
   formatSubjectABC,
   validateABCTiming,
 } from './abcParser';

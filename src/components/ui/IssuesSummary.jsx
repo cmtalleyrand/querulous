@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SCORE_THRESHOLDS, getScoreRating, getScoreColor, getScoreBgColor } from '../../utils/scoring';
 
 /**
  * IssuesSummary - Aggregates and displays all issues from various analyses
@@ -62,18 +63,18 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
     }
   }
 
-  // Stretto issues - show each problematic stretto individually
-  if (results.stretto?.problematicStrettos?.length > 0) {
-    const issues = results.stretto.problematicStrettos.map(s => ({
-      description: `Stretto at ${s.distance} beats: ${s.issues?.length || 0} issue${(s.issues?.length || 0) !== 1 ? 's' : ''} (${s.issues?.map(i => i.description || i.type || 'voice-leading').join(', ') || 'voice-leading issues'})`,
-    }));
-    categories.push({
-      name: 'Stretto Viability',
-      issues,
-      warnings: [],
-      icon: '🎼',
-      detail: `${results.stretto.cleanStrettos?.length || 0} clean, ${(results.stretto.viableStrettos?.length || 0) - (results.stretto.cleanStrettos?.length || 0)} with warnings`,
-    });
+  // Stretto: only show a summary warning if there are zero viable strettos at any transposition
+  // Individual non-viable strettos are NOT issues - they're just distances that don't work
+  if (results.stretto) {
+    const viableCount = results.stretto.viableStrettos?.length || 0;
+    if (viableCount === 0 && (results.stretto.allResults?.length || 0) > 0) {
+      categories.push({
+        name: 'Stretto Viability',
+        issues: [],
+        warnings: [{ description: 'No viable stretto found at any transposition or distance' }],
+        icon: '🎼',
+      });
+    }
   }
 
   // Double counterpoint issues - show each issue individually, not as summary
@@ -221,18 +222,20 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
           </div>
         </div>
 
-        {/* Overall score indicator */}
+        {/* Overall score indicator - uses base-zero scoring thresholds */}
         {scoreResult && (
           <div style={{
             padding: '8px 16px',
-            backgroundColor: scoreResult.overall >= 75 ? '#dcfce7' : scoreResult.overall >= 50 ? '#fef3c7' : '#fee2e2',
+            backgroundColor: getScoreBgColor(scoreResult.overall),
             borderRadius: '6px',
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: '18px', fontWeight: '700', color: scoreResult.overall >= 75 ? '#166534' : scoreResult.overall >= 50 ? '#92400e' : '#dc2626' }}>
-              {Math.round(scoreResult.overall)}
+            <div style={{ fontSize: '14px', fontWeight: '700', color: getScoreColor(scoreResult.overall) }}>
+              {getScoreRating(scoreResult.overall)}
             </div>
-            <div style={{ fontSize: '10px', color: '#6b7280' }}>overall</div>
+            <div style={{ fontSize: '10px', color: '#6b7280' }}>
+              {scoreResult.overall >= 0 ? '+' : ''}{Math.round(scoreResult.overall * 10) / 10}
+            </div>
           </div>
         )}
       </div>

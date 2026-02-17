@@ -2,8 +2,9 @@
  * Shared visualization constants and utilities
  */
 
-// Unified semantic color scheme - NEW SYSTEM:
-// A) Dissonances: purple → red (based on ENTRY score + pattern bonus)
+// Unified semantic color scheme:
+// A) Dissonances: purple → red (based on TOTAL score = entry + exit + patterns)
+//    Purple = well-handled overall, red = poorly handled overall
 // B) Consonant resolutions: emerald → amber (based on EXIT score)
 // C) Red reserved for: parallel fifths/octaves, consecutive non-passing dissonances
 export const VIZ_COLORS = {
@@ -127,8 +128,7 @@ function getResolutionColorByExitScore(score) {
 
 /**
  * Get interval style based on consonance, score, and resolution status
- * NEW SYSTEM:
- * - Dissonances colored by entry+pattern score (purple→red)
+ * - Dissonances colored by total score (purple→red): reflects overall handling quality
  * - Resolutions colored by exit score (emerald→amber)
  * - Regular consonances keep original colors (teal/lime)
  *
@@ -224,10 +224,13 @@ export function getIntervalStyle({
     };
   }
 
-  // DISSONANCE - color by entry + pattern score (purple → red spectrum)
-  // Use entryScore if provided, otherwise fall back to total score
-  const useEntryScore = entryScore !== undefined ? entryScore : score;
-  const colorInfo = getDissonanceColorByEntryScore(useEntryScore);
+  // DISSONANCE - color by TOTAL score (entry + exit + patterns)
+  // Total score reflects overall handling quality:
+  //   - A resolved dissonance with poor entry still gets credit for good resolution
+  //   - An unresolved dissonance with good entry is penalized for lack of resolution
+  // Purple = well-handled overall, red = poorly handled overall
+  const useTotalScore = score;
+  const colorInfo = getDissonanceColorByEntryScore(useTotalScore);
 
   const baseResolutionStyle = isResolved
     ? { borderStyle: 'solid', borderWidth: 1, opacity: 0.75 }
@@ -235,9 +238,9 @@ export function getIntervalStyle({
 
   return {
     ...colorInfo,
-    bg: useEntryScore >= 1.0 ? '#e0e7ff' : (useEntryScore >= 0 ? '#f3e8ff' : '#fce7f3'),
+    bg: useTotalScore >= 1.0 ? '#e0e7ff' : (useTotalScore >= 0 ? '#f3e8ff' : '#fce7f3'),
     ...baseResolutionStyle,
-    opacity: isResolved ? (useEntryScore >= 0.5 ? 0.8 : 0.7) : 0.55,
+    opacity: isResolved ? (useTotalScore >= 0.5 ? 0.8 : 0.7) : 0.55,
   };
 }
 
