@@ -1508,6 +1508,9 @@ export function testModulatoryRobustness(subject, cs, formatter) {
     observations.push({ type: 'strength', description: 'No parallel 5ths or 8ves against answer' });
   }
 
+  // Get detailed dissonance scoring
+  const detailedScoring = analyzeAllDissonances(sims);
+
   // Check for strong-beat dissonances - only flag those that are poorly handled
   // Well-handled dissonances (suspensions, passing tones, etc.) are not issues
   if (detailedScoring?.dissonances) {
@@ -1530,9 +1533,6 @@ export function testModulatoryRobustness(subject, cs, formatter) {
       }
     }
   }
-
-  // Get detailed dissonance scoring
-  const detailedScoring = analyzeAllDissonances(sims);
 
   return {
     violations,
