@@ -134,20 +134,6 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
     }
   }
 
-  // Modulatory robustness (answer vs CS) issues
-  if (results.modulatoryRobustness?.observations) {
-    const issues = results.modulatoryRobustness.observations.filter(o => o.type === 'issue');
-    const warnings = results.modulatoryRobustness.observations.filter(o => o.type === 'consideration');
-    if (issues.length > 0 || warnings.length > 0) {
-      categories.push({
-        name: 'Answer vs CS',
-        issues,
-        warnings,
-        icon: '🔀',
-      });
-    }
-  }
-
   // Rhythmic complementarity issues
   if (results.rhythmicComplementarity?.observations) {
     const issues = results.rhythmicComplementarity.observations.filter(o => o.type === 'issue');

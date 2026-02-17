@@ -942,33 +942,14 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
   const meter = formatter.meter;
   const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
   const maxDist = subLen * (1 - minOverlap);
-
-  // Build set of transposition intervals to test
-  // Full set: octaves, fifths, fourths, compound fifths/fourths, double octaves
-  const allTranspositions = [0, 12, -12, 7, -7, 5, -5, 19, -19, 17, -17, 24, -24];
-
-  // Deduplicate by mod 12 — transpositions that differ by octaves produce
-  // identical interval classes and therefore identical counterpoint analysis
-  const seenClasses = new Set();
-  const uniqueTranspositions = [];
-  for (const t of allTranspositions) {
-    const cls = ((t % 12) + 12) % 12;
-    if (!seenClasses.has(cls)) {
-      seenClasses.add(cls);
-      uniqueTranspositions.push(t);
-    }
-  }
-  // uniqueTranspositions is now e.g. [0, 7, 5] — one per interval class
-
   const results = [];
 
   // Calculate average note duration for relative weighting
   const avgDuration = subject.reduce((sum, n) => sum + n.duration, 0) / subject.length;
 
-  for (const transp of uniqueTranspositions) {
   for (let dist = increment; dist <= maxDist; dist += increment) {
     const comes = subject.map(
-      (n) => new NoteEvent(n.pitch + transp, n.duration, n.onset + dist, n.scaleDegree, n.abcNote)
+      (n) => new NoteEvent(n.pitch + octaveDisp, n.duration, n.onset + dist, n.scaleDegree, n.abcNote)
     );
     const sims = findSimultaneities(subject, comes, meter);
     const issues = [];
@@ -1197,8 +1178,6 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
 
     results.push({
       distance: dist,
-      transposition: transp,
-      transpositionClass: ((transp % 12) + 12) % 12,
       distanceFormatted: formatter.formatDistance(dist),
       overlapPercent: Math.round(((subLen - dist) / subLen) * 100),
       issueCount: issues.length,
@@ -1218,8 +1197,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
         // It represents the average counterpoint quality at this distance
       },
     });
-  } // end distance loop
-  } // end transposition loop
+  }
 
   // Generate summary with counts by category (based on weighted severity)
   const cleanCount = results.filter(r => r.clean).length;
@@ -1239,26 +1217,12 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     ? nonClean.reduce((best, r) => r.weightedSeverity < best.weightedSeverity ? r : best)
     : null;
 
-  // Transposition diversity statistics
-  const testedTranspositions = uniqueTranspositions;
-  const viableTranspositions = [...new Set(results.filter(r => r.viable).map(r => r.transpositionClass))];
-  const viableDistances = [...new Set(results.filter(r => r.viable).map(r => r.distance))];
-  const totalDistancesPerTransposition = Math.max(1, Math.floor(maxDist / increment));
-
-  // Results filtered to the user-selected transposition class (for UI display)
-  // The user selects e.g. +12, -12, +24, -24 — all map to class 0
-  const selectedClass = ((octaveDisp % 12) + 12) % 12;
-  const selectedResults = results.filter(r => r.transpositionClass === selectedClass);
-
   return {
     subjectLengthBeats: subLen,
     allResults: results,
-    // Filtered to user-selected transposition for backward-compatible UI display
-    selectedResults,
     viableStrettos: results.filter((r) => r.viable),
     cleanStrettos: results.filter((r) => r.clean),
     problematicStrettos: results.filter((r) => !r.viable),
-    testedTranspositions,
     summary: {
       totalTested: results.length,
       clean: cleanCount,
@@ -1272,10 +1236,6 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
                     viableCount > 0 ? results.find(r => r.viable)?.distanceFormatted : null,
       bestNonCleanDistance: bestNonClean?.distanceFormatted || null,
       bestNonCleanSeverity: bestNonClean?.weightedSeverity || null,
-      viableTranspositionCount: viableTranspositions.length,
-      viableDistanceCount: viableDistances.length,
-      totalDistancesPerTransposition,
-      testedTranspositionCount: uniqueTranspositions.length,
     },
   };
 }
@@ -1474,10 +1434,10 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
   }
 
   for (const i of orig.issues) {
-    observations.push({ type: 'issue', description: `Original: ${i.description}`, onset: i.onset });
+    observations.push({ type: 'consideration', description: `Original: ${i.description}` });
   }
   for (const i of inv.issues) {
-    observations.push({ type: 'issue', description: `Inverted: ${i.description}`, onset: i.onset });
+    observations.push({ type: 'consideration', description: `Inverted: ${i.description}` });
   }
 
   if (!orig.issues.length && !inv.issues.length) {
@@ -1542,7 +1502,7 @@ export function testModulatoryRobustness(subject, cs, formatter) {
 
   if (violations.length) {
     for (const v of violations) {
-      observations.push({ type: 'issue', description: v.description, onset: v.onset });
+      observations.push({ type: 'consideration', description: v.description });
     }
   } else {
     observations.push({ type: 'strength', description: 'No parallel 5ths or 8ves against answer' });
