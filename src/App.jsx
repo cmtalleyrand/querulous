@@ -1070,29 +1070,30 @@ export default function App() {
 
             {/* Stretto Possibilities */}
             <Section title="Stretto Possibilities" helpKey="strettoViability">
-              {/* Summary first - what we found */}
+              {/* Summary - overall across all transpositions */}
               {(() => {
-                const cleanCount = results.stretto.cleanStrettos?.length || 0;
-                const viableCount = results.stretto.viableStrettos?.length || 0;
-                const withWarnings = viableCount - cleanCount;
+                const allViable = results.stretto.viableStrettos?.length || 0;
+                const allClean = results.stretto.cleanStrettos?.length || 0;
+                const transpCount = results.stretto.summary?.viableTranspositionCount || 0;
+                const testedTransp = results.stretto.summary?.testedTranspositionCount || 1;
 
                 return (
                   <div style={{
                     padding: '14px 16px',
                     marginBottom: '16px',
                     borderRadius: '8px',
-                    backgroundColor: viableCount > 0 ? '#ecfdf5' : '#f8fafc',
-                    border: viableCount > 0 ? '1px solid #a7f3d0' : '1px solid #e2e8f0',
+                    backgroundColor: allViable > 0 ? '#ecfdf5' : '#f8fafc',
+                    border: allViable > 0 ? '1px solid #a7f3d0' : '1px solid #e2e8f0',
                   }}>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: viableCount > 0 ? '#065f46' : '#475569', marginBottom: '6px' }}>
-                      {viableCount > 0
-                        ? `${viableCount} viable stretto distance${viableCount !== 1 ? 's' : ''} found`
-                        : 'No clean stretto distances at this configuration'}
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: allViable > 0 ? '#065f46' : '#475569', marginBottom: '6px' }}>
+                      {allViable > 0
+                        ? `${allViable} viable stretto(s) across ${transpCount}/${testedTransp} transposition interval${testedTransp !== 1 ? 's' : ''}`
+                        : 'No viable stretto distances found at any transposition'}
                     </div>
-                    <div style={{ fontSize: '12px', color: viableCount > 0 ? '#047857' : '#64748b' }}>
-                      {cleanCount > 0 && <span style={{ marginRight: '12px' }}>{cleanCount} clean</span>}
-                      {withWarnings > 0 && <span>{withWarnings} with minor issues</span>}
-                      {viableCount === 0 && <span>Stretto may still be possible with modification or at different intervals</span>}
+                    <div style={{ fontSize: '12px', color: allViable > 0 ? '#047857' : '#64748b' }}>
+                      {allClean > 0 && <span style={{ marginRight: '12px' }}>{allClean} clean</span>}
+                      {allViable > allClean && <span>{allViable - allClean} with minor issues</span>}
+                      {allViable === 0 && <span>Stretto may still be possible with modification</span>}
                     </div>
                   </div>
                 );
@@ -1137,13 +1138,13 @@ export default function App() {
                 </span>
               </div>
 
-              {/* All distances with gradation by severity */}
+              {/* Distances for selected transposition */}
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
-                  All distances tested:
+                  Distances at selected displacement:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {results.stretto.allResults.map((s, i) => {
+                  {(results.stretto.selectedResults || results.stretto.allResults).map((s, i) => {
                     const isSelected = selectedStretto === s.distance;
                     const issueCount = s.issueCount || 0;
                     const warningCount = s.warningCount || 0;
@@ -1248,7 +1249,7 @@ export default function App() {
 
               {/* Selected stretto detail */}
               {selectedStretto !== null && (() => {
-                const s = results.stretto.allResults.find((r) => r.distance === selectedStretto);
+                const s = (results.stretto.selectedResults || results.stretto.allResults).find((r) => r.distance === selectedStretto);
                 if (!s) return null;
                 return (
                   <div
