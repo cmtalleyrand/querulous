@@ -258,7 +258,7 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
           );
         })}
 
-        {/* Improvement suggestions */}
+        {/* Issue explanations */}
         {improvements.length > 0 && (
           <div
             style={{
@@ -270,7 +270,7 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
             }}
           >
             <div style={{ fontSize: '12px', fontWeight: '600', color: '#37474f', marginBottom: '8px' }}>
-              Suggestions for Improvement
+              Issues
             </div>
             {improvements.map((item, i) => (
               <div
@@ -284,7 +284,7 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
                 }}
               >
                 <div style={{ fontSize: '12px', fontWeight: '500', color: '#e65100' }}>{item.category}</div>
-                <div style={{ fontSize: '11px', color: '#546e7a', marginTop: '2px' }}>{item.suggestion}</div>
+                <div style={{ fontSize: '11px', color: '#546e7a', marginTop: '2px' }}>{item.explanation}</div>
               </div>
             ))}
           </div>
