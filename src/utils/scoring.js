@@ -316,131 +316,97 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
   const totalTests = allResults.length;
 
   if (totalTests === 0) {
-    return { score: 0, internal: 0, details: [{ factor: 'No stretto distances tested', impact: 0 }], context: {} };
+    return { score: 50, internal: 0, details: [{ factor: 'No stretto distances tested', impact: 0 }], context: {} };
   }
 
-  const subLen = result.subjectLengthBeats || 4;
-
-  // Collect counterpoint scores from each (distance, transposition) combination
+  // Collect counterpoint scores from each distance
+  // Each distance already has dissonance analysis - use avgDissonanceScore
   const distanceScores = allResults.map(r => {
+    // Use the average dissonance score from the analysis
+    // This treats each stretto as if it were full counterpoint
     const avgScore = r.dissonanceAnalysis?.summary?.averageScore || 0;
     return {
       distance: r.distance,
-      transposition: r.transposition || 0,
-      transpositionClass: r.transpositionClass || 0,
-      overlapPercent: r.overlapPercent || 0,
       avgScore,
       issueCount: r.issues?.length || 0,
       viable: r.viable,
     };
   });
 
-  const viableResults = distanceScores.filter(d => d.viable);
-  const viableCount = viableResults.length;
+  // Sort by score (best first) and take top 3
+  // Rationale: You're unlikely to use more than 3 stretto distances in practice,
+  // so what matters is whether your best options are good, not the average of all.
+  const sortedScores = [...distanceScores].sort((a, b) => b.avgScore - a.avgScore);
+  const top3 = sortedScores.slice(0, 3);
+  const rest = sortedScores.slice(3);
 
-  let internal = 0;
+  // Primary score: average of top 3 (or fewer if less than 3 tested)
+  const top3Avg = top3.reduce((sum, d) => sum + d.avgScore, 0) / top3.length;
 
-  // (i) Viable count bonus: min(10, count - 2)
-  // Reward having multiple viable strettos
-  const viableCountBonus = Math.min(10, Math.max(0, viableCount - 2));
-  internal += viableCountBonus;
-  if (viableCountBonus > 0) {
-    details.push({ factor: `${viableCount} viable strettos`, impact: viableCountBonus });
-  } else if (viableCount <= 2) {
-    details.push({ factor: `Only ${viableCount} viable stretto(s)`, impact: 0, type: 'info' });
+  // Secondary: rest of distances contribute at 25% weight
+  const restAvg = rest.length > 0 ? rest.reduce((sum, d) => sum + d.avgScore, 0) / rest.length : 0;
+  const weightedAvg = rest.length > 0
+    ? (top3Avg * 0.75 + restAvg * 0.25)
+    : top3Avg;
+
+  // Internal score: scale to -15 to +15 range
+  let internal = weightedAvg * 5;
+
+  details.push({
+    factor: `Top ${top3.length} stretto distances avg: ${top3Avg.toFixed(2)}`,
+    impact: Math.round(top3Avg * 5),
+  });
+
+  if (rest.length > 0) {
+    details.push({
+      factor: `Other ${rest.length} distances avg: ${restAvg.toFixed(2)} (25% weight)`,
+      impact: Math.round(restAvg * 5 * 0.25),
+      type: 'info',
+    });
   }
 
-  // (ii) Diversity bonus
-  // (a) Unique transposition intervals with viable strettos
-  const viableTranspClasses = [...new Set(viableResults.map(d => d.transpositionClass))];
-  const transpDiversityBonus = Math.min(8, Math.max(0, (viableTranspClasses.length - 1.5) * 2));
-  internal += transpDiversityBonus;
-  if (transpDiversityBonus > 0) {
-    details.push({ factor: `Viable at ${viableTranspClasses.length} transposition interval(s)`, impact: Math.round(transpDiversityBonus) });
+  // Count good distances for context
+  const goodDistances = distanceScores.filter(d => d.avgScore >= 0).length;
+
+  // Bonus for close stretto possibility (high overlap with good counterpoint)
+  const closeGood = distanceScores.filter(d => {
+    const r = allResults.find(ar => ar.distance === d.distance);
+    return r && r.overlapPercent >= 60 && d.avgScore >= 0;
+  });
+  if (closeGood.length > 0) {
+    internal += 5;
+    details.push({ factor: `Close stretto possible with good counterpoint`, impact: +5 });
   }
 
-  // (b) Unique distances with viable strettos
-  const viableDistances = [...new Set(viableResults.map(d => d.distance))];
-  const totalDistancesPerTransp = result.summary?.totalDistancesPerTransposition || Math.floor(allResults.length / Math.max(1, (result.testedTranspositions?.length || 1)));
-  const distDiversityBonus = Math.min(8, Math.max(0, (viableDistances.length - 0.25 * totalDistancesPerTransp) * 2));
-  internal += distDiversityBonus;
-  if (distDiversityBonus > 0) {
-    details.push({ factor: `Viable at ${viableDistances.length}/${totalDistancesPerTransp} distances`, impact: Math.round(distDiversityBonus) });
-  }
-
-  // (iii) Quality from top scores: top 5 strettos with no distance or interval repeated more than once
-  // Select best strettos ensuring diversity — no distance or transposition class used more than once
-  const sortedByScore = [...distanceScores].sort((a, b) => b.avgScore - a.avgScore);
-  const top5 = [];
-  const usedDistances = new Map(); // distance → count
-  const usedTranspClasses = new Map(); // transpositionClass → count
-  for (const d of sortedByScore) {
-    if (top5.length >= 5) break;
-    const distCount = usedDistances.get(d.distance) || 0;
-    const transpCount = usedTranspClasses.get(d.transpositionClass) || 0;
-    if (distCount < 1 && transpCount < 1) {
-      top5.push(d);
-      usedDistances.set(d.distance, distCount + 1);
-      usedTranspClasses.set(d.transpositionClass, transpCount + 1);
-    }
-  }
-
-  if (top5.length > 0) {
-    const top5Avg = top5.reduce((sum, d) => sum + d.avgScore, 0) / top5.length;
-    const qualityScore = top5Avg * 4;
-    internal += qualityScore;
-    details.push({ factor: `Top ${top5.length} diverse strettos avg quality: ${top5Avg.toFixed(2)}`, impact: Math.round(qualityScore) });
-  }
-
-  // (iv) Close stretto bonus
-  // Based on overlap percentage of viable strettos
-  const viableAt75 = viableResults.some(d => d.overlapPercent >= 75);
-  const viableAt60 = viableResults.some(d => d.overlapPercent >= 60);
-  const viableAt40 = viableResults.some(d => d.overlapPercent >= 40);
-  const viableAt30 = viableResults.some(d => d.overlapPercent >= 30);
-
-  let closeBonus = 0;
-  if (viableAt75) {
-    closeBonus = 5;
-    details.push({ factor: 'Viable close stretto at 75%+ overlap', impact: +5 });
-  } else if (viableAt60) {
-    closeBonus = 3;
-    details.push({ factor: 'Viable close stretto at 60%+ overlap', impact: +3 });
-  } else if (!viableAt40) {
-    if (!viableAt30) {
-      closeBonus = -5;
-      details.push({ factor: 'No viable stretto at 30%+ overlap', impact: -5 });
-    } else {
-      closeBonus = -3;
-      details.push({ factor: 'No viable stretto at 40%+ overlap', impact: -3 });
-    }
-  }
-  internal += closeBonus;
-
-  // (v) Maximum viable gap: (furthest viable - closest viable - 0.25 * subjectLength) * 4
-  if (viableDistances.length >= 2) {
-    const sortedViableDist = [...viableDistances].sort((a, b) => a - b);
-    const closest = sortedViableDist[0];
-    const furthest = sortedViableDist[sortedViableDist.length - 1];
-    const gapScore = (furthest - closest - 0.25 * subLen) * 4;
-    const clampedGap = Math.max(-10, Math.min(10, gapScore));
-    internal += clampedGap;
-    if (Math.abs(clampedGap) >= 0.5) {
-      details.push({ factor: `Viable distance range: ${closest.toFixed(1)}-${furthest.toFixed(1)} beats`, impact: Math.round(clampedGap) });
-    }
-  } else if (viableCount === 1) {
-    details.push({ factor: 'Only one viable distance', impact: 0, type: 'info' });
+  // Penalty for parallel perfects (critical issues)
+  const hasParallelPerfects = allResults.some(r =>
+    r.issues?.some(i => i.type === 'parallel')
+  );
+  if (hasParallelPerfects) {
+    const parallelCount = allResults.filter(r =>
+      r.issues?.some(i => i.type === 'parallel')
+    ).length;
+    const penalty = Math.min(10, parallelCount * 2);
+    internal -= penalty;
+    details.push({ factor: `Parallel perfects at ${parallelCount} distances`, impact: -penalty });
   }
 
   // Context
-  const goodDistances = viableCount;
   const context = {
     subjectLength,
     testedDistances: totalTests,
     goodDistances,
-    viableTranspositions: viableTranspClasses.length,
+    avgCounterpointScore: weightedAvg,
     distanceScores,
   };
+
+  if (subjectLength && goodDistances > 0) {
+    details.push({
+      factor: `${goodDistances} usable entry points`,
+      impact: 0,
+      type: 'info',
+    });
+  }
 
   return {
     score: toDisplayScore(internal),
@@ -1057,7 +1023,7 @@ export function getScoreSummary(scoreResult) {
         score: data.internal,
         internal: data.internal,
         rating: getScoreRating(data.internal),
-        explanation: getIssueExplanation(key, data),
+        suggestion: getSuggestion(key, data),
       });
     }
   }
@@ -1066,29 +1032,30 @@ export function getScoreSummary(scoreResult) {
 }
 
 /**
- * Get explanation of what the issue is for a weak category
+ * Get improvement suggestions for a category
  */
-function getIssueExplanation(category, data) {
-  const explanations = {
-    tonalClarity: 'The subject\'s opening/ending notes create weak tonal orientation or a problematic harmonic junction with the answer.',
-    rhythmicCharacter: 'The subject uses few distinct note values, limiting its recognisability in contrapuntal texture.',
-    strettoPotential: 'Overlapping entries produce poorly handled dissonances or lack viable entry distances across transposition intervals.',
-    invertibility: 'The inverted position (voices swapped) produces significantly worse counterpoint than the original.',
-    rhythmicInterplay: 'Attack points between voices coincide too frequently, reducing rhythmic independence.',
-    voiceIndependence: 'Voice contours move too similarly — insufficient contrary and oblique motion relative to parallel motion.',
-    transpositionStability: 'The countersubject produces problematic intervals when paired with the dominant-level answer.',
+function getSuggestion(category, data) {
+  const suggestions = {
+    // Active keys
+    tonalClarity: 'Consider the opening/ending notes and harmonic motion at the answer junction.',
+    rhythmicCharacter: 'Try incorporating more diverse note values and rhythmic contrasts.',
+    strettoPotential: 'Adjust melodic intervals to improve counterpoint quality when overlapping.',
+    invertibility: 'Use more thirds and sixths to maintain quality when inverted.',
+    rhythmicInterplay: 'Offset attack points between voices for better independence.',
+    voiceIndependence: 'Add more contrary motion to differentiate voice contours.',
+    transpositionStability: 'Ensure the countersubject works smoothly against the dominant-level answer.',
     // Legacy keys
-    tonalDefinition: 'The subject\'s opening/ending notes create weak tonal orientation.',
-    answerCompatibility: 'The harmonic junction between the subject\'s end and the answer entry is problematic.',
-    harmonicImplication: 'The subject\'s opening/ending notes create weak tonal orientation.',
-    rhythmicVariety: 'The subject uses few distinct note values, limiting its recognisability in contrapuntal texture.',
-    strettoViability: 'Overlapping entries produce poorly handled dissonances or lack viable entry distances.',
-    tonalAnswer: 'The harmonic junction between the subject\'s end and the answer entry is problematic.',
-    doubleCounterpoint: 'The inverted position produces significantly worse counterpoint than the original.',
-    rhythmicComplementarity: 'Attack points between voices coincide too frequently.',
-    contourIndependence: 'Voice contours move too similarly — insufficient contrary and oblique motion.',
-    modulatoryRobustness: 'The countersubject produces problematic intervals against the dominant-level answer.',
+    tonalDefinition: 'Consider starting on a tonic chord tone and ending on a degree that creates clear harmonic motion.',
+    answerCompatibility: 'Consider the harmonic junction at the end of the subject.',
+    harmonicImplication: 'Consider starting on a tonic chord tone and ending on a degree that creates clear harmonic motion.',
+    rhythmicVariety: 'Try incorporating more diverse note values and rhythmic contrasts.',
+    strettoViability: 'Adjust melodic intervals to improve counterpoint quality when overlapping.',
+    tonalAnswer: 'Consider the harmonic junction at the end of the subject.',
+    doubleCounterpoint: 'Use more thirds and sixths to maintain quality when inverted.',
+    rhythmicComplementarity: 'Offset attack points between voices for better independence.',
+    contourIndependence: 'Add more contrary motion to differentiate voice contours.',
+    modulatoryRobustness: 'Ensure the countersubject works smoothly against the dominant-level answer.',
   };
 
-  return explanations[category] || 'See the detailed score breakdown for specific issues.';
+  return suggestions[category] || 'Review the analysis details for specific issues.';
 }
