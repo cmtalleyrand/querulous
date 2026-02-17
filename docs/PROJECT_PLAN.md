@@ -206,8 +206,10 @@ Before any release, verify:
 
 ## Reference Documents
 
+- **Definitions**: `docs/DEFINITIONS.md` — all terms, data structures, scoring rules with code cross-references
 - **Design principles**: `PROJECT_INTENT.md`
 - **Scoring details**: `docs/SCORING_SYSTEM.md`
 - **Critical analysis**: `docs/SCORING_CRITICAL_APPRAISAL.md`
+- **Harmonic algorithm**: `docs/HARMONIC_IMPLICATION_ALGORITHM.md`
 - **Technical overview**: `docs/CODEBASE_OVERVIEW.md`
 - **Previous tasks**: `IMPLEMENTATION_PLAN.md`

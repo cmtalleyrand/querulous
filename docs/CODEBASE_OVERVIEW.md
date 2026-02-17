@@ -43,9 +43,15 @@ querulous/
 │   └── types/
 │       └── music.js           # Type definitions (90 lines)
 ├── docs/
+│   ├── DEFINITIONS.md         # Terms and definitions reference
 │   ├── SCORING_SYSTEM.md      # Comprehensive scoring docs
-│   └── SCORING_CRITICAL_APPRAISAL.md  # Critical analysis
+│   ├── SCORING_CRITICAL_APPRAISAL.md  # Critical analysis
+│   ├── HARMONIC_IMPLICATION_ALGORITHM.md # Chord analysis spec
+│   ├── PROJECT_PLAN.md        # Planned improvements
+│   ├── CODEBASE_OVERVIEW.md   # Technical orientation (this file)
+│   └── WORKING_WITH_USER.md   # Communication guidance
 ├── PROJECT_INTENT.md          # Design principles
+├── PENDING_FEEDBACK.md        # Feedback tracking / changelog
 └── IMPLEMENTATION_PLAN.md     # Task tracking
 ```
 
@@ -306,9 +312,16 @@ No comprehensive test suite currently. Testing is manual via UI.
 
 ## Documentation Locations
 
-- **Design principles**: `PROJECT_INTENT.md`
-- **Scoring details**: `docs/SCORING_SYSTEM.md`
-- **Critical analysis**: `docs/SCORING_CRITICAL_APPRAISAL.md`
-- **Implementation tasks**: `IMPLEMENTATION_PLAN.md`
-- **This file**: `docs/CODEBASE_OVERVIEW.md`
-- **Next steps**: `docs/PROJECT_PLAN.md`
+| Document | Path | Purpose |
+|----------|------|---------|
+| Design principles | `PROJECT_INTENT.md` | UI/UX goals, visualization spec, color semantics |
+| Definitions reference | `docs/DEFINITIONS.md` | All terms, data structures, and scoring rules with code cross-references |
+| Scoring system | `docs/SCORING_SYSTEM.md` | Comprehensive scoring documentation |
+| Scoring critique | `docs/SCORING_CRITICAL_APPRAISAL.md` | Identified weaknesses and improvement proposals |
+| Harmonic algorithm | `docs/HARMONIC_IMPLICATION_ALGORITHM.md` | Beat-by-beat chord analysis specification |
+| Project plan | `docs/PROJECT_PLAN.md` | Planned improvements and next steps |
+| Working with user | `docs/WORKING_WITH_USER.md` | Communication style, preferences, domain context |
+| Codebase overview | `docs/CODEBASE_OVERVIEW.md` | This file — technical orientation |
+| Pending feedback | `PENDING_FEEDBACK.md` | User confirmation tracking and changelog |
+| Implementation tasks | `IMPLEMENTATION_PLAN.md` | Original task list (partially complete) |
+| README | `README.md` | Public-facing project description |
