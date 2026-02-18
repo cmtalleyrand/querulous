@@ -34,6 +34,9 @@ export function TwoVoiceViz({
   // sequences: { v1: SeqInfo, v2: SeqInfo } — optional, both can be undefined
   sequences = {},
   scoringOptions: externalScoringOptions = {},
+  // Optional: pre-computed issues/warnings from analysis.js — skips internal recomputation
+  issues: propIssues = null,
+  warnings: propWarnings = null,
   // Optional: called with { issues, warnings, avgScore } whenever analysis updates
   onAnalysis,
 }) {
@@ -417,7 +420,9 @@ export function TwoVoiceViz({
     return <div style={{ padding: '16px', color: '#6b7280', fontStyle: 'italic' }}>Insufficient voice data</div>;
   }
 
-  const { minPitch, maxPitch, maxTime, intervalPoints, issues, warnings, avgScore } = analysis;
+  const { minPitch, maxPitch, maxTime, intervalPoints, issues: computedIssues, warnings: computedWarnings, avgScore } = analysis;
+  const issues = propIssues !== null ? propIssues : computedIssues;
+  const warnings = propWarnings !== null ? propWarnings : computedWarnings;
   const pRange = maxPitch - minPitch;
   const noteHeight = 18;
   const headerHeight = 32;
@@ -959,12 +964,12 @@ export function TwoVoiceViz({
               <span style={{ color: VIZ_COLORS.dissonantProblematic, fontWeight: '600' }}>
                 {formatter?.formatBeat(issue.onset) || `Beat ${issue.onset + 1}`}:
               </span>
-              <span>{issue.intervalName}</span>
-              {issue.isParallel && (
+              <span>{issue.description || issue.intervalName}</span>
+              {(issue.isParallel || issue.type === 'parallel') && (
                 <span style={{ padding: '2px 6px', backgroundColor: '#fef2f2', color: '#dc2626',
                   borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Parallel</span>
               )}
-              {!issue.isResolved && (
+              {(issue.isResolved === false) && (
                 <span style={{ padding: '2px 6px', backgroundColor: '#fef3c7', color: '#b45309',
                   borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Unresolved</span>
               )}
