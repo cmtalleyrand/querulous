@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   PianoRoll,
   IntervalTimeline,
-  StrettoViz,
+  TwoVoiceViz,
   IntervalAnalysisViz,
   InvertibilityViz,
   UnifiedCounterpointViz,
@@ -52,6 +52,7 @@ import {
   setSequenceRanges,
   setSequenceBeatRanges,
 } from './utils';
+import { VIZ_COLORS } from './utils/vizConstants';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
@@ -1273,14 +1274,36 @@ export default function App() {
                           backgroundColor: '#f8fafc',
                           border: '1px solid #e2e8f0',
                           borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '6px',
                         }}>
-                          <span style={{ fontWeight: '600', color: '#475569', marginRight: '8px' }}>
+                          <span style={{ fontWeight: '600', color: '#475569', marginRight: '4px' }}>
                             {transpName}:
                           </span>
-                          <span style={{ color: '#059669' }}>
-                            {strettos.map(s => s.distanceFormatted).join(', ')}
-                          </span>
-                          <span style={{ color: '#94a3b8', marginLeft: '8px' }}>
+                          {strettos.map((s, si) => (
+                            <button
+                              key={si}
+                              onClick={() => {
+                                setStrettoOctave(String(s.transposition));
+                                setSelectedStretto(s.distance);
+                              }}
+                              style={{
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                border: `1px solid ${s.clean ? '#86efac' : '#fde047'}`,
+                                backgroundColor: s.clean ? '#dcfce7' : '#fef9c3',
+                                color: s.clean ? '#166534' : '#854d0e',
+                              }}
+                            >
+                              {s.distanceFormatted}
+                            </button>
+                          ))}
+                          <span style={{ color: '#94a3b8', fontSize: '11px' }}>
                             ({strettos.filter(s => s.clean).length} clean, {strettos.filter(s => !s.clean).length} with warnings)
                           </span>
                         </div>
@@ -1335,7 +1358,7 @@ export default function App() {
                   All distances tested:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {(results.stretto.selectedResults || results.stretto.allResults).map((s, i) => {
+                  {(results.stretto.allResults || []).filter(r => r.transposition === parseInt(strettoOctave)).map((s, i) => {
                     const isSelected = selectedStretto === s.distance;
                     const issueCount = s.issueCount || 0;
                     const warningCount = s.warningCount || 0;
@@ -1440,7 +1463,7 @@ export default function App() {
 
               {/* Selected stretto detail */}
               {selectedStretto !== null && (() => {
-                const s = (results.stretto.selectedResults || results.stretto.allResults).find((r) => r.distance === selectedStretto);
+                const s = (results.stretto.allResults || []).find((r) => r.distance === selectedStretto && r.transposition === parseInt(strettoOctave));
                 if (!s) return null;
                 return (
                   <div
@@ -1501,48 +1524,20 @@ export default function App() {
                         </div>
                       );
                     })()}
-                    <StrettoViz
-                      subject={results.subject}
-                      distance={s.distance}
-                      issues={s.issues}
-                      warnings={s.warnings || []}
-                      intervalPoints={s.intervalPoints || []}
+                    <TwoVoiceViz
+                      voice1={results.subject}
+                      voice2={results.subject.map(n => ({
+                        ...n,
+                        pitch: n.pitch + strettoOctaveVal,
+                        onset: n.onset + s.distance,
+                      }))}
+                      voice1Label="Dux"
+                      voice2Label="Comes"
+                      voice1Color={VIZ_COLORS.voiceDux}
+                      voice2Color={VIZ_COLORS.voiceComes}
                       formatter={results.formatter}
-                      octaveDisp={strettoOctaveVal}
                       meter={results.meter}
                     />
-                    {(s.issues.length > 0 || (s.warnings && s.warnings.length > 0)) && (
-                      <div style={{ marginTop: '10px' }}>
-                        {s.warnings && s.warnings.map((w, j) => (
-                          <div
-                            key={`warn-${j}`}
-                            style={{
-                              fontSize: '12px',
-                              color: '#a16207',
-                              marginTop: '4px',
-                              paddingLeft: '10px',
-                              borderLeft: '2px solid #fcd34d',
-                            }}
-                          >
-                            {w.description}
-                          </div>
-                        ))}
-                        {s.issues.map((is, j) => (
-                          <div
-                            key={`issue-${j}`}
-                            style={{
-                              fontSize: '12px',
-                              color: '#64748b',
-                              marginTop: '4px',
-                              paddingLeft: '10px',
-                              borderLeft: '2px solid #cbd5e1',
-                            }}
-                          >
-                            {is.description}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 );
               })()}
