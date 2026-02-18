@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { pitchName } from '../../utils/formatter';
 import { generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
 
@@ -201,6 +201,44 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
               );
             })}
 
+            {/* Dissonance chain borders */}
+            {(() => {
+              const chains = new Map();
+              for (const pt of intervalPoints) {
+                if (pt.chainStartOnset !== undefined && pt.chainLength > 0) {
+                  const key = pt.chainStartOnset;
+                  if (!chains.has(key)) {
+                    chains.set(key, { start: pt.chainStartOnset, end: pt.chainEndOnset, length: pt.chainLength });
+                  }
+                }
+              }
+              return Array.from(chains.values()).map((chain, i) => {
+                const resolutionPt = intervalPoints.find(p =>
+                  p.isChainResolution && p.chainStartOnset === chain.start
+                );
+                const endOnset = resolutionPt ? resolutionPt.onset : chain.end;
+                const x1 = tToX(chain.start);
+                const endPt = intervalPoints.find(p => Math.abs(p.onset - endOnset) < 0.01);
+                const nextAfterEnd = endPt ? intervalPoints[intervalPoints.indexOf(endPt) + 1] : null;
+                const x2 = nextAfterEnd ? tToX(nextAfterEnd.onset) : tToX(endOnset) + 30;
+                return (
+                  <rect
+                    key={`chain-${i}`}
+                    x={x1 - 1}
+                    y={headerHeight + 2}
+                    width={x2 - x1 + 2}
+                    height={h - headerHeight - 22}
+                    fill="none"
+                    stroke="rgba(139, 92, 246, 0.35)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4,2"
+                    rx={4}
+                    pointerEvents="none"
+                  />
+                );
+              });
+            })()}
+
             {/* Interval regions - semi-transparent filled areas between voices */}
             {intervalPoints.map((pt, i) => {
               const x = tToX(pt.onset);
@@ -227,7 +265,17 @@ export function StrettoViz({ subject, distance, issues, warnings = [], intervalP
                 isConsonant: pt.isConsonant,
                 isPerfect,
                 score: pt.score || 0,
+                entryScore: pt.entryScore,
+                exitScore: pt.exitScore,
                 category: pt.category,
+                isRepeated: pt.isRepeated,
+                isResolved: pt.isResolved,
+                isParallel: pt.isParallel,
+                isChainEntry: pt.isChainEntry,
+                isConsecutiveDissonance: pt.isConsecutiveDissonance,
+                consecutiveMitigationCount: pt.consecutiveMitigationCount || 0,
+                isChainResolution: pt.isChainResolution,
+                chainLength: pt.chainLength || 0,
               });
               const fillColor = style.fill;
               const labelBg = style.bg;

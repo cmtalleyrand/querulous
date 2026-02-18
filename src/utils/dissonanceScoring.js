@@ -184,6 +184,190 @@ function getShortNoteInfo(sim, ctx) {
 }
 
 /**
+ * Score "passingness" of a dissonance for a given voice.
+ * Determines if a dissonant note qualifies as passing motion per user spec.
+ *
+ * Requirements to be eligible:
+ * - MUST be an eighth note or shorter
+ * - ALWAYS passing if 32nd note or shorter and not repeated
+ * - If on strong/medium beat, MUST be shorter than an eighth
+ *
+ * Scoring factors:
+ * - eighth note: -1
+ * - between 8th and 16th (e.g. triplet 8th, dotted 16th): -0.5
+ * - longer than previous note: -0.5
+ * - from rest of eighth or longer: -0.5
+ * - shorter than previous note: +0.25
+ * - on the beat: -0.5
+ * - off the primary subdivision: +0.5
+ * - by leap: -0.5
+ * - by step: +0.75
+ * - oblique motion: +0.5
+ * - in same direction as previous move: +0.5
+ * - returning to previous note: +0.5
+ * - recovering from leap: +0.25
+ * - repeating same interval class (step/skip/perfect leap): +0.25
+ * - in sequence: +1
+ *
+ * Penalty mitigation = sum of passingness / 2
+ * If passingness >= 1 → is passing motion
+ *
+ * @param {Simultaneity} currSim - Current simultaneity
+ * @param {Simultaneity|null} prevSim - Previous simultaneity
+ * @param {Simultaneity|null} nextSim - Next simultaneity
+ * @param {number} voiceMelodicInterval - Melodic interval into this note for the voice
+ * @param {number|null} prevMelodicInterval - Previous melodic interval for same voice
+ * @param {Object} exitResolution - Resolution info for this voice
+ * @param {Object} entryMotion - Motion type info
+ * @param {Object} ctx - Analysis context
+ * @returns {{ passingness: number, isPassing: boolean, mitigation: number, details: string[] }}
+ */
+function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, prevMelodicInterval, exitResolution, entryMotion, ctx) {
+  const details = [];
+
+  // Get note duration (shorter of the two voices for this simultaneity)
+  const noteDuration = Math.min(currSim.voice1Note.duration, currSim.voice2Note.duration);
+
+  // Eligibility check: must be eighth note (0.5) or shorter
+  if (noteDuration > 0.5 + 0.01) {
+    return { passingness: 0, isPassing: false, mitigation: 0, details: ['Duration > eighth note: not eligible'] };
+  }
+
+  // If on strong or medium beat, must be shorter than eighth
+  const beatStrength = metricWeight(currSim.onset, ctx.meter);
+  if (beatStrength >= 0.75 && noteDuration >= 0.5 - 0.01) {
+    return { passingness: 0, isPassing: false, mitigation: 0, details: ['Strong beat + eighth note: not eligible'] };
+  }
+
+  // Always passing if 32nd note or shorter (0.125) and not repeated pitch
+  const is32ndOrShorter = noteDuration <= 0.125 + 0.01;
+  const isRepeatedPitch = voiceMelodicInterval === 0;
+  if (is32ndOrShorter && !isRepeatedPitch) {
+    return { passingness: 3, isPassing: true, mitigation: 1.5, details: ['32nd note or shorter: always passing'] };
+  }
+
+  let passingness = 0;
+
+  // Duration scoring
+  if (noteDuration >= 0.5 - 0.01) {
+    // Eighth note
+    passingness -= 1;
+    details.push('Eighth note: -1');
+  } else if (noteDuration > 0.25 + 0.01) {
+    // Between 8th and 16th (triplet eighth, dotted 16th, etc.)
+    passingness -= 0.5;
+    details.push('Between 8th and 16th: -0.5');
+  }
+  // 16th or shorter: no penalty
+
+  // Compare to previous note duration
+  if (prevSim) {
+    const prevDuration = Math.min(prevSim.voice1Note.duration, prevSim.voice2Note.duration);
+    if (noteDuration > prevDuration + 0.01) {
+      passingness -= 0.5;
+      details.push('Longer than previous note: -0.5');
+    } else if (noteDuration < prevDuration - 0.01) {
+      passingness += 0.25;
+      details.push('Shorter than previous note: +0.25');
+    }
+  }
+
+  // From rest check
+  if (prevSim) {
+    const prevV1End = prevSim.voice1Note.onset + prevSim.voice1Note.duration;
+    const prevV2End = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
+    const v1RestDur = currSim.onset - prevV1End;
+    const v2RestDur = currSim.onset - prevV2End;
+    const maxRest = Math.max(v1RestDur, v2RestDur);
+    if (maxRest >= 0.5 - 0.01) {
+      passingness -= 0.5;
+      details.push('From rest of eighth or longer: -0.5');
+    }
+  }
+
+  // Beat position
+  if (beatStrength >= 0.75) {
+    passingness -= 0.5;
+    details.push('On the beat: -0.5');
+  } else if (beatStrength < 0.5) {
+    passingness += 0.5;
+    details.push('Off primary subdivision: +0.5');
+  }
+
+  // Motion type
+  const absInterval = Math.abs(voiceMelodicInterval);
+  if (absInterval === 0) {
+    // Repeated note - not really passing
+    passingness -= 0.5;
+    details.push('Repeated note: -0.5');
+  } else if (absInterval > 2) {
+    passingness -= 0.5;
+    details.push('By leap: -0.5');
+  } else {
+    passingness += 0.75;
+    details.push('By step: +0.75');
+  }
+
+  // Oblique motion (only one voice moved)
+  if (entryMotion && entryMotion.type === 'oblique') {
+    passingness += 0.5;
+    details.push('Oblique motion: +0.5');
+  }
+
+  // Same direction as previous move
+  if (prevMelodicInterval !== null && prevMelodicInterval !== undefined && prevMelodicInterval !== 0 && voiceMelodicInterval !== 0) {
+    if (Math.sign(prevMelodicInterval) === Math.sign(voiceMelodicInterval)) {
+      passingness += 0.5;
+      details.push('Same direction as previous: +0.5');
+    }
+  }
+
+  // Returning to previous note
+  if (exitResolution && prevSim) {
+    const exitInterval = exitResolution.interval || 0;
+    const exitDir = exitResolution.direction || 0;
+    // If exit returns us to the pitch we had before entry
+    if (exitDir !== 0 && Math.sign(exitDir) !== Math.sign(voiceMelodicInterval) &&
+        Math.abs(exitInterval - absInterval) <= 1) {
+      passingness += 0.5;
+      details.push('Returning to previous note: +0.5');
+    }
+  }
+
+  // Recovering from leap (opposite direction step/short leap after a leap)
+  if (prevMelodicInterval !== null && prevMelodicInterval !== undefined) {
+    const prevAbs = Math.abs(prevMelodicInterval);
+    if (prevAbs > 2 && voiceMelodicInterval !== 0) {
+      if (Math.sign(voiceMelodicInterval) !== Math.sign(prevMelodicInterval)) {
+        passingness += 0.25;
+        details.push('Recovering from leap: +0.25');
+      }
+    }
+  }
+
+  // Repeating same interval class (step after step, skip after skip, etc.)
+  if (prevMelodicInterval !== null && prevMelodicInterval !== undefined && prevMelodicInterval !== 0) {
+    const prevMag = getIntervalMagnitude(prevMelodicInterval);
+    const currMag = getIntervalMagnitude(voiceMelodicInterval);
+    if (prevMag.type === currMag.type && currMag.type !== 'unison') {
+      passingness += 0.25;
+      details.push(`Repeating ${currMag.type}: +0.25`);
+    }
+  }
+
+  // In sequence
+  if (isOnsetInSequence(currSim.onset, ctx)) {
+    passingness += 1;
+    details.push('In sequence: +1');
+  }
+
+  const mitigation = passingness / 2;
+  const isPassing = passingness >= 1;
+
+  return { passingness, isPassing, mitigation: Math.max(0, mitigation), details };
+}
+
+/**
  * Classify interval magnitude
  */
 function getIntervalMagnitude(semitones) {
@@ -1482,21 +1666,94 @@ export function analyzeAllDissonances(sims, options = {}) {
   }
 
   // Track consecutive dissonance groups (D → D → D sequences)
+  // Also annotate each result with chain position info
   const consecutiveGroups = [];
   let currentGroup = [];
   for (let i = 0; i < results.length; i++) {
     if (!results[i].isConsonant) {
       currentGroup.push({ index: i, onset: results[i].onset, type: results[i].type });
     } else {
+      if (currentGroup.length >= 1) {
+        // Mark chain positions
+        for (let j = 0; j < currentGroup.length; j++) {
+          const idx = currentGroup[j].index;
+          results[idx].chainPosition = j; // 0 = entry
+          results[idx].chainLength = currentGroup.length;
+          results[idx].isChainEntry = (j === 0);
+          results[idx].isConsecutiveDissonance = (j > 0);
+          // Chain start/end onsets for border drawing
+          results[idx].chainStartOnset = results[currentGroup[0].index].onset;
+          results[idx].chainEndOnset = results[currentGroup[currentGroup.length - 1].index].onset;
+        }
+        // Also mark the resolution consonance as chain end
+        results[i].isChainResolution = true;
+        results[i].chainStartOnset = results[currentGroup[0].index].onset;
+        results[i].chainEndOnset = results[currentGroup[currentGroup.length - 1].index].onset;
+      }
       if (currentGroup.length >= 2) {
         consecutiveGroups.push([...currentGroup]);
       }
       currentGroup = [];
     }
   }
-  // Don't forget trailing group
+  // Don't forget trailing group (unresolved chain)
+  if (currentGroup.length >= 1) {
+    for (let j = 0; j < currentGroup.length; j++) {
+      const idx = currentGroup[j].index;
+      results[idx].chainPosition = j;
+      results[idx].chainLength = currentGroup.length;
+      results[idx].isChainEntry = (j === 0);
+      results[idx].isConsecutiveDissonance = (j > 0);
+      results[idx].chainStartOnset = results[currentGroup[0].index].onset;
+      results[idx].chainEndOnset = results[currentGroup[currentGroup.length - 1].index].onset;
+      results[idx].chainUnresolved = true;
+    }
+  }
   if (currentGroup.length >= 2) {
     consecutiveGroups.push([...currentGroup]);
+  }
+
+  // Now score passing motion for consecutive dissonances
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].isConsecutiveDissonance) {
+      const sim = sims[i];
+      const prevSim = i > 0 ? sims[i - 1] : null;
+      const nextSim = i < sims.length - 1 ? sims[i + 1] : null;
+
+      // Get melodic intervals for both voices
+      const v1Interval = prevSim ? sim.voice1Note.pitch - prevSim.voice1Note.pitch : 0;
+      const v2Interval = prevSim ? sim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
+
+      // Get previous melodic intervals
+      const prevPrevSim = i > 1 ? sims[i - 2] : null;
+      const prevV1Interval = prevPrevSim && prevSim ? prevSim.voice1Note.pitch - prevPrevSim.voice1Note.pitch : null;
+      const prevV2Interval = prevPrevSim && prevSim ? prevSim.voice2Note.pitch - prevPrevSim.voice2Note.pitch : null;
+
+      // Determine motion type
+      const v1Moved = v1Interval !== 0;
+      const v2Moved = v2Interval !== 0;
+      const entryMotion = {
+        type: v1Moved && v2Moved ? (Math.sign(v1Interval) !== Math.sign(v2Interval) ? 'contrary' : 'similar') :
+              (v1Moved || v2Moved) ? 'oblique' : 'static'
+      };
+
+      // Score passing motion for each voice, take the better one
+      const v1Passing = scorePassingMotion(sim, prevSim, nextSim, v1Interval, prevV1Interval, null, entryMotion, ctx);
+      const v2Passing = scorePassingMotion(sim, prevSim, nextSim, v2Interval, prevV2Interval, null, entryMotion, ctx);
+      const bestPassing = v1Passing.passingness >= v2Passing.passingness ? v1Passing : v2Passing;
+
+      results[i].passingMotion = bestPassing;
+
+      // Count mitigating factors
+      let mitigationCount = 0;
+      if (bestPassing.isPassing) mitigationCount++;
+      if (isOnsetInSequence(sim.onset, ctx)) mitigationCount++;
+      // Check if any pattern was already detected (suspension through, etc.)
+      if (results[i].patterns && results[i].patterns.length > 0) mitigationCount++;
+
+      results[i].consecutiveMitigationCount = mitigationCount;
+      results[i].consecutiveMitigation = bestPassing.mitigation;
+    }
   }
 
   return {
