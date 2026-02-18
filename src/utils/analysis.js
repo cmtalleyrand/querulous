@@ -942,38 +942,103 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
   const meter = formatter.meter;
   const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
   const maxDist = subLen * (1 - minOverlap);
+
+  // Build set of transposition intervals to test
+  // Full set: octaves, fifths, fourths, compound fifths/fourths, double octaves
+  // NOTE: We do NOT deduplicate by mod 12 anymore because octave displacement
+  // DOES matter: P5 from the bass is consonant, but P4 from the bass (= P5 + octave
+  // inverted) is dissonant. So +7 (P5) and +19 (P12 = P5+P8) produce different
+  // interval analyses when the entry below vs above changes which voice is bass.
+  const allTranspositions = [0, 12, -12, 7, -7, 5, -5, 19, -19, 17, -17, 24, -24];
+
   const results = [];
 
   // Calculate average note duration for relative weighting
   const avgDuration = subject.reduce((sum, n) => sum + n.duration, 0) / subject.length;
 
+  for (const transp of allTranspositions) {
   for (let dist = increment; dist <= maxDist; dist += increment) {
     const comes = subject.map(
-      (n) => new NoteEvent(n.pitch + octaveDisp, n.duration, n.onset + dist, n.scaleDegree, n.abcNote)
+      (n) => new NoteEvent(n.pitch + transp, n.duration, n.onset + dist, n.scaleDegree, n.abcNote)
     );
     const sims = findSimultaneities(subject, comes, meter);
     const issues = [];
     const warnings = [];
 
-    // Check parallel perfects (serious issue)
-    for (const v of checkParallelPerfects(sims, formatter)) {
-      // Find the simultaneity to get metric weight and duration info
+    // Analyze dissonances with new scoring system (needed for passing motion detection)
+    const dissonanceAnalysis = analyzeAllDissonances(sims);
+
+    // Check parallel perfects with mitigation for stretto context
+    // Allowed exceptions:
+    // a) In sequences (parallels that are part of sequential patterns)
+    // b) Passing motion (short-note parallels that are stepwise through)
+    // c) Tight stretto bonus: if distance <= 1/4 subject length, allow 1 extra parallel
+    const isTightStretto = dist <= subLen / 4;
+    const allParallels = checkParallelPerfects(sims, formatter);
+    let allowedParallels = 0;
+    const mitigatedParallels = [];
+    const unmitigatedParallels = [];
+
+    for (const v of allParallels) {
+      const sim = sims.find(s => Math.abs(s.onset - v.onset) < 0.01);
+      const metricWt = sim ? sim.metricWeight : 0.5;
+      const noteDur = sim ? Math.min(sim.voice1Note.duration, sim.voice2Note.duration) : avgDuration;
+
+      // Check if in sequence (stretto doesn't have external sequence context,
+      // but we can detect if consecutive parallels follow a pattern)
+      // For stretto, "in sequence" means consecutive intervals form a sequential pattern
+      // We approximate: if the melodic intervals repeat, treat as sequential
+      const inSequence = false; // Stretto doesn't have sequence detection yet
+
+      // Check if passing motion (short note, stepwise)
+      const isPassing = dissonanceAnalysis.all?.some(r =>
+        Math.abs(r.onset - v.onset) < 0.01 && r.passingMotion?.isPassing
+      ) || (noteDur <= 0.25); // Short notes are more forgivable
+
+      if (inSequence || isPassing) {
+        mitigatedParallels.push(v);
+        warnings.push({
+          onset: v.onset,
+          description: `${v.description} (mitigated: ${inSequence ? 'in sequence' : 'passing motion'})`,
+          type: 'parallel_mitigated',
+          metricWeight: metricWt,
+          duration: noteDur,
+          baseSeverity: 0.5,
+        });
+      } else {
+        unmitigatedParallels.push(v);
+      }
+    }
+
+    // Tight stretto allows 1 extra unmitigated parallel
+    const parallelAllowance = isTightStretto ? 1 : 0;
+    for (let pi = 0; pi < unmitigatedParallels.length; pi++) {
+      const v = unmitigatedParallels[pi];
       const sim = sims.find(s => Math.abs(s.onset - v.onset) < 0.01);
       const metricWt = sim ? sim.metricWeight : 0.5;
       const noteDur = sim ? Math.max(sim.voice1Note.duration, sim.voice2Note.duration) : avgDuration;
 
-      issues.push({
-        onset: v.onset,
-        description: v.description,
-        type: 'parallel',
-        metricWeight: metricWt,
-        duration: noteDur,
-        baseSeverity: 2.0, // Parallel perfects are always serious
-      });
+      if (pi < parallelAllowance) {
+        // Allowed by tight stretto bonus
+        warnings.push({
+          onset: v.onset,
+          description: `${v.description} (allowed: tight stretto)`,
+          type: 'parallel_tight',
+          metricWeight: metricWt,
+          duration: noteDur,
+          baseSeverity: 0.5,
+        });
+      } else {
+        issues.push({
+          onset: v.onset,
+          description: v.description,
+          type: 'parallel',
+          metricWeight: metricWt,
+          duration: noteDur,
+          baseSeverity: 2.0,
+        });
+      }
     }
-
-    // Analyze dissonances with new scoring system
-    const dissonanceAnalysis = analyzeAllDissonances(sims);
 
     // Evaluate each dissonance based on score
     for (const d of dissonanceAnalysis.dissonances) {
@@ -1145,6 +1210,33 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       intervalPoints.push(beatSnapshots.get(beat));
     }
 
+    // Merge chain info from dissonanceAnalysis into intervalPoints
+    if (dissonanceAnalysis?.all) {
+      const chainByOnset = new Map();
+      for (const r of dissonanceAnalysis.all) {
+        chainByOnset.set(Math.round(r.onset * 4) / 4, r);
+      }
+      for (const pt of intervalPoints) {
+        const chain = chainByOnset.get(Math.round(pt.onset * 4) / 4);
+        if (chain) {
+          pt.isChainEntry = chain.isChainEntry || false;
+          pt.isConsecutiveDissonance = chain.isConsecutiveDissonance || false;
+          pt.chainPosition = chain.chainPosition;
+          pt.chainLength = chain.chainLength || 0;
+          pt.chainStartOnset = chain.chainStartOnset;
+          pt.chainEndOnset = chain.chainEndOnset;
+          pt.chainUnresolved = chain.chainUnresolved || false;
+          pt.isChainResolution = chain.isChainResolution || false;
+          pt.consecutiveMitigationCount = chain.consecutiveMitigationCount || 0;
+          pt.consecutiveMitigation = chain.consecutiveMitigation || 0;
+          pt.passingMotion = chain.passingMotion || null;
+          pt.isRepeated = chain.isRepeated || false;
+          pt.isResolved = chain.isResolved !== false;
+          pt.isParallel = chain.isParallel || false;
+        }
+      }
+    }
+
     // Calculate quality rating based on weighted severity (not just count)
     // Thresholds: clean = 0, good < 2, acceptable < 4, marginal < 6, problematic >= 6
     let qualityRating = 'clean';
@@ -1178,6 +1270,8 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
 
     results.push({
       distance: dist,
+      transposition: transp,
+      transpositionClass: ((transp % 12) + 12) % 12,
       distanceFormatted: formatter.formatDistance(dist),
       overlapPercent: Math.round(((subLen - dist) / subLen) * 100),
       issueCount: issues.length,
@@ -1198,6 +1292,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       },
     });
   }
+  } // end for transp
 
   // Generate summary with counts by category (based on weighted severity)
   const cleanCount = results.filter(r => r.clean).length;
@@ -1217,9 +1312,20 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     ? nonClean.reduce((best, r) => r.weightedSeverity < best.weightedSeverity ? r : best)
     : null;
 
+  // Transposition diversity statistics
+  const testedTranspositions = allTranspositions;
+  const viableTranspositions = [...new Set(results.filter(r => r.viable).map(r => r.transposition))];
+  const viableDistances = [...new Set(results.filter(r => r.viable).map(r => r.distance))];
+  const totalDistancesPerTransposition = Math.max(1, Math.floor(maxDist / increment));
+
+  // Results filtered to the user-selected transposition (for UI display)
+  // Now matches exact transposition value since octave displacement matters
+  const selectedResults = results.filter(r => r.transposition === octaveDisp);
+
   return {
     subjectLengthBeats: subLen,
     allResults: results,
+    selectedResults,
     viableStrettos: results.filter((r) => r.viable),
     cleanStrettos: results.filter((r) => r.clean),
     problematicStrettos: results.filter((r) => !r.viable),
@@ -1236,6 +1342,10 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
                     viableCount > 0 ? results.find(r => r.viable)?.distanceFormatted : null,
       bestNonCleanDistance: bestNonClean?.distanceFormatted || null,
       bestNonCleanSeverity: bestNonClean?.weightedSeverity || null,
+      viableTranspositionCount: viableTranspositions.length,
+      viableDistanceCount: viableDistances.length,
+      totalDistancesPerTransposition,
+      testedTranspositionCount: allTranspositions.length,
     },
   };
 }

@@ -36,9 +36,14 @@ export const VIZ_COLORS = {
   resolutionPoor: '#f97316',       // Orange-500 - poor (score >= -0.5)
   resolutionWeak: '#fb923c',       // Orange-400 - weak (score < -0.5)
 
-  // VIOLATION colors - RED reserved for serious issues
+  // CONSECUTIVE DISSONANCE colors (red → orange → yellow based on mitigation)
+  // Red = unmitigated consecutive, orange = 1 mitigating factor, yellow = 2+ factors
+  consecutiveNone: '#dc2626',       // Red-600 - no mitigation
+  consecutivePartial: '#f97316',    // Orange-500 - 1 mitigating factor (passing, sequence, or pattern)
+  consecutiveWell: '#eab308',       // Yellow-500 - 2+ mitigating factors
+
+  // VIOLATION colors
   parallelFifthsOctaves: '#dc2626', // Red-600 - parallel 5ths/8ves
-  consecutiveDissonance: '#ef4444', // Red-500 - consecutive non-passing dissonances
   unresolvedDissonance: '#f59e0b',  // Amber-500 - unresolved
 
   // Semi-transparent fills for interval regions
@@ -59,6 +64,11 @@ export const VIZ_COLORS = {
   resolutionGoodFill: 'rgba(132, 204, 22, 0.20)',       // Lime
   resolutionMarginalFill: 'rgba(245, 158, 11, 0.22)',   // Amber
   resolutionPoorFill: 'rgba(251, 146, 60, 0.24)',       // Orange
+
+  // Consecutive dissonance fills
+  consecutiveNoneFill: 'rgba(220, 38, 38, 0.30)',       // Red
+  consecutivePartialFill: 'rgba(249, 115, 22, 0.28)',   // Orange
+  consecutiveWellFill: 'rgba(234, 179, 8, 0.25)',       // Yellow
 
   // Violation fills - prominent red
   parallelFill: 'rgba(220, 38, 38, 0.35)',              // Bright red
@@ -127,24 +137,51 @@ function getResolutionColorByExitScore(score) {
 }
 
 /**
- * Get interval style based on consonance, score, and resolution status
- * - Dissonances colored by total score (purple→red): reflects overall handling quality
- * - Resolutions colored by exit score (emerald→amber)
- * - Regular consonances keep original colors (teal/lime)
+ * Get color for consecutive dissonance based on mitigation count.
+ * Red = no mitigation, Orange = 1 factor, Yellow = 2+ factors.
+ */
+function getConsecutiveDissonanceColor(mitigationCount) {
+  if (mitigationCount >= 2) {
+    return { color: VIZ_COLORS.consecutiveWell, fill: VIZ_COLORS.consecutiveWellFill, label: 'Consecutive (mitigated)' };
+  }
+  if (mitigationCount >= 1) {
+    return { color: VIZ_COLORS.consecutivePartial, fill: VIZ_COLORS.consecutivePartialFill, label: 'Consecutive (partial)' };
+  }
+  return { color: VIZ_COLORS.consecutiveNone, fill: VIZ_COLORS.consecutiveNoneFill, label: 'Consecutive dissonance' };
+}
+
+/**
+ * Get interval style based on consonance, score, resolution, and chain position.
  *
- * @param {Object} options - { isConsonant, isPerfect, score, entryScore, exitScore, category, isRepeated, isResolved, isParallel }
- * @returns {Object} { color, bg, fill, label, borderStyle, borderWidth, opacity }
+ * Coloring logic:
+ * - Chain entry dissonance (first D after C): purple spectrum (blue-purple = good entry, red-purple = poor)
+ * - Consecutive dissonance (D after D): red → orange → yellow based on mitigation
+ *   (passing motion, sequence, recognized pattern each count as mitigating factor)
+ * - Resolution (C after D): green spectrum (emerald = good, amber = poor)
+ * - Regular consonances: teal (perfect) or lime (imperfect)
+ * - Parallel 5ths/8ves: bright red
+ *
+ * The area from entry to resolution is bordered as a "chain" in the visualization.
+ *
+ * @param {Object} options
+ * @returns {Object} { color, bg, fill, label, borderStyle, borderWidth, opacity, isInChain, chainBorder }
  */
 export function getIntervalStyle({
   isConsonant,
   isPerfect,
   score = 0,
-  entryScore,    // NEW: for coloring dissonances by entry
-  exitScore,     // NEW: for coloring resolutions by exit
+  entryScore,
+  exitScore,
   category,
   isRepeated = false,
   isResolved = true,
-  isParallel = false
+  isParallel = false,
+  // Chain info (new)
+  isChainEntry = false,
+  isConsecutiveDissonance = false,
+  consecutiveMitigationCount = 0,
+  isChainResolution = false,
+  chainLength = 0,
 }) {
   // Problem indicators take precedence
   if (isParallel) {
@@ -160,8 +197,8 @@ export function getIntervalStyle({
   }
 
   if (isConsonant) {
-    // RESOLUTION: consonance following a dissonance - color by exit score (emerald → amber)
-    if (category === 'consonant_resolution' || category === 'consonant_good_resolution' || category === 'consonant_bad_resolution') {
+    // RESOLUTION: consonance following a dissonance chain - color by exit score (emerald → amber)
+    if (category === 'consonant_resolution' || category === 'consonant_good_resolution' || category === 'consonant_bad_resolution' || isChainResolution) {
       const useScore = exitScore !== undefined ? exitScore : score;
       const colorInfo = getResolutionColorByExitScore(useScore);
       return {
@@ -170,6 +207,7 @@ export function getIntervalStyle({
         borderStyle: useScore >= 0 ? 'solid' : 'dashed',
         borderWidth: useScore >= 0.75 ? 2 : 1,
         opacity: useScore >= 0.5 ? 0.85 : 0.7,
+        isInChain: isChainResolution,
       };
     }
 
@@ -224,13 +262,25 @@ export function getIntervalStyle({
     };
   }
 
-  // DISSONANCE - color by TOTAL score (entry + exit + patterns)
-  // Total score reflects overall handling quality:
-  //   - A resolved dissonance with poor entry still gets credit for good resolution
-  //   - An unresolved dissonance with good entry is penalized for lack of resolution
-  // Purple = well-handled overall, red = poorly handled overall
-  const useTotalScore = score;
-  const colorInfo = getDissonanceColorByEntryScore(useTotalScore);
+  // DISSONANCE
+
+  // CONSECUTIVE DISSONANCE (D after D) - red/orange/yellow based on mitigation
+  if (isConsecutiveDissonance) {
+    const colorInfo = getConsecutiveDissonanceColor(consecutiveMitigationCount);
+    return {
+      ...colorInfo,
+      bg: consecutiveMitigationCount >= 2 ? '#fef9c3' : consecutiveMitigationCount >= 1 ? '#ffedd5' : '#fecaca',
+      borderStyle: 'solid',
+      borderWidth: 2,
+      opacity: 0.85,
+      isInChain: true,
+    };
+  }
+
+  // CHAIN ENTRY or SINGLE DISSONANCE - purple spectrum based on entry score
+  // Purple = well-entered (blue+red), red-purple = poorly entered
+  const useScore = isChainEntry ? (entryScore !== undefined ? entryScore : score) : score;
+  const colorInfo = getDissonanceColorByEntryScore(useScore);
 
   const baseResolutionStyle = isResolved
     ? { borderStyle: 'solid', borderWidth: 1, opacity: 0.75 }
@@ -238,9 +288,10 @@ export function getIntervalStyle({
 
   return {
     ...colorInfo,
-    bg: useTotalScore >= 1.0 ? '#e0e7ff' : (useTotalScore >= 0 ? '#f3e8ff' : '#fce7f3'),
+    bg: useScore >= 1.0 ? '#e0e7ff' : (useScore >= 0 ? '#f3e8ff' : '#fce7f3'),
     ...baseResolutionStyle,
-    opacity: isResolved ? (useTotalScore >= 0.5 ? 0.8 : 0.7) : 0.55,
+    opacity: isResolved ? (useScore >= 0.5 ? 0.8 : 0.7) : 0.55,
+    isInChain: chainLength > 1,
   };
 }
 

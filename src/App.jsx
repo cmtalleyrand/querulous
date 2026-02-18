@@ -86,6 +86,7 @@ export default function App() {
   const [csPos, setCsPos] = useState('above');
   const [csShift, setCsShift] = useState('0');
   const [answerMode, setAnswerMode] = useState('tonal'); // 'tonal' or 'real'
+  const [answerOctaveShift, setAnswerOctaveShift] = useState(0); // 0, -12, +12 etc.
 
   // Results state
   const [results, setResults] = useState(null);
@@ -403,6 +404,13 @@ export default function App() {
           res.cs1Cs2Sims = findSimultaneities(shiftedCs, shiftedCs2, meter);
         }
       }
+
+      // Store analysis inputs for re-use (e.g., answer octave shift)
+      res.subject = subject;
+      res.keyInfo = keyInfo;
+      res.defaultNL = effNL;
+      res.meter = meter;
+      res.formatter = formatter;
 
       // Calculate scores
       const scores = calculateOverallScore(res, !!cs?.length);
@@ -1130,8 +1138,8 @@ export default function App() {
               />
               <ObservationList observations={results.tonalAnswer.observations} />
 
-              {/* Answer type selector */}
-              <div style={{ display: 'flex', gap: '8px', marginTop: '10px', marginBottom: '10px' }}>
+              {/* Answer type and octave selector */}
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px', marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <button
                   onClick={() => setAnswerMode('tonal')}
                   style={{
@@ -1167,15 +1175,37 @@ export default function App() {
                     Tonal recommended for this subject
                   </span>
                 )}
+                <div style={{ marginLeft: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>Octave:</span>
+                  <select
+                    value={answerOctaveShift}
+                    onChange={(e) => setAnswerOctaveShift(parseInt(e.target.value))}
+                    style={{ padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                  >
+                    <option value={12}>P12 up (+8ve)</option>
+                    <option value={0}>P5 up (default)</option>
+                    <option value={-12}>P4 down (-8ve)</option>
+                    <option value={-24}>P11 down (-2 8ve)</option>
+                  </select>
+                </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <ABCBox abc={results.subjectABC} label="Subject:" />
-                <ABCBox
-                  abc={answerMode === 'real' ? results.realAnswerSameKey : results.tonalAnswerSameKey}
-                  label={`${answerMode === 'real' ? 'Real' : 'Tonal'} answer (in subject key):`}
-                />
-              </div>
+              {(() => {
+                // Regenerate ABC with octave shift applied
+                const shiftedABC = answerOctaveShift !== 0
+                  ? generateAnswerABCSameKey(results.subject, results.keyInfo, results.tonalAnswer, results.defaultNL, results.meter, answerMode === 'real', null, answerOctaveShift)
+                  : (answerMode === 'real' ? results.realAnswerSameKey : results.tonalAnswerSameKey);
+                const intervalName = { 12: 'P12 up', 0: 'P5 up', '-12': 'P4 down', '-24': 'P11 down' }[String(answerOctaveShift)] || '';
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <ABCBox abc={results.subjectABC} label="Subject:" />
+                    <ABCBox
+                      abc={shiftedABC}
+                      label={`${answerMode === 'real' ? 'Real' : 'Tonal'} answer${intervalName !== 'P5 up' ? ` (${intervalName})` : ''} (in subject key):`}
+                    />
+                  </div>
+                );
+              })()}
             </Section>
 
             {/* Stretto Possibilities */}
@@ -1213,12 +1243,17 @@ export default function App() {
                 const viableStrettos = results.stretto.viableStrettos || [];
                 if (viableStrettos.length === 0) return null;
 
-                // Group viable strettos by transposition class
+                // Group viable strettos by transposition value
                 const byTransp = {};
-                const transpNames = { 0: 'Unison/Octave', 5: 'P4', 7: 'P5' };
+                const transpNames = {
+                  0: 'Unison', 12: '+P8', '-12': '-P8',
+                  7: '+P5', '-7': '-P5', 5: '+P4', '-5': '-P4',
+                  19: '+P12', '-19': '-P12', 17: '+P11', '-17': '-P11',
+                  24: '+2 oct', '-24': '-2 oct',
+                };
                 for (const s of viableStrettos) {
-                  const cls = s.transpositionClass || 0;
-                  const name = transpNames[cls] || `${cls} semitones`;
+                  const t = s.transposition;
+                  const name = transpNames[String(t)] || `${t > 0 ? '+' : ''}${t} semitones`;
                   if (!byTransp[name]) byTransp[name] = [];
                   byTransp[name].push(s);
                 }
@@ -1300,7 +1335,7 @@ export default function App() {
                   All distances tested:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {results.stretto.allResults.map((s, i) => {
+                  {(results.stretto.selectedResults || results.stretto.allResults).map((s, i) => {
                     const isSelected = selectedStretto === s.distance;
                     const issueCount = s.issueCount || 0;
                     const warningCount = s.warningCount || 0;
@@ -1405,7 +1440,7 @@ export default function App() {
 
               {/* Selected stretto detail */}
               {selectedStretto !== null && (() => {
-                const s = results.stretto.allResults.find((r) => r.distance === selectedStretto);
+                const s = (results.stretto.selectedResults || results.stretto.allResults).find((r) => r.distance === selectedStretto);
                 if (!s) return null;
                 return (
                   <div

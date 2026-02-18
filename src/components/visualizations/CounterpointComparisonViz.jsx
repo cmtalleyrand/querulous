@@ -474,6 +474,32 @@ export function CounterpointComparisonViz({
       }
     }
 
+    // Run analyzeAllDissonances to get chain info (entry vs consecutive, passing motion, etc.)
+    const chainAnalysis = analyzeAllDissonances(sims, scoringOptions);
+    // Merge chain info into interval points by matching onset
+    if (chainAnalysis?.all) {
+      const chainByOnset = new Map();
+      for (const r of chainAnalysis.all) {
+        chainByOnset.set(Math.round(r.onset * 4) / 4, r);
+      }
+      for (const pt of intervalPoints) {
+        const chain = chainByOnset.get(Math.round(pt.onset * 4) / 4);
+        if (chain) {
+          pt.isChainEntry = chain.isChainEntry || false;
+          pt.isConsecutiveDissonance = chain.isConsecutiveDissonance || false;
+          pt.chainPosition = chain.chainPosition;
+          pt.chainLength = chain.chainLength || 0;
+          pt.chainStartOnset = chain.chainStartOnset;
+          pt.chainEndOnset = chain.chainEndOnset;
+          pt.chainUnresolved = chain.chainUnresolved || false;
+          pt.isChainResolution = chain.isChainResolution || false;
+          pt.consecutiveMitigationCount = chain.consecutiveMitigationCount || 0;
+          pt.consecutiveMitigation = chain.consecutiveMitigation || 0;
+          pt.passingMotion = chain.passingMotion || null;
+        }
+      }
+    }
+
     const allPitches = [
       ...voice1.map(n => n.pitch),
       ...transposedVoice2.map(n => n.pitch),
@@ -1075,6 +1101,47 @@ export function CounterpointComparisonViz({
               return null;
             })}
 
+            {/* Dissonance chain borders - bracket from entry to resolution */}
+            {(() => {
+              // Find unique chains by chainStartOnset
+              const chains = new Map();
+              for (const pt of intervalPoints) {
+                if (pt.chainStartOnset !== undefined && pt.chainLength > 0) {
+                  const key = pt.chainStartOnset;
+                  if (!chains.has(key)) {
+                    chains.set(key, { start: pt.chainStartOnset, end: pt.chainEndOnset, length: pt.chainLength });
+                  }
+                }
+              }
+              return Array.from(chains.values()).map((chain, i) => {
+                // Find the resolution point (first consonance after chainEndOnset)
+                const resolutionPt = intervalPoints.find(p =>
+                  p.isChainResolution && p.chainStartOnset === chain.start
+                );
+                const endOnset = resolutionPt ? resolutionPt.onset : chain.end;
+                const x1 = tToX(chain.start);
+                const endPt = intervalPoints.find(p => Math.abs(p.onset - endOnset) < 0.01);
+                const nextAfterEnd = endPt ? intervalPoints[intervalPoints.indexOf(endPt) + 1] : null;
+                const x2 = nextAfterEnd ? tToX(nextAfterEnd.onset) : tToX(endOnset) + 30;
+                const chainWidth = x2 - x1;
+                return (
+                  <rect
+                    key={`chain-${i}`}
+                    x={x1 - 1}
+                    y={headerHeight + 2}
+                    width={chainWidth + 2}
+                    height={h - headerHeight - 22}
+                    fill="none"
+                    stroke="rgba(139, 92, 246, 0.35)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4,2"
+                    rx={4}
+                    pointerEvents="none"
+                  />
+                );
+              });
+            })()}
+
             {/* ALWAYS VISIBLE interval regions - subtle by default, prominent for problems */}
             {intervalPoints.map((pt, i) => {
               const x = tToX(pt.onset);
@@ -1091,12 +1158,17 @@ export function CounterpointComparisonViz({
                 isConsonant: pt.isConsonant,
                 isPerfect,
                 score: pt.score || 0,
-                entryScore: pt.entryScore,  // NEW
-                exitScore: pt.exitScore,    // NEW
+                entryScore: pt.entryScore,
+                exitScore: pt.exitScore,
                 category: pt.category,
                 isRepeated: pt.isRepeated,
                 isResolved: pt.isResolved,
                 isParallel: pt.isParallel,
+                isChainEntry: pt.isChainEntry,
+                isConsecutiveDissonance: pt.isConsecutiveDissonance,
+                consecutiveMitigationCount: pt.consecutiveMitigationCount || 0,
+                isChainResolution: pt.isChainResolution,
+                chainLength: pt.chainLength || 0,
               });
 
               // Determine opacity based on state and type
@@ -1320,12 +1392,17 @@ export function CounterpointComparisonViz({
               isConsonant: pt.isConsonant,
               isPerfect,
               score: pt.score,
-              entryScore: pt.entryScore,  // NEW
-              exitScore: pt.exitScore,    // NEW
+              entryScore: pt.entryScore,
+              exitScore: pt.exitScore,
               category: pt.category,
               isRepeated: pt.isRepeated,
               isResolved: pt.isResolved,
               isParallel: pt.isParallel,
+              isChainEntry: pt.isChainEntry,
+              isConsecutiveDissonance: pt.isConsecutiveDissonance,
+              consecutiveMitigationCount: pt.consecutiveMitigationCount || 0,
+              isChainResolution: pt.isChainResolution,
+              chainLength: pt.chainLength || 0,
             });
 
             // Format motion as interval name

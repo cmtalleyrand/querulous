@@ -469,7 +469,7 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
  * @param {boolean} forceReal - If true, generate a real (non-tonal) answer
  * @param {number[]} noteLengthFraction - Optional note length fraction
  */
-export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNoteLength, meter, forceReal = false, noteLengthFraction = null) {
+export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNoteLength, meter, forceReal = false, noteLengthFraction = null, octaveShift = 0) {
   if (!meter || !Array.isArray(meter) || meter.length < 2) {
     throw new Error(`generateAnswerABCSameKey: meter is invalid (${JSON.stringify(meter)})`);
   }
@@ -517,15 +517,15 @@ export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNo
     let newPitch;
 
     if (forceReal) {
-      // Real answer: always transpose up a 5th (7 semitones)
-      newPitch = n.pitch + 7;
+      // Real answer: always transpose up a 5th (7 semitones) + octave shift
+      newPitch = n.pitch + 7 + octaveShift;
     } else {
-      // Tonal answer: apply mutation
-      newPitch = n.pitch + 7;
+      // Tonal answer: apply mutation + octave shift
+      newPitch = n.pitch + 7 + octaveShift;
       if (tonalMotions.length > 0 && mutationPoint !== null && i < mutationPoint) {
         const d = n.scaleDegree;
-        if (d.degree === 1 && d.alteration === 0) newPitch = n.pitch + 7;
-        else if (d.degree === 5 && d.alteration === 0) newPitch = n.pitch + 5;
+        if (d.degree === 1 && d.alteration === 0) newPitch = n.pitch + 7 + octaveShift;
+        else if (d.degree === 5 && d.alteration === 0) newPitch = n.pitch + 5 + octaveShift;
       }
     }
 
