@@ -1543,13 +1543,6 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
     });
   }
 
-  for (const i of orig.issues) {
-    observations.push({ type: 'consideration', description: `Original: ${i.description}` });
-  }
-  for (const i of inv.issues) {
-    observations.push({ type: 'consideration', description: `Inverted: ${i.description}` });
-  }
-
   if (!orig.issues.length && !inv.issues.length) {
     observations.push({
       type: 'strength',

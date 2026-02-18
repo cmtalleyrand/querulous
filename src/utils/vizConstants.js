@@ -52,12 +52,12 @@ export const VIZ_COLORS = {
   repeatedFill: 'rgba(163, 163, 163, 0.15)',    // Grey
   consonantFill: 'rgba(132, 204, 22, 0.18)',    // Alias
 
-  // Dissonance fills (purple spectrum)
-  dissonantExcellentFill: 'rgba(99, 102, 241, 0.25)',   // Indigo
-  dissonantGoodFill: 'rgba(139, 92, 246, 0.24)',        // Violet
-  dissonantMarginalFill: 'rgba(192, 38, 211, 0.23)',    // Fuchsia
-  dissonantBadFill: 'rgba(219, 39, 119, 0.25)',         // Pink
-  dissonantVeryBadFill: 'rgba(220, 38, 38, 0.28)',      // Red
+  // Dissonance fills (purple spectrum) — high opacity to show clearly over note bars
+  dissonantExcellentFill: 'rgba(99, 102, 241, 0.72)',   // Indigo
+  dissonantGoodFill: 'rgba(139, 92, 246, 0.70)',        // Violet
+  dissonantMarginalFill: 'rgba(192, 38, 211, 0.68)',    // Fuchsia
+  dissonantBadFill: 'rgba(219, 39, 119, 0.72)',         // Pink
+  dissonantVeryBadFill: 'rgba(220, 38, 38, 0.75)',      // Red
 
   // Resolution fills (green to amber spectrum)
   resolutionExcellentFill: 'rgba(16, 185, 129, 0.22)',  // Emerald
@@ -65,10 +65,10 @@ export const VIZ_COLORS = {
   resolutionMarginalFill: 'rgba(245, 158, 11, 0.22)',   // Amber
   resolutionPoorFill: 'rgba(251, 146, 60, 0.24)',       // Orange
 
-  // Consecutive dissonance fills
-  consecutiveNoneFill: 'rgba(220, 38, 38, 0.30)',       // Red
-  consecutivePartialFill: 'rgba(249, 115, 22, 0.28)',   // Orange
-  consecutiveWellFill: 'rgba(234, 179, 8, 0.25)',       // Yellow
+  // Consecutive dissonance fills — high opacity to clearly indicate problem
+  consecutiveNoneFill: 'rgba(220, 38, 38, 0.78)',       // Red
+  consecutivePartialFill: 'rgba(249, 115, 22, 0.73)',   // Orange
+  consecutiveWellFill: 'rgba(234, 179, 8, 0.68)',       // Yellow
 
   // Violation fills - prominent red
   parallelFill: 'rgba(220, 38, 38, 0.35)',              // Bright red
