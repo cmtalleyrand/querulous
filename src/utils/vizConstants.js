@@ -46,12 +46,12 @@ export const VIZ_COLORS = {
   repeatedFill: 'rgba(163, 163, 163, 0.15)',    // Grey
   consonantFill: 'rgba(132, 204, 22, 0.18)',    // Alias
 
-  // Dissonance fills (purple spectrum)
-  dissonantExcellentFill: 'rgba(99, 102, 241, 0.25)',   // Indigo
-  dissonantGoodFill: 'rgba(139, 92, 246, 0.24)',        // Violet
-  dissonantMarginalFill: 'rgba(192, 38, 211, 0.23)',    // Fuchsia
-  dissonantBadFill: 'rgba(219, 39, 119, 0.25)',         // Pink
-  dissonantVeryBadFill: 'rgba(220, 38, 38, 0.28)',      // Red
+  // Dissonance fills (purple spectrum) — high opacity to show over note bars
+  dissonantExcellentFill: 'rgba(99, 102, 241, 0.72)',   // Indigo
+  dissonantGoodFill: 'rgba(139, 92, 246, 0.70)',        // Violet
+  dissonantMarginalFill: 'rgba(192, 38, 211, 0.68)',    // Fuchsia
+  dissonantBadFill: 'rgba(219, 39, 119, 0.72)',         // Pink
+  dissonantVeryBadFill: 'rgba(220, 38, 38, 0.75)',      // Red
 
   // Resolution fills (green to amber spectrum)
   resolutionExcellentFill: 'rgba(16, 185, 129, 0.22)',  // Emerald

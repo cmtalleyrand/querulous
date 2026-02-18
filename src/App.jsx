@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   PianoRoll,
   IntervalTimeline,
-  StrettoViz,
+  TwoVoiceViz,
   IntervalAnalysisViz,
   InvertibilityViz,
   UnifiedCounterpointViz,
@@ -51,6 +51,7 @@ import {
   setSequenceRanges,
   setSequenceBeatRanges,
 } from './utils';
+import { VIZ_COLORS } from './utils/vizConstants';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
@@ -1309,48 +1310,20 @@ export default function App() {
                         </div>
                       );
                     })()}
-                    <StrettoViz
-                      subject={results.subject}
-                      distance={s.distance}
-                      issues={s.issues}
-                      warnings={s.warnings || []}
-                      intervalPoints={s.intervalPoints || []}
+                    <TwoVoiceViz
+                      voice1={results.subject}
+                      voice2={results.subject.map(n => ({
+                        ...n,
+                        pitch: n.pitch + strettoOctaveVal,
+                        onset: n.onset + s.distance,
+                      }))}
+                      voice1Label="Dux"
+                      voice2Label="Comes"
+                      voice1Color={VIZ_COLORS.voiceDux}
+                      voice2Color={VIZ_COLORS.voiceComes}
                       formatter={results.formatter}
-                      octaveDisp={strettoOctaveVal}
                       meter={results.meter}
                     />
-                    {(s.issues.length > 0 || (s.warnings && s.warnings.length > 0)) && (
-                      <div style={{ marginTop: '10px' }}>
-                        {s.warnings && s.warnings.map((w, j) => (
-                          <div
-                            key={`warn-${j}`}
-                            style={{
-                              fontSize: '12px',
-                              color: '#a16207',
-                              marginTop: '4px',
-                              paddingLeft: '10px',
-                              borderLeft: '2px solid #fcd34d',
-                            }}
-                          >
-                            {w.description}
-                          </div>
-                        ))}
-                        {s.issues.map((is, j) => (
-                          <div
-                            key={`issue-${j}`}
-                            style={{
-                              fontSize: '12px',
-                              color: '#64748b',
-                              marginTop: '4px',
-                              paddingLeft: '10px',
-                              borderLeft: '2px solid #cbd5e1',
-                            }}
-                          >
-                            {is.description}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 );
               })()}

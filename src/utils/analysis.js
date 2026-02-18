@@ -1433,12 +1433,8 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
     });
   }
 
-  for (const i of orig.issues) {
-    observations.push({ type: 'consideration', description: `Original: ${i.description}` });
-  }
-  for (const i of inv.issues) {
-    observations.push({ type: 'consideration', description: `Inverted: ${i.description}` });
-  }
+  // Issues are already exposed via original.issues / inverted.issues
+  // and shown directly by IssuesSummary — do NOT duplicate them in observations
 
   if (!orig.issues.length && !inv.issues.length) {
     observations.push({
