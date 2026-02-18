@@ -240,6 +240,9 @@ export function calculateMelodicContourScore(result) {
   };
 }
 
+// Legacy alias
+export const calculateHarmonicImplicationScore = calculateTonalDefinitionScore;
+
 /**
  * Calculate Rhythmic Character score (base-zero)
  * Baseline 0 = minimal rhythmic variety (2 note values)
@@ -292,6 +295,9 @@ export function calculateRhythmicCharacterScore(result) {
     details,
   };
 }
+
+// Legacy alias
+export const calculateRhythmicVarietyScore = calculateRhythmicCharacterScore;
 
 /**
  * Calculate Stretto Potential score (base-zero)
@@ -410,6 +416,9 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
   };
 }
 
+// Legacy alias
+export const calculateStrettoViabilityScore = calculateStrettoPotentialScore;
+
 /**
  * Calculate Answer Compatibility score (base-zero)
  * Baseline 0 = acceptable junction
@@ -455,6 +464,9 @@ export function calculateAnswerCompatibilityScore(result) {
     details,
   };
 }
+
+// Legacy alias
+export const calculateTonalAnswerScore = calculateAnswerCompatibilityScore;
 
 /**
  * Calculate Tonal Clarity score (base-zero)
@@ -616,6 +628,9 @@ export function calculateInvertibilityScore(result) {
   };
 }
 
+// Legacy alias
+export const calculateDoubleCounterpointScore = calculateInvertibilityScore;
+
 /**
  * Calculate Rhythmic Interplay score (base-zero)
  *
@@ -675,6 +690,9 @@ export function calculateRhythmicInterplayScore(result) {
     details,
   };
 }
+
+// Legacy alias
+export const calculateRhythmicComplementarityScore = calculateRhythmicInterplayScore;
 
 /**
  * Calculate Voice Independence score (base-zero)
@@ -817,6 +835,9 @@ export function calculateVoiceIndependenceScore(result) {
   };
 }
 
+// Legacy alias
+export const calculateContourIndependenceScore = calculateVoiceIndependenceScore;
+
 /**
  * Calculate Transposition Stability score (base-zero)
  * Simply uses the counterpoint quality score against the answer, weighted for length.
@@ -864,6 +885,9 @@ export function calculateTranspositionStabilityScore(result) {
     details: [{ factor: 'No counterpoint data available', impact: 0 }],
   };
 }
+
+// Legacy alias
+export const calculateModulatoryRobustnessScore = calculateTranspositionStabilityScore;
 
 /**
  * Calculate overall fugue viability score (base-zero aggregation)
@@ -1035,32 +1059,3 @@ function getSuggestion(category, data) {
 
   return suggestions[category] || 'Review the analysis details for specific issues.';
 }
-
-// ============================================================================
-// Legacy aliases for backward compatibility - placed at end of file
-// to ensure all functions are defined before references
-// ============================================================================
-
-// Alias for calculateTonalDefinitionScore
-export const calculateHarmonicImplicationScore = calculateTonalDefinitionScore;
-
-// Alias for calculateRhythmicCharacterScore
-export const calculateRhythmicVarietyScore = calculateRhythmicCharacterScore;
-
-// Alias for calculateStrettoPotentialScore
-export const calculateStrettoViabilityScore = calculateStrettoPotentialScore;
-
-// Alias for calculateAnswerCompatibilityScore
-export const calculateTonalAnswerScore = calculateAnswerCompatibilityScore;
-
-// Alias for calculateInvertibilityScore
-export const calculateDoubleCounterpointScore = calculateInvertibilityScore;
-
-// Alias for calculateRhythmicInterplayScore
-export const calculateRhythmicComplementarityScore = calculateRhythmicInterplayScore;
-
-// Alias for calculateVoiceIndependenceScore
-export const calculateContourIndependenceScore = calculateVoiceIndependenceScore;
-
-// Alias for calculateTranspositionStabilityScore
-export const calculateModulatoryRobustnessScore = calculateTranspositionStabilityScore;
