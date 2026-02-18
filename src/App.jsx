@@ -1525,6 +1525,7 @@ export default function App() {
                       );
                     })()}
                     <TwoVoiceViz
+                      key={`${selectedStretto}-${strettoOctave}`}
                       voice1={results.subject}
                       voice2={results.subject.map(n => ({
                         ...n,
@@ -1537,6 +1538,8 @@ export default function App() {
                       voice2Color={VIZ_COLORS.voiceComes}
                       formatter={results.formatter}
                       meter={results.meter}
+                      issues={s.issues || []}
+                      warnings={s.warnings || []}
                     />
                   </div>
                 );
