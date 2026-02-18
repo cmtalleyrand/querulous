@@ -13,7 +13,7 @@ import { SCORE_CATEGORIES, getScoreSummary } from '../../utils/scoring';
  * - COMBINATION: How voices work together (with CS)
  */
 export function ScoreDashboard({ scoreResult, hasCountersubject }) {
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
 
   if (!scoreResult) return null;
@@ -39,16 +39,8 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
       subtitle: 'How voices work together',
       color: '#81c784',
       categories: hasCountersubject
-        ? ['invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability']
+        ? ['transpositionStability', 'invertibility', 'rhythmicInterplay', 'voiceIndependence']
         : [],
-    },
-    // Basic indicators - shown separately with reduced prominence
-    basicIndicators: {
-      title: 'Basic Indicators',
-      subtitle: 'Simple tonal orientation checks',
-      color: '#90a4ae',
-      categories: ['tonalClarity'],
-      isBasic: true,
     },
   };
 
@@ -182,45 +174,6 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
         {Object.entries(categoryGroups).map(([groupKey, group]) => {
           // Skip empty groups
           if (group.categories.length === 0) return null;
-
-          // Basic indicators get reduced prominence
-          if (group.isBasic) {
-            return (
-              <div key={groupKey} style={{ marginBottom: '16px', opacity: 0.8 }}>
-                <h3
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '500',
-                    color: '#78909c',
-                    marginBottom: '4px',
-                    paddingBottom: '4px',
-                    borderBottom: `1px solid ${group.color}`,
-                  }}
-                >
-                  {group.title}
-                </h3>
-                <p style={{ fontSize: '10px', color: '#90a4ae', margin: '0 0 8px 0' }}>
-                  {group.subtitle}
-                </p>
-                {group.categories.map((key) => {
-                  const data = scoreResult.categories[key];
-                  if (!data) return null;
-                  return (
-                    <div key={key} onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}>
-                      <ScoreBar
-                        categoryKey={key}
-                        score={data.internal}
-                        internalScore={data.internal}
-                        showDetails={showDetails || expandedCategory === key}
-                        details={data.details}
-                        compact={true}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          }
 
           return (
             <div key={groupKey} style={{ marginBottom: '16px' }}>

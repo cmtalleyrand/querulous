@@ -14,17 +14,16 @@ export const VIZ_COLORS = {
   repeatedInterval: '#a3a3a3',    // Neutral-400 - grey for repeated
   consonant: '#84cc16',           // Alias for imperfect
 
-  // DISSONANCE colors (purple → red based on entry + pattern score)
-  // Blue-purple if well-entered/patterned, red-purple if poorly entered
-  // Score 0 is on the red side of purple
-  dissonantExcellent: '#6366f1',  // Indigo-500 - excellent entry+pattern (score >= 2.0)
-  dissonantVeryGood: '#7c3aed',   // Violet-600 - very good (score >= 1.5)
-  dissonantGood: '#8b5cf6',       // Violet-500 - good (score >= 1.0)
-  dissonantAcceptable: '#a855f7', // Purple-500 - acceptable (score >= 0.5)
-  dissonantMarginal: '#c026d3',   // Fuchsia-600 - marginal (score >= 0)
-  dissonantPoor: '#db2777',       // Pink-600 - poor, red side of purple (score >= -0.5)
-  dissonantBad: '#e11d48',        // Rose-600 - bad (score >= -1.0)
-  dissonantVeryBad: '#dc2626',    // Red-600 - very bad (score < -1.0)
+  // DISSONANCE colors (blue → purple spectrum based on entry + pattern score)
+  // Whole palette shifted toward blue so even poor entries read as purple, not red
+  dissonantExcellent: '#3b82f6',  // Blue-500 - excellent entry+pattern (score >= 2.0)
+  dissonantVeryGood: '#6366f1',   // Indigo-500 - very good (score >= 1.5)
+  dissonantGood: '#7c3aed',       // Violet-600 - good (score >= 1.0)
+  dissonantAcceptable: '#8b5cf6', // Violet-500 - acceptable (score >= 0.5)
+  dissonantMarginal: '#a855f7',   // Purple-500 - marginal (score >= 0)
+  dissonantPoor: '#c026d3',       // Fuchsia-600 - poor (score >= -0.5)
+  dissonantBad: '#db2777',        // Pink-600 - bad (score >= -1.0)
+  dissonantVeryBad: '#e11d48',    // Rose-600 - very bad (score < -1.0)
 
   // RESOLUTION colors (emerald → amber based on exit score)
   // Only as bad as amber, never red (red reserved for violations)
@@ -52,26 +51,26 @@ export const VIZ_COLORS = {
   repeatedFill: 'rgba(163, 163, 163, 0.15)',    // Grey
   consonantFill: 'rgba(132, 204, 22, 0.18)',    // Alias
 
-  // Dissonance fills (purple spectrum) — high opacity to show clearly over note bars
-  dissonantExcellentFill: 'rgba(99, 102, 241, 0.72)',   // Indigo
-  dissonantGoodFill: 'rgba(139, 92, 246, 0.70)',        // Violet
-  dissonantMarginalFill: 'rgba(192, 38, 211, 0.68)',    // Fuchsia
-  dissonantBadFill: 'rgba(219, 39, 119, 0.72)',         // Pink
-  dissonantVeryBadFill: 'rgba(220, 38, 38, 0.75)',      // Red
+  // Dissonance fills (blue→purple spectrum) — drawn BEHIND notes, shifted toward blue
+  dissonantExcellentFill: 'rgba(59, 130, 246, 0.38)',   // Blue-500
+  dissonantGoodFill: 'rgba(99, 102, 241, 0.36)',        // Indigo-500
+  dissonantMarginalFill: 'rgba(139, 92, 246, 0.34)',    // Violet-500
+  dissonantBadFill: 'rgba(168, 85, 247, 0.36)',         // Purple-500
+  dissonantVeryBadFill: 'rgba(192, 38, 211, 0.38)',     // Fuchsia-600
 
-  // Resolution fills (green to amber spectrum)
-  resolutionExcellentFill: 'rgba(16, 185, 129, 0.22)',  // Emerald
-  resolutionGoodFill: 'rgba(132, 204, 22, 0.20)',       // Lime
-  resolutionMarginalFill: 'rgba(245, 158, 11, 0.22)',   // Amber
-  resolutionPoorFill: 'rgba(251, 146, 60, 0.24)',       // Orange
+  // Resolution fills — drawn BEHIND notes, boosted opacity for clear visibility
+  resolutionExcellentFill: 'rgba(16, 185, 129, 0.50)',  // Emerald
+  resolutionGoodFill: 'rgba(132, 204, 22, 0.45)',       // Lime
+  resolutionMarginalFill: 'rgba(245, 158, 11, 0.42)',   // Amber
+  resolutionPoorFill: 'rgba(251, 146, 60, 0.45)',       // Orange
 
-  // Consecutive dissonance fills — high opacity to clearly indicate problem
-  consecutiveNoneFill: 'rgba(220, 38, 38, 0.78)',       // Red
-  consecutivePartialFill: 'rgba(249, 115, 22, 0.73)',   // Orange
-  consecutiveWellFill: 'rgba(234, 179, 8, 0.68)',       // Yellow
+  // Consecutive dissonance fills — still red/orange (consecutive IS a problem)
+  consecutiveNoneFill: 'rgba(220, 38, 38, 0.40)',       // Red
+  consecutivePartialFill: 'rgba(249, 115, 22, 0.36)',   // Orange
+  consecutiveWellFill: 'rgba(234, 179, 8, 0.32)',       // Yellow
 
   // Violation fills - prominent red
-  parallelFill: 'rgba(220, 38, 38, 0.35)',              // Bright red
+  parallelFill: 'rgba(220, 38, 38, 0.42)',              // Bright red
   unresolvedFill: 'rgba(245, 158, 11, 0.30)',           // Amber
 
   // Voice colors (muted, distinct)
@@ -83,15 +82,15 @@ export const VIZ_COLORS = {
   voiceCSAbove: '#10b981',        // Emerald-500 - countersubject (softer green)
   voiceCSBelow: '#f59e0b',        // Amber-500 - countersubject below (inverted)
 
-  // UI state colors - very subtle backgrounds
+  // UI state colors - subtle backgrounds with visible borders
   issueBackground: '#fef2f2',
-  issueBorder: '#fecaca',
+  issueBorder: '#f87171',       // Red-400 — more visible than #fecaca
   issueText: '#991b1b',
   warningBackground: '#fefce8',
-  warningBorder: '#fef08a',
+  warningBorder: '#fbbf24',     // Amber-400 — more visible than #fef08a
   warningText: '#854d0e',
   cleanBackground: '#f0fdf4',
-  cleanBorder: '#bbf7d0',
+  cleanBorder: '#34d399',       // Emerald-400 — more visible than #bbf7d0
   cleanText: '#166534',
 
   // Grid colors
@@ -163,6 +162,7 @@ function getConsecutiveDissonanceColor(mitigationCount) {
  *
  * The area from entry to resolution is bordered as a "chain" in the visualization.
  *
+ * Fills are drawn BEHIND note bars so notes always read clearly on top.
  * @param {Object} options
  * @returns {Object} { color, bg, fill, label, borderStyle, borderWidth, opacity, isInChain, chainBorder }
  */
@@ -206,7 +206,7 @@ export function getIntervalStyle({
         bg: useScore >= 0.5 ? '#d1fae5' : (useScore >= 0 ? '#fef3c7' : '#fed7aa'),
         borderStyle: useScore >= 0 ? 'solid' : 'dashed',
         borderWidth: useScore >= 0.75 ? 2 : 1,
-        opacity: useScore >= 0.5 ? 0.85 : 0.7,
+        opacity: useScore >= 0.5 ? 0.92 : 0.82,  // Higher: fills are behind notes now
         isInChain: isChainResolution,
       };
     }
@@ -272,25 +272,24 @@ export function getIntervalStyle({
       bg: consecutiveMitigationCount >= 2 ? '#fef9c3' : consecutiveMitigationCount >= 1 ? '#ffedd5' : '#fecaca',
       borderStyle: 'solid',
       borderWidth: 2,
-      opacity: 0.85,
+      opacity: 0.88,
       isInChain: true,
     };
   }
 
-  // CHAIN ENTRY or SINGLE DISSONANCE - purple spectrum based on entry score
-  // Purple = well-entered (blue+red), red-purple = poorly entered
+  // CHAIN ENTRY or SINGLE DISSONANCE - blue-purple spectrum based on entry score
   const useScore = isChainEntry ? (entryScore !== undefined ? entryScore : score) : score;
   const colorInfo = getDissonanceColorByEntryScore(useScore);
 
   const baseResolutionStyle = isResolved
-    ? { borderStyle: 'solid', borderWidth: 1, opacity: 0.75 }
-    : { borderStyle: 'dashed', borderWidth: 2, opacity: 0.6 };
+    ? { borderStyle: 'solid', borderWidth: 1, opacity: 0.80 }
+    : { borderStyle: 'dashed', borderWidth: 2, opacity: 0.68 };
 
   return {
     ...colorInfo,
     bg: useScore >= 1.0 ? '#e0e7ff' : (useScore >= 0 ? '#f3e8ff' : '#fce7f3'),
     ...baseResolutionStyle,
-    opacity: isResolved ? (useScore >= 0.5 ? 0.8 : 0.7) : 0.55,
+    opacity: isResolved ? (useScore >= 0.5 ? 0.86 : 0.78) : 0.65,
     isInChain: chainLength > 1,
   };
 }

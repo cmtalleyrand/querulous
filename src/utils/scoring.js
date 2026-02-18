@@ -372,19 +372,6 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
     details.push({ factor: `Close stretto possible with good counterpoint`, impact: +5 });
   }
 
-  // Penalty for parallel perfects (critical issues)
-  const hasParallelPerfects = allResults.some(r =>
-    r.issues?.some(i => i.type === 'parallel')
-  );
-  if (hasParallelPerfects) {
-    const parallelCount = allResults.filter(r =>
-      r.issues?.some(i => i.type === 'parallel')
-    ).length;
-    const penalty = Math.min(10, parallelCount * 2);
-    internal -= penalty;
-    details.push({ factor: `Parallel perfects at ${parallelCount} distances`, impact: -penalty });
-  }
-
   // Context
   const context = {
     subjectLength,
@@ -547,39 +534,43 @@ export function calculateInvertibilityScore(result) {
 
   let internal = 0;
 
+  // Show original (S+CS) quality for reference — this is the baseline the user already knows
+  details.push({
+    factor: `Original (S+CS) quality: ${origAvg.toFixed(2)}`,
+    impact: 0,
+    type: 'info',
+  });
+
   // PRIMARY FACTOR: Quality of inverted position
-  // This is what matters - does the inversion sound good?
-  // Scale: avg score -3 to +3 maps to internal -15 to +15
+  // Does the CS work well BELOW the subject? Scale: avg -3..+3 maps to -15..+15
   internal = invAvg * 5;
   details.push({
-    factor: `Inverted position quality: ${invAvg.toFixed(2)}`,
+    factor: `Inverted (CS below) quality: ${invAvg.toFixed(2)}`,
     impact: Math.round(invAvg * 5),
   });
 
-  // SECONDARY FACTOR: Comparison to original
-  // If inverted is much worse than original, additional penalty
-  // If inverted is better than original, small bonus
+  // SECONDARY FACTOR: Comparison — how much does inversion change quality?
   const qualityDiff = invAvg - origAvg;
 
-  if (qualityDiff < -1.0) {
-    // Inverted is significantly worse than original
-    const penalty = Math.min(8, Math.abs(qualityDiff) * 3);
+  if (qualityDiff < -0.3) {
+    // Inverted is meaningfully worse than original
+    const penalty = Math.min(8, Math.abs(qualityDiff) * 4);
     internal -= penalty;
     details.push({
-      factor: `Inverted degrades from original (Δ${qualityDiff.toFixed(2)})`,
+      factor: `Inverted weaker than original (Δ${qualityDiff.toFixed(2)})`,
       impact: -Math.round(penalty),
     });
-  } else if (qualityDiff > 0.5) {
-    // Inverted is actually better than original (rare but good)
+  } else if (qualityDiff > 0.3) {
+    // Inverted is better than original
     internal += 3;
     details.push({
-      factor: `Inverted improves on original (Δ+${qualityDiff.toFixed(2)})`,
+      factor: `Inverted stronger than original (Δ+${qualityDiff.toFixed(2)})`,
       impact: +3,
     });
   } else {
-    // Similar quality - this is the baseline (good)
+    // Comparable quality — good invertibility
     details.push({
-      factor: `Similar quality in both positions (Δ${qualityDiff.toFixed(2)})`,
+      factor: `Comparable in both positions (Δ${qualityDiff.toFixed(2)})`,
       impact: 0,
       type: 'info',
     });
@@ -838,17 +829,9 @@ export function calculateTranspositionStabilityScore(result) {
     const internal = avgScore * 5 * lengthFactor;
 
     details.push({
-      factor: `Counterpoint quality vs answer: ${avgScore.toFixed(2)}`,
+      factor: `CS vs answer avg quality: ${avgScore.toFixed(2)} (${totalIntervals} simultaneities)`,
       impact: Math.round(internal),
     });
-
-    if (totalIntervals < 10) {
-      details.push({
-        factor: `Short overlap (${totalIntervals} intervals)`,
-        impact: 0,
-        type: 'info',
-      });
-    }
 
     return {
       score: toDisplayScore(internal),
@@ -925,8 +908,8 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
   let totalWeight = 0;
   let weightedInternalSum = 0;
 
-  // Categories used for scoring (note: tonalClarity replaces tonalDefinition + answerCompatibility)
-  const scoringKeys = ['tonalClarity', 'rhythmicCharacter', 'strettoPotential'];
+  // Categories used for scoring
+  const scoringKeys = ['rhythmicCharacter', 'strettoPotential'];
   if (hasCountersubject) {
     scoringKeys.push('invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability');
   }

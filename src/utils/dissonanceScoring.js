@@ -99,10 +99,9 @@ export function createAnalysisContext(options = {}) {
  * @returns {boolean}
  */
 function isP4DissonantInContext(sim, ctx) {
-  // P4 is ALWAYS dissonant in two-voice counterpoint
-  // (one voice is always the bass, and P4 against bass is dissonant)
-  // It's just scored less severely than other dissonances
-  return true;
+  // P4 is dissonant by default in two-voice counterpoint (bass is always implied).
+  // The user can override this via the "Treat P4 as consonant" toggle.
+  return ctx.treatP4AsDissonant !== false;
 }
 
 /**

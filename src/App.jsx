@@ -83,7 +83,7 @@ export default function App() {
   const [strettoStep, setStrettoStep] = useState('1');
   const [strettoOctave, setStrettoOctave] = useState('12');
   const [selectedStretto, setSelectedStretto] = useState(null);
-  const [treatP4Dissonant, setTreatP4Dissonant] = useState(false);
+  const [treatP4Dissonant, setTreatP4Dissonant] = useState(true); // default: P4 is dissonant (traditional)
   const [csPos, setCsPos] = useState('above');
   const [csShift, setCsShift] = useState('0');
   const [answerMode, setAnswerMode] = useState('tonal'); // 'tonal' or 'real'
@@ -217,6 +217,8 @@ export default function App() {
     try {
       setError(null);
       setSelectedStretto(null);
+      // Apply P4 treatment setting before running analysis
+      setP4Treatment(treatP4Dissonant);
 
       // Extract headers from ABC notation
       const h = extractABCHeaders(subjectInput);
@@ -1336,15 +1338,16 @@ export default function App() {
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#37474f', cursor: 'pointer' }}>
                     <input
                       type="checkbox"
-                      checked={treatP4Dissonant}
+                      checked={!treatP4Dissonant}
                       onChange={(e) => {
-                        setTreatP4Dissonant(e.target.checked);
-                        setP4Treatment(e.target.checked);
+                        const consonant = e.target.checked;
+                        setTreatP4Dissonant(!consonant);
+                        setP4Treatment(!consonant);
                         setSelectedStretto(null);
                       }}
                       style={{ cursor: 'pointer' }}
                     />
-                    Treat P4 as dissonant
+                    Treat P4 as consonant
                   </label>
                 </div>
                 <span style={{ fontSize: '11px', color: '#94a3b8', paddingBottom: '8px' }}>
@@ -1524,6 +1527,32 @@ export default function App() {
                         </div>
                       );
                     })()}
+                    {/* Stretto considerations: dissonance warnings at this distance */}
+                    {s.warnings?.length > 0 && (
+                      <div style={{
+                        marginBottom: '10px', padding: '8px 12px',
+                        backgroundColor: '#fefce8', borderRadius: '6px',
+                        border: '1px solid #fbbf24', fontSize: '12px',
+                      }}>
+                        <div style={{ fontWeight: '600', color: '#854d0e', marginBottom: '4px' }}>
+                          Considerations ({s.warnings.length})
+                        </div>
+                        {s.warnings.map((w, wi) => (
+                          <div key={wi} style={{ color: '#78350f', marginBottom: '2px', paddingLeft: '6px' }}>
+                            <span style={{ color: '#b45309', fontWeight: '600', marginRight: '4px' }}>
+                              {results.formatter?.formatBeat(w.onset) || `b${w.onset}`}:
+                            </span>
+                            {w.description}
+                            {w.score !== undefined && (
+                              <span style={{ marginLeft: '6px', fontWeight: '700',
+                                color: w.score >= 0 ? '#059669' : '#dc2626' }}>
+                                ({w.score >= 0 ? '+' : ''}{w.score.toFixed(1)})
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <TwoVoiceViz
                       key={`${selectedStretto}-${strettoOctave}`}
                       voice1={results.subject}
