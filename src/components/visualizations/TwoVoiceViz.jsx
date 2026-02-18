@@ -16,10 +16,10 @@ import {
  *
  * SVG rendering order (correct):
  *   1. Grid / backgrounds
- *   2. Chain borders
- *   3. Voice 1 notes
- *   4. Voice 2 notes
- *   5. Interval fills  ← rendered LAST so they appear on top of note bars
+ *   2. Interval fills  ← rendered BEFORE notes so notes are always readable on top
+ *   3. Chain borders
+ *   4. Voice 1 notes
+ *   5. Voice 2 notes
  *   6. Hover labels
  */
 export function TwoVoiceViz({
@@ -386,9 +386,19 @@ export function TwoVoiceViz({
 
   const handleIntervalClick = useCallback((pt, event) => {
     if (event) { event.preventDefault(); event.stopPropagation(); }
+    // If tapping inside a chain (but not on the entry), always show entry for full context
+    if (pt.chainStartOnset !== undefined && pt.chainLength > 0 && !pt.isChainEntry) {
+      const pts = analysis?.intervalPoints || [];
+      const chainEntry = pts.find(p => Math.abs(p.onset - pt.chainStartOnset) < 0.01 && p.isChainEntry);
+      if (chainEntry) {
+        setSelectedInterval({ ...chainEntry, _tappedOnset: pt.onset });
+        setHighlightedOnset(getOnsetKey(pt.onset));
+        return;
+      }
+    }
     setSelectedInterval(pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
-  }, []);
+  }, [analysis]);
 
   const handleNoteClick = useCallback((n, event) => {
     if (event) event.preventDefault();
@@ -543,6 +553,31 @@ export function TwoVoiceViz({
               return null;
             })}
 
+            {/* ── Interval background fills ── rendered FIRST, behind notes */}
+            {intervalPoints.map((pt, i) => {
+              const x = tToX(pt.onset);
+              const nextPt = intervalPoints[i + 1];
+              const regionWidth = nextPt
+                ? Math.max(4, (nextPt.onset - pt.onset) * tScale - 2)
+                : Math.max(20, tScale * 0.5);
+              const isPerfect = [1, 5, 8, 0].includes(pt.intervalClass);
+              const style = getIntervalStyle({
+                isConsonant: pt.isConsonant, isPerfect, score: pt.score || 0,
+                entryScore: pt.entryScore, exitScore: pt.exitScore, category: pt.category,
+                isRepeated: pt.isRepeated, isResolved: pt.isResolved, isParallel: pt.isParallel,
+                isChainEntry: pt.isChainEntry, isConsecutiveDissonance: pt.isConsecutiveDissonance,
+                consecutiveMitigationCount: pt.consecutiveMitigationCount || 0,
+                isChainResolution: pt.isChainResolution, chainLength: pt.chainLength || 0,
+              });
+              let bgOpacity = style.opacity || 0.5;
+              if (pt.isParallel || (!pt.isConsonant && !pt.isResolved)) bgOpacity = Math.max(bgOpacity, 0.75);
+              return (
+                <rect key={`bg-${i}`} x={x} y={headerHeight} width={regionWidth}
+                  height={h - headerHeight - 18} fill={style.fill} opacity={bgOpacity}
+                  rx={3} pointerEvents="none" />
+              );
+            })}
+
             {/* Chain borders — entry through resolution */}
             {(() => {
               const chains = new Map();
@@ -568,7 +603,7 @@ export function TwoVoiceViz({
               });
             })()}
 
-            {/* ── Voice 1 notes ── rendered BEFORE interval fills */}
+            {/* ── Voice 1 notes ── */}
             {voice1.map((n, i) => {
               const x = tToX(n.onset);
               const y = pToY(n.pitch);
@@ -591,7 +626,7 @@ export function TwoVoiceViz({
               );
             })}
 
-            {/* ── Voice 2 notes ── rendered BEFORE interval fills */}
+            {/* ── Voice 2 notes ── */}
             {voice2.map((n, i) => {
               const x = tToX(n.onset);
               const y = pToY(n.pitch);
@@ -614,7 +649,7 @@ export function TwoVoiceViz({
               );
             })}
 
-            {/* ── Interval fills ── rendered LAST so they appear on top of note bars */}
+            {/* ── Interval hit areas + tooltips ── transparent click targets on top of notes */}
             {intervalPoints.map((pt, i) => {
               const x = tToX(pt.onset);
               const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
@@ -633,25 +668,23 @@ export function TwoVoiceViz({
                 consecutiveMitigationCount: pt.consecutiveMitigationCount || 0,
                 isChainResolution: pt.isChainResolution, chainLength: pt.chainLength || 0,
               });
-
-              let regionOpacity = style.opacity || 0.5;
-              if (isHighlighted || isSelected) regionOpacity = Math.min(1, regionOpacity + 0.3);
-              if (pt.isParallel || (!pt.isConsonant && !pt.isResolved)) regionOpacity = Math.max(regionOpacity, 0.75);
-
               return (
                 <g key={`int-${i}`} style={{ cursor: 'pointer' }}
                   onClick={(e) => handleIntervalClick(pt, e)}
                   onMouseEnter={() => setHighlightedOnset(getOnsetKey(pt.onset))}
                   onMouseLeave={() => !isSelected && setHighlightedOnset(null)}>
+                  {/* Transparent hit area (full column) with visible border when active */}
                   <rect x={x} y={headerHeight} width={regionWidth} height={h - headerHeight - 18}
-                    fill={style.fill} opacity={regionOpacity} rx={3}
-                    stroke={style.color} strokeWidth={style.borderWidth || 1}
+                    fill="transparent"
+                    stroke={isHighlighted || isSelected ? style.color : 'none'}
+                    strokeWidth={isHighlighted || isSelected ? (style.borderWidth || 1.5) : 0}
                     strokeDasharray={style.borderStyle === 'dashed' ? '4,3' : undefined}
-                    strokeOpacity={0.6} />
+                    strokeOpacity={0.8} rx={3} />
+                  {/* Tooltip badge rendered on top of notes */}
                   {(isHighlighted || isSelected) && (
                     <g>
                       <rect x={x + regionWidth/2 - 18} y={midY - 14} width={36} height={28}
-                        fill={style.bg} stroke={style.color} strokeWidth={1.5} rx={4} opacity={0.95} />
+                        fill={style.bg} stroke={style.color} strokeWidth={1.5} rx={4} opacity={0.97} />
                       <text x={x + regionWidth/2} y={midY + 2} fontSize="12" fontWeight="600"
                         fill={style.color} textAnchor="middle">
                         {pt.intervalName}
@@ -720,30 +753,48 @@ export function TwoVoiceViz({
               <span style={{ fontWeight: '600', fontSize: '13px', color: '#1f2937' }}>
                 {formatter?.formatBeat(pt.onset) || `Beat ${pt.onset + 1}`}
               </span>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Interval name — what the interval IS */}
                 <span style={{ padding: '3px 8px', backgroundColor: style.bg, color: style.color,
-                  borderRadius: '4px', fontSize: '12px', fontWeight: '600' }}>
-                  {pt.intervalName} — {style.label}
+                  borderRadius: '4px', fontSize: '13px', fontWeight: '700' }}>
+                  {pt.intervalName}
                 </span>
+                {/* Context badges — where we are in the pattern */}
                 {pt.isParallel && (
                   <span style={{ padding: '3px 8px', backgroundColor: '#fef2f2', color: '#dc2626',
-                    borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Parallel!</span>
+                    borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Parallel 5th/8ve</span>
                 )}
-                {!pt.isResolved && !pt.isConsonant && (
+                {pt.isChainEntry && !pt.isParallel && (
+                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600',
+                    backgroundColor: '#ede9fe', color: '#6366f1' }}>Entry</span>
+                )}
+                {!pt.isConsonant && pt.isConsecutiveDissonance && (
+                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600',
+                    backgroundColor: '#fff7ed', color: '#c2410c' }}>
+                    Consecutive{pt.consecutiveMitigationCount > 0 ? ` (${pt.consecutiveMitigationCount} mitigating)` : ''}
+                  </span>
+                )}
+                {pt.isChainResolution && (
+                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600',
+                    backgroundColor: '#d1fae5', color: '#059669' }}>Resolution</span>
+                )}
+                {!pt.isResolved && !pt.isConsonant && !pt.isConsecutiveDissonance && (
                   <span style={{ padding: '3px 8px', backgroundColor: '#fef3c7', color: '#b45309',
                     borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Unresolved</span>
                 )}
+                {/* Chain position indicator when tapped within a chain */}
+                {pt._tappedOnset !== undefined && pt._tappedOnset !== pt.onset && (
+                  <span style={{ padding: '3px 8px', backgroundColor: '#f0f9ff', color: '#0284c7',
+                    borderRadius: '4px', fontSize: '11px', fontWeight: '500' }}>
+                    ← tapped at {formatter?.formatBeat(pt._tappedOnset) || `beat ${pt._tappedOnset + 1}`}
+                  </span>
+                )}
+                {/* Score badges */}
                 {!pt.isConsonant && pt.isChainEntry && pt.entryScore !== undefined && (
                   <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600',
                     backgroundColor: pt.entryScore >= 0 ? '#ede9fe' : '#fee2e2',
                     color: pt.entryScore >= 0 ? '#6366f1' : '#dc2626' }}>
                     Entry: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(1)}
-                  </span>
-                )}
-                {!pt.isConsonant && pt.isConsecutiveDissonance && (
-                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600',
-                    backgroundColor: '#fef2f2', color: '#dc2626' }}>
-                    Consecutive{pt.consecutiveMitigationCount > 0 ? ` (${pt.consecutiveMitigationCount} mit.)` : ''}
                   </span>
                 )}
                 {pt.isChainResolution && pt.exitScore !== undefined && (
@@ -813,7 +864,9 @@ export function TwoVoiceViz({
                         <span style={{ fontWeight: '700', color: '#6366f1', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           Entry Motion
                         </span>
-                        <span style={{ fontWeight: '700', color: '#1e293b', backgroundColor: '#f1f5f9',
+                        <span style={{ fontWeight: '700',
+                          color: pt.entry.score >= 0 ? '#6366f1' : '#dc2626',
+                          backgroundColor: pt.entry.score >= 0 ? '#ede9fe' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
                           Base: {pt.entry.score >= 0 ? '+' : ''}{pt.entry.score.toFixed(2)}
                         </span>
@@ -861,7 +914,9 @@ export function TwoVoiceViz({
                         <span style={{ fontWeight: '700', color: '#059669', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           Exit / Resolution
                         </span>
-                        <span style={{ fontWeight: '700', color: '#1e293b', backgroundColor: '#f1f5f9',
+                        <span style={{ fontWeight: '700',
+                          color: pt.exit.score >= 0 ? '#059669' : '#ea580c',
+                          backgroundColor: pt.exit.score >= 0 ? '#d1fae5' : '#fed7aa',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
                           Base: {pt.exit.score >= 0 ? '+' : ''}{pt.exit.score.toFixed(2)}
                         </span>

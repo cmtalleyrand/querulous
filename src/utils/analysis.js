@@ -968,77 +968,8 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     // Analyze dissonances with new scoring system (needed for passing motion detection)
     const dissonanceAnalysis = analyzeAllDissonances(sims);
 
-    // Check parallel perfects with mitigation for stretto context
-    // Allowed exceptions:
-    // a) In sequences (parallels that are part of sequential patterns)
-    // b) Passing motion (short-note parallels that are stepwise through)
-    // c) Tight stretto bonus: if distance <= 1/4 subject length, allow 1 extra parallel
-    const isTightStretto = dist <= subLen / 4;
-    const allParallels = checkParallelPerfects(sims, formatter);
-    let allowedParallels = 0;
-    const mitigatedParallels = [];
-    const unmitigatedParallels = [];
-
-    for (const v of allParallels) {
-      const sim = sims.find(s => Math.abs(s.onset - v.onset) < 0.01);
-      const metricWt = sim ? sim.metricWeight : 0.5;
-      const noteDur = sim ? Math.min(sim.voice1Note.duration, sim.voice2Note.duration) : avgDuration;
-
-      // Check if in sequence (stretto doesn't have external sequence context,
-      // but we can detect if consecutive parallels follow a pattern)
-      // For stretto, "in sequence" means consecutive intervals form a sequential pattern
-      // We approximate: if the melodic intervals repeat, treat as sequential
-      const inSequence = false; // Stretto doesn't have sequence detection yet
-
-      // Check if passing motion (short note, stepwise)
-      const isPassing = dissonanceAnalysis.all?.some(r =>
-        Math.abs(r.onset - v.onset) < 0.01 && r.passingMotion?.isPassing
-      ) || (noteDur <= 0.25); // Short notes are more forgivable
-
-      if (inSequence || isPassing) {
-        mitigatedParallels.push(v);
-        warnings.push({
-          onset: v.onset,
-          description: `${v.description} (mitigated: ${inSequence ? 'in sequence' : 'passing motion'})`,
-          type: 'parallel_mitigated',
-          metricWeight: metricWt,
-          duration: noteDur,
-          baseSeverity: 0.5,
-        });
-      } else {
-        unmitigatedParallels.push(v);
-      }
-    }
-
-    // Tight stretto allows 1 extra unmitigated parallel
-    const parallelAllowance = isTightStretto ? 1 : 0;
-    for (let pi = 0; pi < unmitigatedParallels.length; pi++) {
-      const v = unmitigatedParallels[pi];
-      const sim = sims.find(s => Math.abs(s.onset - v.onset) < 0.01);
-      const metricWt = sim ? sim.metricWeight : 0.5;
-      const noteDur = sim ? Math.max(sim.voice1Note.duration, sim.voice2Note.duration) : avgDuration;
-
-      if (pi < parallelAllowance) {
-        // Allowed by tight stretto bonus
-        warnings.push({
-          onset: v.onset,
-          description: `${v.description} (allowed: tight stretto)`,
-          type: 'parallel_tight',
-          metricWeight: metricWt,
-          duration: noteDur,
-          baseSeverity: 0.5,
-        });
-      } else {
-        issues.push({
-          onset: v.onset,
-          description: v.description,
-          type: 'parallel',
-          metricWeight: metricWt,
-          duration: noteDur,
-          baseSeverity: 2.0,
-        });
-      }
-    }
+    // Parallel perfects in stretto are expected across many tested distances and are not
+    // scored — they are visible in the TwoVoiceViz when that specific pair is viewed.
 
     // Evaluate each dissonance based on score
     for (const d of dissonanceAnalysis.dissonances) {
