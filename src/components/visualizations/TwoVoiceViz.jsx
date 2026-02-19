@@ -387,19 +387,9 @@ export function TwoVoiceViz({
 
   const handleIntervalClick = useCallback((pt, event) => {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    // If tapping inside a chain (but not on the entry), always show entry for full context
-    if (pt.chainStartOnset !== undefined && pt.chainLength > 0 && !pt.isChainEntry) {
-      const pts = analysis?.intervalPoints || [];
-      const chainEntry = pts.find(p => Math.abs(p.onset - pt.chainStartOnset) < 0.01 && p.isChainEntry);
-      if (chainEntry) {
-        setSelectedInterval({ ...chainEntry, _tappedOnset: pt.onset });
-        setHighlightedOnset(getOnsetKey(pt.onset));
-        return;
-      }
-    }
     setSelectedInterval(pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
-  }, [analysis]);
+  }, []);
 
   const handleNoteClick = useCallback((n, event) => {
     if (event) event.preventDefault();
@@ -783,13 +773,6 @@ export function TwoVoiceViz({
                   <span style={{ padding: '3px 8px', backgroundColor: '#fef3c7', color: '#b45309',
                     borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Unresolved</span>
                 )}
-                {/* Chain position indicator when tapped within a chain */}
-                {pt._tappedOnset !== undefined && pt._tappedOnset !== pt.onset && (
-                  <span style={{ padding: '3px 8px', backgroundColor: '#f0f9ff', color: '#0284c7',
-                    borderRadius: '4px', fontSize: '11px', fontWeight: '500' }}>
-                    ← tapped at {formatter?.formatBeat(pt._tappedOnset) || `beat ${pt._tappedOnset + 1}`}
-                  </span>
-                )}
                 {/* Score badges */}
                 {!pt.isConsonant && pt.isChainEntry && pt.entryScore !== undefined && (
                   <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600',
@@ -1042,7 +1025,10 @@ export function TwoVoiceViz({
             dissonances: analysis.chainAnalysis.dissonances,
           }}
           formatter={formatter}
-          onIssueClick={(issue) => handleIssueClick(issue)}
+          onIssueClick={(issue) => {
+            const pt = analysis.intervalPoints.find(p => Math.abs(p.onset - issue.onset) < 0.01);
+            handleIssueClick(pt || issue);
+          }}
           title="Dissonance Score Breakdown"
         />
       )}

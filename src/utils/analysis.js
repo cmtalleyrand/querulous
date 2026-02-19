@@ -987,6 +987,22 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
       const metricLabel = sim.metricWeight === 1.0 ? 'downbeat' : (sim.metricWeight >= 0.75 ? 'strong beat' : 'weak beat');
       const noteDur = Math.max(sim.voice1Note.duration, sim.voice2Note.duration);
 
+      // Passing consecutive dissonances (isPassing = passingness >= 1) are minor issues only —
+      // they do not impair stretto viability. Downgrade them to warnings.
+      if (d.isPassing) {
+        warnings.push({
+          onset: d.onset,
+          description: `Passing consecutive ${d.interval} at ${formatter.formatBeat(d.onset)} (minor)`,
+          type: 'passing_consecutive',
+          interval: d.interval,
+          score: d.score,
+          details: d.details,
+          metricWeight: sim.metricWeight,
+          duration: noteDur,
+        });
+        continue;
+      }
+
       if (d.score < -1.0) {
         // Serious issue - badly handled dissonance
         issues.push({
@@ -1169,6 +1185,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
           pt.consecutiveMitigationCount = chain.consecutiveMitigationCount || 0;
           pt.consecutiveMitigation = chain.consecutiveMitigation || 0;
           pt.passingMotion = chain.passingMotion || null;
+          pt.isPassing = chain.isPassing || false;
           pt.isRepeated = chain.isRepeated || false;
           pt.isResolved = chain.isResolved !== false;
           pt.isParallel = chain.isParallel || false;

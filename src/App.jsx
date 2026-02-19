@@ -194,6 +194,7 @@ export default function App() {
   const loadPreset = (preset) => {
     setSubjectInput(preset.subject || '');
     setCsInput(preset.countersubject || '');
+    setCs2Input(preset.countersubject2 || '');
     setAnswerInput(preset.answer || '');
     if (preset.settings) {
       if (preset.settings.key) setSelKey(preset.settings.key);
