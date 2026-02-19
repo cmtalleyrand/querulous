@@ -333,36 +333,72 @@ export function TwoVoiceViz({
     const consonances = intervalPoints.filter(p => p.isConsonant);
 
     let totalWeightedScore = 0, totalDuration = 0;
+    let consonanceContribution = 0, dissonanceContribution = 0;
+    let resolutionBonus = 0, resolutionPenalty = 0;
+    let parallelPenalty = 0, repetitionPenalty = 0, motionBonus = 0;
+
     for (const pt of intervalPoints) {
       const dur = Math.max(0.25, pt.duration || 0.25);
       totalDuration += dur;
       if (pt.isConsonant) {
         const isImperfect = [3, 6].includes(pt.intervalClass);
         const isP4 = pt.intervalClass === 4;
-        let base = isImperfect ? 0.5 : pt.intervalClass === 5 ? 0.3 : isP4 ? 0.25 : 0.2;
-        if (pt.category === 'consonant_good_resolution') base += 0.3;
-        if (pt.category === 'consonant_bad_resolution') base -= 0.2;
-        if (pt.isRepeated) base -= 0.15 * (pt.isShortNote ? 0.5 : 1.0);
-        totalWeightedScore += base * dur;
+        const baseConsonance = isImperfect ? 0.5 : pt.intervalClass === 5 ? 0.3 : isP4 ? 0.25 : 0.2;
+        let adjusted = baseConsonance;
+        if (pt.category === 'consonant_good_resolution') { resolutionBonus += 0.3 * dur; adjusted += 0.3; }
+        if (pt.category === 'consonant_bad_resolution') { resolutionPenalty += 0.2 * dur; adjusted -= 0.2; }
+        if (pt.isRepeated) {
+          const repAmount = 0.15 * (pt.isShortNote ? 0.5 : 1.0);
+          repetitionPenalty += repAmount * dur;
+          adjusted -= repAmount;
+        }
+        consonanceContribution += baseConsonance * dur;
+        totalWeightedScore += adjusted * dur;
       } else {
-        totalWeightedScore += (pt.score || 0) * dur;
+        const ds = (pt.score || 0) * dur;
+        dissonanceContribution += ds;
+        totalWeightedScore += ds;
       }
       if (pt.isParallel) {
         let mult = pt.motionScoreMultiplier || 1.0;
         if (pt.parallelInSequence) mult *= 0.25;
         else if (pt.isShortNote && !pt.isRepeatedParallel) mult *= 0.5;
-        totalWeightedScore -= 1.0 * dur * mult;
+        const pp = 1.0 * dur * mult;
+        parallelPenalty += pp;
+        totalWeightedScore -= pp;
       }
       if (pt.v1Motion !== undefined && pt.v2Motion !== undefined) {
-        if (Math.abs(pt.v1Motion) <= 2 && pt.v1Motion !== 0 && Math.abs(pt.v2Motion) <= 2 && pt.v2Motion !== 0)
+        if (Math.abs(pt.v1Motion) <= 2 && pt.v1Motion !== 0 && Math.abs(pt.v2Motion) <= 2 && pt.v2Motion !== 0) {
+          motionBonus += 0.1 * dur;
           totalWeightedScore += 0.1 * dur;
+        }
       }
     }
     const avgScore = totalDuration > 0 ? totalWeightedScore / totalDuration : 0;
 
+    const scoreBreakdown = {
+      totalIntervals: intervalPoints.length,
+      consonances: consonances.length,
+      dissonances: dissonances.length,
+      repeatedIntervals: intervalPoints.filter(p => p.isRepeated).length,
+      parallelIssues: intervalPoints.filter(p => p.isParallel).length,
+      unresolvedDissonances: dissonances.filter(p => !p.isResolved).length,
+      totalDuration: totalDuration.toFixed(2),
+      totalWeightedScore: totalWeightedScore.toFixed(2),
+      factors: {
+        consonanceContribution: consonanceContribution.toFixed(2),
+        dissonanceContribution: dissonanceContribution.toFixed(2),
+        resolutionBonus: resolutionBonus.toFixed(2),
+        resolutionPenalty: (-resolutionPenalty).toFixed(2),
+        parallelPenalty: (-parallelPenalty).toFixed(2),
+        repetitionPenalty: (-repetitionPenalty).toFixed(2),
+        motionBonus: motionBonus.toFixed(2),
+      },
+    };
+
     return {
       intervalPoints, beatMap, issues, warnings, dissonances, consonances,
-      avgScore, chainAnalysis,
+      avgScore, scoreBreakdown, chainAnalysis,
       minPitch: Math.min(...allPitches) - 2,
       maxPitch: Math.max(...allPitches) + 2,
       maxTime,
@@ -421,7 +457,7 @@ export function TwoVoiceViz({
     return <div style={{ padding: '16px', color: '#6b7280', fontStyle: 'italic' }}>Insufficient voice data</div>;
   }
 
-  const { minPitch, maxPitch, maxTime, intervalPoints, issues: computedIssues, warnings: computedWarnings, avgScore } = analysis;
+  const { minPitch, maxPitch, maxTime, intervalPoints, issues: computedIssues, warnings: computedWarnings, avgScore, scoreBreakdown } = analysis;
   const issues = propIssues !== null ? propIssues : computedIssues;
   const warnings = propWarnings !== null ? propWarnings : computedWarnings;
   const pRange = maxPitch - minPitch;
@@ -1014,6 +1050,106 @@ export function TwoVoiceViz({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Score Calculation Breakdown */}
+      {scoreBreakdown && (
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 14px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+            fontWeight: '600', fontSize: '13px', color: '#475569',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Score Calculation Breakdown</span>
+            <span style={{ padding: '3px 10px', borderRadius: '4px', fontSize: '12px', fontWeight: '700',
+              backgroundColor: avgScore >= 0.5 ? '#dcfce7' : avgScore >= 0 ? '#fef9c3' : '#fee2e2',
+              color: avgScore >= 0.5 ? '#16a34a' : avgScore >= 0 ? '#ca8a04' : '#dc2626' }}>
+              Score: {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
+            </span>
+          </div>
+          <div style={{ padding: '12px 14px' }}>
+            {/* Summary counts */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+              gap: '8px', marginBottom: '12px' }}>
+              <div style={{ padding: '8px', backgroundColor: '#f0fdf4', borderRadius: '4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: '#16a34a' }}>{scoreBreakdown.consonances}</div>
+                <div style={{ fontSize: '10px', color: '#64748b' }}>Consonances</div>
+              </div>
+              <div style={{ padding: '8px', backgroundColor: '#faf5ff', borderRadius: '4px', textAlign: 'center' }}>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: '#7c3aed' }}>{scoreBreakdown.dissonances}</div>
+                <div style={{ fontSize: '10px', color: '#64748b' }}>Dissonances</div>
+              </div>
+              {scoreBreakdown.repeatedIntervals > 0 && (
+                <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#737373' }}>{scoreBreakdown.repeatedIntervals}</div>
+                  <div style={{ fontSize: '10px', color: '#64748b' }}>Repeated</div>
+                </div>
+              )}
+              {scoreBreakdown.parallelIssues > 0 && (
+                <div style={{ padding: '8px', backgroundColor: '#fef2f2', borderRadius: '4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#dc2626' }}>{scoreBreakdown.parallelIssues}</div>
+                  <div style={{ fontSize: '10px', color: '#64748b' }}>Parallel 5/8</div>
+                </div>
+              )}
+            </div>
+
+            {/* Factor breakdown */}
+            {scoreBreakdown.factors && (
+              <div style={{ backgroundColor: '#faf5ff', borderRadius: '6px', padding: '10px', fontSize: '11px', color: '#5b21b6' }}>
+                <div style={{ fontWeight: '600', marginBottom: '8px' }}>Comprehensive Score Breakdown:</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Consonance quality:</span>
+                    <strong style={{ color: '#16a34a' }}>+{scoreBreakdown.factors.consonanceContribution}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Dissonance handling:</span>
+                    <strong style={{ color: parseFloat(scoreBreakdown.factors.dissonanceContribution) >= 0 ? '#16a34a' : '#dc2626' }}>
+                      {parseFloat(scoreBreakdown.factors.dissonanceContribution) >= 0 ? '+' : ''}{scoreBreakdown.factors.dissonanceContribution}
+                    </strong>
+                  </div>
+                  {parseFloat(scoreBreakdown.factors.resolutionBonus) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Good resolutions:</span>
+                      <strong style={{ color: '#16a34a' }}>+{scoreBreakdown.factors.resolutionBonus}</strong>
+                    </div>
+                  )}
+                  {parseFloat(scoreBreakdown.factors.resolutionPenalty) < 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Leap resolutions:</span>
+                      <strong style={{ color: '#dc2626' }}>{scoreBreakdown.factors.resolutionPenalty}</strong>
+                    </div>
+                  )}
+                  {parseFloat(scoreBreakdown.factors.parallelPenalty) < 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Parallel 5ths/8ves:</span>
+                      <strong style={{ color: '#dc2626' }}>{scoreBreakdown.factors.parallelPenalty}</strong>
+                    </div>
+                  )}
+                  {parseFloat(scoreBreakdown.factors.repetitionPenalty) < 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Repeated intervals:</span>
+                      <strong style={{ color: '#ca8a04' }}>{scoreBreakdown.factors.repetitionPenalty}</strong>
+                    </div>
+                  )}
+                  {parseFloat(scoreBreakdown.factors.motionBonus) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Stepwise motion:</span>
+                      <strong style={{ color: '#16a34a' }}>+{scoreBreakdown.factors.motionBonus}</strong>
+                    </div>
+                  )}
+                </div>
+                <div style={{ borderTop: '1px solid #e9d5ff', paddingTop: '8px', marginTop: '4px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Total: <strong>{scoreBreakdown.totalWeightedScore}</strong> ÷ <strong>{scoreBreakdown.totalDuration}</strong> beats</span>
+                  <strong style={{ padding: '2px 8px', borderRadius: '4px',
+                    backgroundColor: avgScore >= 0 ? '#dcfce7' : '#fee2e2',
+                    color: avgScore >= 0 ? '#16a34a' : '#dc2626' }}>
+                    = {avgScore >= 0 ? '+' : ''}{avgScore.toFixed(2)}
+                  </strong>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
