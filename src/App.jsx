@@ -988,9 +988,11 @@ export default function App() {
 
               if (allSequences.length === 0) {
                 return (
-                  <div style={{ padding: '16px', color: '#6b7280', fontStyle: 'italic', fontSize: '14px' }}>
-                    No melodic sequences detected. Sequences require consecutive repetitions of a melodic pattern (minimum 3 notes, 2 repetitions).
-                  </div>
+                  <Section title="Sequences" defaultCollapsed={false}>
+                    <div style={{ padding: '16px', color: '#6b7280', fontStyle: 'italic', fontSize: '14px' }}>
+                      No melodic sequences detected. Sequences require consecutive repetitions of a melodic pattern (minimum 3 notes, 2 repetitions).
+                    </div>
+                  </Section>
                 );
               }
 
@@ -1024,7 +1026,7 @@ export default function App() {
               };
 
               return (
-                <Section title="Sequences" defaultCollapsed={true}>
+                <Section title="Sequences" defaultCollapsed={false}>
                   <div style={{
                     padding: '10px 14px',
                     marginBottom: '12px',

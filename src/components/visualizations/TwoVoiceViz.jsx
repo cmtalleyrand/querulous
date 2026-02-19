@@ -9,6 +9,7 @@ import {
   getIntervalName,
   isParallelFifthOrOctave,
 } from '../../utils/vizConstants';
+import { CounterpointScoreDisplay } from '../ui/CounterpointScoreDisplay';
 
 /**
  * TwoVoiceViz — unified two-voice counterpoint visualization.
@@ -361,7 +362,7 @@ export function TwoVoiceViz({
 
     return {
       intervalPoints, beatMap, issues, warnings, dissonances, consonances,
-      avgScore,
+      avgScore, chainAnalysis,
       minPitch: Math.min(...allPitches) - 2,
       maxPitch: Math.max(...allPitches) + 2,
       maxTime,
@@ -1031,6 +1032,19 @@ export function TwoVoiceViz({
             </div>
           ))}
         </div>
+      )}
+
+      {/* Dissonance Score Breakdown — restored CounterpointScoreDisplay */}
+      {analysis.chainAnalysis && (
+        <CounterpointScoreDisplay
+          detailedScoring={{
+            summary: analysis.chainAnalysis.summary,
+            dissonances: analysis.chainAnalysis.dissonances,
+          }}
+          formatter={formatter}
+          onIssueClick={(issue) => handleIssueClick(issue)}
+          title="Dissonance Score Breakdown"
+        />
       )}
     </div>
   );

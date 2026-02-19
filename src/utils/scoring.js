@@ -85,8 +85,8 @@ export const SCORE_CATEGORIES = {
 
   // === COMBINATION GROUP: Voice interaction (with CS) ===
   invertibility: {
-    name: 'Invertibility',
-    description: 'Quality of double counterpoint at the octave',
+    name: 'Invertible Counterpoint',
+    description: 'Whether the CS works equally well below the subject (double counterpoint)',
     group: 'combination',
     weight: 1.0,
     baseline: 'Inverted same quality as original',
@@ -109,8 +109,8 @@ export const SCORE_CATEGORIES = {
     factors: ['+15 high contrary motion', '-15 high parallel motion', '+5 oblique motion'],
   },
   transpositionStability: {
-    name: 'Transposition Stability',
-    description: 'How well the countersubject works against the dominant-level answer',
+    name: 'CS vs Answer Quality',
+    description: 'Counterpoint quality when the CS is paired with the tonal answer',
     group: 'combination',
     weight: 1.0,
     baseline: 'Acceptable counterpoint against answer',
@@ -545,40 +545,58 @@ export function calculateInvertibilityScore(result) {
   // Does the CS work well BELOW the subject? Scale: avg -3..+3 maps to -15..+15
   internal = invAvg * 5;
   details.push({
-    factor: `Inverted (CS below) quality: ${invAvg.toFixed(2)}`,
-    impact: Math.round(invAvg * 5),
+    factor: `Inverted (CS below) avg quality: ${invAvg.toFixed(2)} × 5 = ${(invAvg * 5).toFixed(1)}`,
+    impact: parseFloat((invAvg * 5).toFixed(1)),
   });
 
-  // SECONDARY FACTOR: Comparison — how much does inversion change quality?
+  // SECONDARY FACTOR: Comparison — tighter threshold (0.1 quality = 0.5 score pts)
+  // Working equally well in both positions IS the point of double counterpoint → reward it
   const qualityDiff = invAvg - origAvg;
+  // Explain delta fully: inverted avg − original avg = Δ = score pts
+  const deltaExplained = `inverted avg ${invAvg.toFixed(2)} − original avg ${origAvg.toFixed(2)} = Δ${qualityDiff >= 0 ? '+' : ''}${qualityDiff.toFixed(2)} = ${(qualityDiff * 5).toFixed(1)} pts`;
 
-  if (qualityDiff < -0.3) {
-    // Inverted is meaningfully worse than original
-    const penalty = Math.min(8, Math.abs(qualityDiff) * 4);
-    internal -= penalty;
+  if (Math.abs(qualityDiff) < 0.1) {
+    // Works equally well in both positions — this IS the goal of double counterpoint
+    internal += 2;
     details.push({
-      factor: `Inverted weaker than original (Δ${qualityDiff.toFixed(2)})`,
-      impact: -Math.round(penalty),
+      factor: `Works equally in both positions (${deltaExplained})`,
+      impact: +2,
     });
-  } else if (qualityDiff > 0.3) {
-    // Inverted is better than original
-    internal += 3;
+  } else if (qualityDiff > 0.1) {
+    // Inverted is better than original — no extra bonus (already in invAvg * 5)
     details.push({
-      factor: `Inverted stronger than original (Δ+${qualityDiff.toFixed(2)})`,
-      impact: +3,
-    });
-  } else {
-    // Comparable quality — good invertibility
-    details.push({
-      factor: `Comparable in both positions (Δ${qualityDiff.toFixed(2)})`,
+      factor: `Better when inverted (${deltaExplained})`,
       impact: 0,
       type: 'info',
     });
+  } else if (qualityDiff > -0.3) {
+    // -0.1 to -0.3: noticeably but not severely weaker
+    internal -= 2;
+    details.push({
+      factor: `Noticeably weaker when inverted (${deltaExplained})`,
+      impact: -2,
+    });
+  } else {
+    // < -0.3: significantly weaker
+    const penalty = Math.min(8, Math.abs(qualityDiff) * 4);
+    internal -= penalty;
+    details.push({
+      factor: `Significantly weaker when inverted (${deltaExplained})`,
+      impact: -Math.round(penalty),
+    });
   }
 
-  // Parallel perfects penalty removed - already reflected in the average score
-  // which includes consecutive perfect consonance penalties. Adding a separate
-  // penalty here was double-counting.
+  // PARALLEL PERFECTS — restoring removed penalty
+  // These are between consonant intervals so NOT captured in invAvg (avgScore only covers dissonances)
+  const invertedParallels = result.inverted?.issues?.filter(i => i.type === 'parallel') || [];
+  if (invertedParallels.length > 0) {
+    const penalty = Math.min(6, invertedParallels.length * 2);
+    internal -= penalty;
+    details.push({
+      factor: `${invertedParallels.length} parallel perfect${invertedParallels.length !== 1 ? 's' : ''} in inverted position`,
+      impact: -penalty,
+    });
+  }
 
   // Imperfect consonance ratio - higher ratio means safer inversion
   const origRatio = result.original?.imperfectRatio || 0;
@@ -826,12 +844,29 @@ export function calculateTranspositionStabilityScore(result) {
     // Scale: avg -3 to +3 maps to internal -15 to +15
     // Weight slightly by length (more intervals = more reliable assessment)
     const lengthFactor = Math.min(1.2, 0.8 + totalIntervals / 50);
-    const internal = avgScore * 5 * lengthFactor;
+    let internal = avgScore * 5 * lengthFactor;
 
     details.push({
-      factor: `CS vs answer avg quality: ${avgScore.toFixed(2)} (${totalIntervals} simultaneities)`,
-      impact: Math.round(internal),
+      factor: `CS vs answer avg quality: ${avgScore.toFixed(2)} × 5 × ${lengthFactor.toFixed(2)} (length) = ${(avgScore * 5 * lengthFactor).toFixed(1)}`,
+      impact: parseFloat((avgScore * 5 * lengthFactor).toFixed(1)),
     });
+
+    details.push({
+      factor: `${detailedScoring.goodCount} well-handled, ${detailedScoring.badCount} problematic of ${detailedScoring.totalDissonances} dissonances`,
+      impact: 0,
+      type: 'info',
+    });
+
+    // Parallel perfects penalty — checkParallelPerfects identifies these between CONSONANT
+    // intervals; they are NOT captured in the dissonance averageScore
+    if (result.violations?.length > 0) {
+      const penalty = Math.min(6, result.violations.length * 2);
+      internal -= penalty;
+      details.push({
+        factor: `${result.violations.length} parallel perfect${result.violations.length !== 1 ? 's' : ''} vs answer`,
+        impact: -penalty,
+      });
+    }
 
     return {
       score: toDisplayScore(internal),

@@ -968,8 +968,16 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     // Analyze dissonances with new scoring system (needed for passing motion detection)
     const dissonanceAnalysis = analyzeAllDissonances(sims);
 
-    // Parallel perfects in stretto are expected across many tested distances and are not
-    // scored — they are visible in the TwoVoiceViz when that specific pair is viewed.
+    // Parallel perfects ARE flagged per-pair as warnings (not used in viability determination,
+    // but shown when viewing an individual stretto pair — consistent with direct 5ths/8ves)
+    const parallelPerfects = checkParallelPerfects(sims, formatter);
+    for (const pp of parallelPerfects) {
+      warnings.push({
+        onset: pp.onset,
+        description: pp.description,
+        type: 'parallel',
+      });
+    }
 
     // Evaluate each dissonance based on score
     for (const d of dissonanceAnalysis.dissonances) {
