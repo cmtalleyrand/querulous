@@ -228,7 +228,7 @@ export const ANALYSIS_THRESHOLDS = {
   // Harmonic analysis - salience calculation
   PASSING_NOTE_THRESHOLD: 0.125,  // duration threshold for passing tones
   MIN_SALIENCE: 0.025,            // minimum salience floor
-  SALIENCE_DECAY: 0.85,           // decay multiplier per beat distance
+  SALIENCE_DECAY_RATE: 0.4,       // linear decay per beat distance (1.0 at distance 0, 0.6 at 1, 0.2 at 2, 0 at 2.5)
 
   // Metric multipliers for salience
   SALIENCE_DOWNBEAT_MULT: 1.2,    // downbeat (weight = 1.0)

@@ -75,6 +75,7 @@ function getApproachMultiplier(note, prevNote) {
 /**
  * Calculate salience for a note contributing to a specific beat
  * Salience = max[(duration - PASSING_NOTE_THRESHOLD) * metric_mult * approach, MIN_SALIENCE] * decay
+ * Decay is linear: (1 - beatDistance * SALIENCE_DECAY_RATE), clamped to [0, 1]
  */
 function calculateSalience(note, beatTime, meter, prevNote, decay = 1.0) {
   const {
@@ -154,12 +155,49 @@ function preprocessNotes(notes, beatUnit) {
 
 /**
  * Collect notes sounding during a beat with their salience
- * Notes from neighboring beats contribute with decay
+ * Notes from neighboring beats contribute with linear decay that reaches zero
+ *
+ * @param {Object[]} notes - Preprocessed notes
+ * @param {number} beatIdx - Current beat index
+ * @param {number} beatUnit - Duration of one beat
+ * @param {number[]} meter - Time signature
+ * @param {number} maxLookback - How many beats back to look for arpeggiation
+ * @param {Object[]|null} chordAssignments - Pass 1 chord results; when provided,
+ *   a note from a past beat is only included if all intervening beats share the
+ *   same chord (or are null). This prevents notes from "skipping over" a chord
+ *   boundary to contribute to a distant, unrelated chord.
  */
-function collectBeatNotes(notes, beatIdx, beatUnit, meter, maxLookback = 2) {
+function collectBeatNotes(notes, beatIdx, beatUnit, meter, maxLookback = 2, chordAssignments = null) {
   const beatStart = beatIdx * beatUnit;
   const beatEnd = beatStart + beatUnit;
-  const { SALIENCE_DECAY } = ANALYSIS_THRESHOLDS;
+  const { SALIENCE_DECAY_RATE } = ANALYSIS_THRESHOLDS;
+
+  // If we have chord assignments from pass 1, determine the effective lookback:
+  // how far back can we look without crossing a chord boundary?
+  let effectiveLookback = maxLookback;
+  if (chordAssignments) {
+    const currChord = chordAssignments[beatIdx];
+    const currKey = currChord?.chord
+      ? `${currChord.chord.root}-${currChord.chord.type}` : null;
+
+    effectiveLookback = 0;
+    for (let d = 1; d <= maxLookback; d++) {
+      const prevIdx = beatIdx - d;
+      if (prevIdx < 0) break;
+
+      const prevChord = chordAssignments[prevIdx];
+      const prevKey = prevChord?.chord
+        ? `${prevChord.chord.root}-${prevChord.chord.type}` : null;
+
+      // Allow lookback through null beats (no chord assigned) or same-chord beats
+      if (prevKey === null || prevKey === currKey || currKey === null) {
+        effectiveLookback = d;
+      } else {
+        // Different chord — stop looking further back
+        break;
+      }
+    }
+  }
 
   const beatNotes = [];
 
@@ -168,7 +206,7 @@ function collectBeatNotes(notes, beatIdx, beatUnit, meter, maxLookback = 2) {
     const noteEnd = note.onset + note.duration;
 
     // Check if note sounds during or near this beat
-    if (noteEnd <= beatStart - (maxLookback * beatUnit)) continue;
+    if (noteEnd <= beatStart - (effectiveLookback * beatUnit)) continue;
     if (note.onset >= beatEnd + beatUnit) break;
 
     // Calculate beat distance for decay
@@ -176,10 +214,13 @@ function collectBeatNotes(notes, beatIdx, beatUnit, meter, maxLookback = 2) {
     const beatDistance = Math.abs(noteBeatIdx - beatIdx);
 
     // Only include notes from current beat or recent past (for arpeggiation)
-    if (beatDistance > maxLookback) continue;
+    if (beatDistance > effectiveLookback) continue;
     if (note.onset > beatEnd) continue; // Don't include future notes
 
-    const decay = Math.pow(SALIENCE_DECAY, beatDistance);
+    // Linear decay: 1.0 at distance 0, decreasing by SALIENCE_DECAY_RATE per beat, reaches 0
+    const decay = Math.max(1.0 - beatDistance * SALIENCE_DECAY_RATE, 0);
+    if (decay <= 0) continue;
+
     const prevNote = i > 0 ? notes[i - 1] : null;
     const salience = calculateSalience(note, beatStart, meter, prevNote, decay);
 
@@ -190,6 +231,7 @@ function collectBeatNotes(notes, beatIdx, beatUnit, meter, maxLookback = 2) {
       onset: note.onset,
       duration: note.duration,
       beatDistance,
+      decay,
     });
   }
 
@@ -253,12 +295,19 @@ function scoreChordCandidate(root, chordType, beatNotes) {
 
     if (isInChord) {
       const weight = getChordMemberWeight(interval);
-      matchedSalience += note.salience * weight;
+      const contribution = note.salience * weight;
+      matchedSalience += contribution;
       matches.push({
         pitch: note.pitch,
+        pitchClass: note.pitchClass,
         interval,
         salience: note.salience,
         weight,
+        contribution,
+        beatDistance: note.beatDistance,
+        decay: note.decay,
+        onset: note.onset,
+        duration: note.duration,
       });
     } else {
       // Penalty = max[(salience - 0.05), 0] - penalizes high salience non-chord tones more
@@ -266,40 +315,48 @@ function scoreChordCandidate(root, chordType, beatNotes) {
       nonChordPenalty += penalty;
       nonChordTones.push({
         pitch: note.pitch,
+        pitchClass: note.pitchClass,
         interval,
         salience: note.salience,
         penalty,
+        beatDistance: note.beatDistance,
+        decay: note.decay,
+        onset: note.onset,
+        duration: note.duration,
       });
     }
   }
 
   // Base score = matched salience - non-chord tone penalty
-  let score = matchedSalience - nonChordPenalty;
+  const preBasScore = matchedSalience - nonChordPenalty;
 
   // Apply bass position multiplier
   let bassMultiplier = 1.0;
+  let bassReason = 'no bass adjustment';
   if (lowestInterval !== null) {
     if (lowestInterval === 0) {
-      // Root in bass - bonus
       bassMultiplier = BASS_ROOT_BONUS;
+      bassReason = 'root in bass: bonus';
     } else if (lowestInterval === 7) {
-      // Fifth in bass - penalty
       bassMultiplier = BASS_FIFTH_PENALTY;
+      bassReason = 'fifth in bass: penalty';
     } else if (lowestInterval === 10 || lowestInterval === 11) {
-      // Seventh in bass - larger penalty
       bassMultiplier = BASS_SEVENTH_PENALTY;
+      bassReason = 'seventh in bass: penalty';
     }
   }
-  score *= bassMultiplier;
+  const score = preBasScore * bassMultiplier;
 
   return {
     score,
     matchedSalience,
     nonChordPenalty,
+    preBasScore,
     matches,
     nonChordTones,
     matchCount: matches.length,
     bassMultiplier,
+    bassReason,
     lowestInterval,
   };
 }
@@ -358,14 +415,6 @@ function findChordCandidates(beatNotes) {
 }
 
 /**
- * Check if a chord can extend a chain (same root and type)
- */
-function canExtendChain(prevChord, currChord) {
-  if (!prevChord || !currChord) return false;
-  return prevChord.root === currChord.root && prevChord.type === currChord.type;
-}
-
-/**
  * Check if chain should break due to salient non-chord tone
  */
 function chainBrokenByNonChordTone(chord, beatNotes) {
@@ -419,14 +468,20 @@ function findOptimalChordSequence(beats, tonic) {
       chord: cand,
       prevKey: null,
       audit: {
-        baseScore: cand.score,
-        complexityPenalty: complexityPen,
-        finalScore,
         matchedSalience: cand.matchedSalience,
         nonChordPenalty: cand.nonChordPenalty,
+        preBasScore: cand.preBasScore,
         bassMultiplier: cand.bassMultiplier,
+        bassReason: cand.bassReason,
+        baseScore: cand.score,
+        complexityLevel: cand.complexity,
+        complexityPenalty: complexityPen,
+        inheritedScore: 0,
+        finalScore,
         matches: cand.matches,
         nonChordTones: cand.nonChordTones,
+        prevChord: null,
+        chainContinued: false,
       },
     });
   }
@@ -490,22 +545,27 @@ function findOptimalChordSequence(beats, tonic) {
       const existing = dp[i].get(currKey);
       if (!existing || bestScore > existing.score) {
         const complexityPen = cand.complexity * COMPLEXITY_PENALTY;
+        const inheritedScore = bestScore - cand.score + complexityPen;
         dp[i].set(currKey, {
           score: bestScore,
           chainLen: bestChainLen,
           chord: cand,
           prevKey: bestPrevKey,
           audit: {
-            baseScore: cand.score,
-            complexityPenalty: complexityPen,
-            inheritedScore: bestScore - cand.score + complexityPen,
-            finalScore: bestScore,
             matchedSalience: cand.matchedSalience,
             nonChordPenalty: cand.nonChordPenalty,
+            preBasScore: cand.preBasScore,
             bassMultiplier: cand.bassMultiplier,
+            bassReason: cand.bassReason,
+            baseScore: cand.score,
+            complexityLevel: cand.complexity,
+            complexityPenalty: complexityPen,
+            inheritedScore,
+            finalScore: bestScore,
             matches: cand.matches,
             nonChordTones: cand.nonChordTones,
             prevChord: bestPrevKey,
+            chainContinued: bestChainLen > 1,
           },
         });
       }
@@ -607,26 +667,29 @@ export function analyzeHarmonicImplication(notes, meter, tonic = 0, options = {}
   const totalDuration = lastNote.onset + lastNote.duration;
   const numBeats = Math.ceil(totalDuration / beatUnit);
 
-  // Collect notes and candidates for each beat
-  const beats = [];
+  // --- Pass 1: unconstrained lookback to get initial chord assignments ---
+  const pass1Beats = [];
   for (let i = 0; i < numBeats; i++) {
     const beatNotes = collectBeatNotes(processedNotes, i, beatUnit, meter);
     const candidates = findChordCandidates(beatNotes);
-
-    beats.push({
-      beatIdx: i,
-      beatTime: i * beatUnit,
-      notes: beatNotes,
-      candidates,
-    });
+    pass1Beats.push({ beatIdx: i, beatTime: i * beatUnit, notes: beatNotes, candidates });
   }
+  const pass1Path = findOptimalChordSequence(pass1Beats, tonic);
 
-  // Run DP optimization
+  // --- Pass 2: re-collect notes with chord-boundary constraints ---
+  // A note from beat N can only contribute to beat M if all intervening beats
+  // share the same chord (or are null). This prevents notes from "skipping over"
+  // a different chord to contribute to an unrelated chord further ahead.
+  const beats = [];
+  for (let i = 0; i < numBeats; i++) {
+    const beatNotes = collectBeatNotes(processedNotes, i, beatUnit, meter, 2, pass1Path);
+    const candidates = findChordCandidates(beatNotes);
+    beats.push({ beatIdx: i, beatTime: i * beatUnit, notes: beatNotes, candidates });
+  }
   const optimalPath = findOptimalChordSequence(beats, tonic);
 
   // Build result with chain information
   const chords = [];
-  let currentChainStart = null;
 
   for (let i = 0; i < numBeats; i++) {
     const beat = beats[i];
@@ -687,26 +750,37 @@ export function analyzeHarmonicImplication(notes, meter, tonic = 0, options = {}
   const uniqueRoots = new Set(nonNullChords.map(c => c.chord?.root));
   const uniqueChords = new Set(nonNullChords.map(c => `${c.chord?.root}-${c.chord?.type}`));
 
-  // Tonic analysis
-  const firstChord = chords.find(c => c.chord !== null)?.chord;
-  const lastChord = [...chords].reverse().find(c => c.chord !== null)?.chord;
-  const startsOnTonic = firstChord && firstChord.root === tonic;
-  const endsOnTonic = lastChord && lastChord.root === tonic;
-
   // Dominant detection (V or V7 in relation to tonic)
   const dominantRoot = (tonic + 7) % 12;
-  const impliesDominant = nonNullChords.some(c =>
-    c.chord && (c.chord.root === dominantRoot ||
-                (c.chord.type === 'dominant_7' && c.chord.root === dominantRoot))
+  const dominantChords = nonNullChords.filter(c =>
+    c.chord && c.chord.root === dominantRoot
   );
+  const impliesDominant = dominantChords.length > 0;
 
-  // Calculate average confidence
+  // First/last chord (informational, not used for scoring)
+  const firstChord = chords.find(c => c.chord !== null)?.chord;
+  const lastChord = [...chords].reverse().find(c => c.chord !== null)?.chord;
+
+  // Count arpeggiations (chains of length > 1)
+  const arpeggiations = chords.filter(c => c.isChainStart && c.chainLength > 1);
+
+  // --- Comprehensive harmonic clarity metrics ---
+
+  // Coverage: what proportion of beats got a chord assignment
+  const coverage = numBeats > 0 ? nonNullChords.length / numBeats : 0;
+
+  // Average fit quality: mean score of assigned chords (how well they fit their notes)
+  const avgFitScore = nonNullChords.length > 0
+    ? nonNullChords.reduce((sum, c) => sum + (c.chord?.score || 0), 0) / nonNullChords.length
+    : 0;
+
+  // Average confidence: ratio of matched notes to total notes per beat
   const avgConfidence = nonNullChords.length > 0
     ? nonNullChords.reduce((sum, c) => sum + (c.chord?.confidence || 0), 0) / nonNullChords.length
     : 0;
 
-  // Count arpeggiations (chains of length > 1)
-  const arpeggiations = chords.filter(c => c.isChainStart && c.chainLength > 1);
+  // Harmonic rhythm: how many distinct chords appear (normalised by beat count)
+  const harmonicRhythm = numBeats > 0 ? uniqueChords.size / numBeats : 0;
 
   return {
     chords,
@@ -715,10 +789,15 @@ export function analyzeHarmonicImplication(notes, meter, tonic = 0, options = {}
       analyzedBeats: nonNullChords.length,
       uniqueRoots: uniqueRoots.size,
       uniqueHarmonies: uniqueChords.size,
-      startsOnTonic,
-      endsOnTonic,
+      firstChord: firstChord ? `${pitchClassName(firstChord.root)}${formatChordType(firstChord.type)}` : null,
+      lastChord: lastChord ? `${pitchClassName(lastChord.root)}${formatChordType(lastChord.type)}` : null,
       impliesDominant,
-      harmonicClarity: avgConfidence,
+      dominantBeats: dominantChords.length,
+      // Comprehensive clarity metrics
+      coverage,
+      avgFitScore,
+      avgConfidence,
+      harmonicRhythm,
       arpeggiationCount: arpeggiations.length,
       avgChainLength: arpeggiations.length > 0
         ? arpeggiations.reduce((sum, c) => sum + c.chainLength, 0) / arpeggiations.length

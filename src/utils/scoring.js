@@ -174,8 +174,7 @@ export function getScoreBgColor(score) {
 /**
  * Calculate Tonal Definition score (base-zero)
  * Baseline 0 = ambiguous tonal center
- * Factors: dominant arrival, harmonic clarity
- * (Opening/terminal analysis removed - oversimplified and not purely harmonic)
+ * Based on chord analysis: coverage (proportion of beats with chords) and dominant implication
  */
 export function calculateTonalDefinitionScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
@@ -183,23 +182,17 @@ export function calculateTonalDefinitionScore(result) {
   let internal = 0; // Base-zero score
   const details = [];
 
-  // Dominant arrival bonus
-  if (result.dominantArrival) {
-    const ratio = result.dominantArrival.ratio;
-    if (ratio >= 0.3 && ratio <= 0.7) {
-      internal += 5;
-      details.push({ factor: 'Well-placed dominant arrival', impact: +5 });
-    } else {
-      internal += 2;
-      details.push({ factor: 'Dominant arrival present', impact: +2 });
-    }
+  // Dominant implied from chord analysis
+  if (result.chordAnalysis?.summary?.impliesDominant) {
+    internal += 3;
+    details.push({ factor: 'Harmony implies dominant function', impact: +3 });
   }
 
-  // Harmonic clarity from chord analysis (0-2.5 points, scaled to internal)
+  // Harmonic clarity from chord coverage (0-2.0 points, scaled to internal)
   if (result.harmonicClarityScore && result.harmonicClarityScore > 0) {
-    const clarityImpact = Math.round(result.harmonicClarityScore * 4); // Scale to 0-10
+    const clarityImpact = Math.round(result.harmonicClarityScore * 4); // Scale to 0-8
     internal += clarityImpact;
-    details.push({ factor: 'Harmonic clarity', impact: clarityImpact });
+    details.push({ factor: 'Harmonic clarity (beat coverage)', impact: clarityImpact });
   }
 
   return {
@@ -458,19 +451,13 @@ export function calculateTonalClarityScore(harmonicResult, answerResult) {
 
   // --- From Harmonic Implication ---
   if (harmonicResult && !harmonicResult.error) {
-    // Dominant arrival bonus
-    if (harmonicResult.dominantArrival) {
-      const ratio = harmonicResult.dominantArrival.ratio;
-      if (ratio >= 0.3 && ratio <= 0.7) {
-        internal += 3;
-        details.push({ factor: 'Well-placed dominant arrival', impact: +3 });
-      } else {
-        internal += 1;
-        details.push({ factor: 'Dominant arrival present', impact: +1 });
-      }
+    // Dominant implied from chord analysis
+    if (harmonicResult.chordAnalysis?.summary?.impliesDominant) {
+      internal += 2;
+      details.push({ factor: 'Harmony implies dominant function', impact: +2 });
     }
 
-    // Harmonic clarity
+    // Harmonic clarity from coverage
     if (harmonicResult.harmonicClarityScore > 1.5) {
       internal += 2;
       details.push({ factor: 'Clear harmonic implications', impact: +2 });

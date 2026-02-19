@@ -558,43 +558,16 @@ export function testMelodicContour(subject, formatter) {
 
 /**
  * Analyze harmonic implications of a subject
- * Now focused purely on harmony: dominant arrival and chord analysis
+ * Dominant detection comes from chord analysis (not scale-degree heuristics)
+ * Clarity is measured by coverage (proportion of beats assigned chords)
  */
 export function testHarmonicImplication(subject, tonic, mode, formatter) {
   if (!subject.length) return { error: 'No notes' };
 
   const meter = formatter.meter;
-  const degrees = subject.map((n) => n.scaleDegree);
   const observations = [];
 
-  // Dominant arrival detection
-  let domArr = null;
-  const subLen = subject[subject.length - 1].onset + subject[subject.length - 1].duration;
-
-  for (let i = 0; i < subject.length; i++) {
-    const d = degrees[i];
-    if (
-      (d.degree === 5 && d.alteration === 0 && metricWeight(subject[i].onset, meter) >= 0.5) ||
-      (d.degree === 7 && d.alteration === 0)
-    ) {
-      domArr = {
-        location: formatter.formatBeat(subject[i].onset),
-        ratio: subject[i].onset / subLen,
-        degree: d.toString(),
-      };
-      break;
-    }
-  }
-
-  if (domArr) {
-    const timing = domArr.ratio < 0.3 ? 'Early' : domArr.ratio > 0.6 ? 'Late' : 'Mid-subject';
-    observations.push({
-      type: 'info',
-      description: `${timing} dominant arrival on ${domArr.degree} at ${domArr.location}`,
-    });
-  }
-
-  // Chord/Harmony analysis
+  // Chord/Harmony analysis — single source of truth for harmonic implications
   let chordAnalysis = null;
   let harmonicClarityScore = 0;
 
@@ -603,41 +576,41 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
     chordAnalysis = analyzeChords(subject, meter, tonicPitchClass);
 
     if (chordAnalysis && chordAnalysis.summary) {
-      const { harmonicClarity, startsOnTonic, endsOnTonic, impliesDominant, uniqueHarmonies } = chordAnalysis.summary;
+      const { coverage, impliesDominant, uniqueHarmonies, firstChord, lastChord } = chordAnalysis.summary;
 
-      harmonicClarityScore = harmonicClarity >= 0.8 ? 2.0 :
-                            harmonicClarity >= 0.6 ? 1.0 :
-                            harmonicClarity >= 0.4 ? 0.5 : 0;
+      // Coverage-based clarity: what proportion of beats have clear harmonic assignments
+      harmonicClarityScore = coverage >= 0.8 ? 2.0 :
+                            coverage >= 0.6 ? 1.0 :
+                            coverage >= 0.4 ? 0.5 : 0;
 
-      if (startsOnTonic && endsOnTonic) {
-        harmonicClarityScore += 0.5;
-        observations.push({
-          type: 'strength',
-          description: 'Strong tonal framing: starts and ends on tonic harmony',
-        });
-      } else if (startsOnTonic || endsOnTonic) {
-        observations.push({
-          type: 'info',
-          description: `${startsOnTonic ? 'Starts' : 'Ends'} on tonic harmony`,
-        });
-      }
-
+      // Dominant detection from chord analysis
       if (impliesDominant) {
         observations.push({
           type: 'info',
-          description: 'Melody implies dominant function',
+          description: 'Harmony implies dominant function',
         });
       }
 
-      if (harmonicClarity >= 0.7) {
+      // Report first/last chords as informational
+      if (firstChord || lastChord) {
+        const parts = [];
+        if (firstChord) parts.push(`opens ${firstChord}`);
+        if (lastChord) parts.push(`closes ${lastChord}`);
+        observations.push({
+          type: 'info',
+          description: `Harmonic framing: ${parts.join(', ')}`,
+        });
+      }
+
+      if (coverage >= 0.7) {
         observations.push({
           type: 'strength',
-          description: `Clear harmonic implications (${uniqueHarmonies} chord${uniqueHarmonies !== 1 ? 's' : ''} suggested)`,
+          description: `Clear harmonic implications (${uniqueHarmonies} chord${uniqueHarmonies !== 1 ? 's' : ''} across ${Math.round(coverage * 100)}% of beats)`,
         });
-      } else if (harmonicClarity < 0.4) {
+      } else if (coverage < 0.4) {
         observations.push({
           type: 'consideration',
-          description: 'Ambiguous harmonic implications',
+          description: `Ambiguous harmonic implications (only ${Math.round(coverage * 100)}% of beats have clear chords)`,
         });
       }
     }
@@ -646,7 +619,6 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
   }
 
   return {
-    dominantArrival: domArr,
     chordAnalysis,
     harmonicClarityScore,
     observations,
