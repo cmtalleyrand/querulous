@@ -82,15 +82,6 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
     const issues = [];
     const warnings = [];
 
-    // Show each original position issue separately
-    if (results.doubleCounterpoint.original?.issues?.length > 0) {
-      for (const issue of results.doubleCounterpoint.original.issues) {
-        issues.push({
-          description: `Original: ${issue.description || issue}`,
-          onset: issue.onset,
-        });
-      }
-    }
     // Show each inverted position issue separately
     if (results.doubleCounterpoint.inverted?.issues?.length > 0) {
       for (const issue of results.doubleCounterpoint.inverted.issues) {
@@ -110,7 +101,7 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
 
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
-        name: 'Invertibility',
+        name: 'Invertible Counterpoint',
         issues,
         warnings,
         icon: '🔄',
@@ -208,22 +199,6 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
           </div>
         </div>
 
-        {/* Overall score indicator - uses base-zero scoring thresholds */}
-        {scoreResult && (
-          <div style={{
-            padding: '8px 16px',
-            backgroundColor: getScoreBgColor(scoreResult.overall),
-            borderRadius: '6px',
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: '14px', fontWeight: '700', color: getScoreColor(scoreResult.overall) }}>
-              {getScoreRating(scoreResult.overall)}
-            </div>
-            <div style={{ fontSize: '10px', color: '#6b7280' }}>
-              {scoreResult.overall >= 0 ? '+' : ''}{Math.round(scoreResult.overall * 10) / 10}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Issue categories */}
