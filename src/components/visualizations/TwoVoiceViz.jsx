@@ -773,13 +773,6 @@ export function TwoVoiceViz({
                   <span style={{ padding: '3px 8px', backgroundColor: '#fef3c7', color: '#b45309',
                     borderRadius: '4px', fontSize: '11px', fontWeight: '600' }}>Unresolved</span>
                 )}
-                {/* Chain position indicator when tapped within a chain */}
-                {pt._tappedOnset !== undefined && pt._tappedOnset !== pt.onset && (
-                  <span style={{ padding: '3px 8px', backgroundColor: '#f0f9ff', color: '#0284c7',
-                    borderRadius: '4px', fontSize: '11px', fontWeight: '500' }}>
-                    ← tapped at {formatter?.formatBeat(pt._tappedOnset) || `beat ${pt._tappedOnset + 1}`}
-                  </span>
-                )}
                 {/* Score badges */}
                 {!pt.isConsonant && pt.isChainEntry && pt.entryScore !== undefined && (
                   <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600',
