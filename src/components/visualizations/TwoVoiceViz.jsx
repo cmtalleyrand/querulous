@@ -387,19 +387,9 @@ export function TwoVoiceViz({
 
   const handleIntervalClick = useCallback((pt, event) => {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    // If tapping inside a chain (but not on the entry), always show entry for full context
-    if (pt.chainStartOnset !== undefined && pt.chainLength > 0 && !pt.isChainEntry) {
-      const pts = analysis?.intervalPoints || [];
-      const chainEntry = pts.find(p => Math.abs(p.onset - pt.chainStartOnset) < 0.01 && p.isChainEntry);
-      if (chainEntry) {
-        setSelectedInterval({ ...chainEntry, _tappedOnset: pt.onset });
-        setHighlightedOnset(getOnsetKey(pt.onset));
-        return;
-      }
-    }
     setSelectedInterval(pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
-  }, [analysis]);
+  }, []);
 
   const handleNoteClick = useCallback((n, event) => {
     if (event) event.preventDefault();
@@ -1042,7 +1032,10 @@ export function TwoVoiceViz({
             dissonances: analysis.chainAnalysis.dissonances,
           }}
           formatter={formatter}
-          onIssueClick={(issue) => handleIssueClick(issue)}
+          onIssueClick={(issue) => {
+            const pt = analysis.intervalPoints.find(p => Math.abs(p.onset - issue.onset) < 0.01);
+            handleIssueClick(pt || issue);
+          }}
           title="Dissonance Score Breakdown"
         />
       )}

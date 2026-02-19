@@ -683,26 +683,32 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   const restModifier = motion.fromRest ? 0.5 : 1.0;
   const restNote = motion.fromRest ? ' (halved: from rest)' : '';
 
-  // Motion scoring
+  // Motion scoring (tracked separately for passingness mitigation)
+  let motionComponent = 0;
   if (motion.type === 'oblique') {
     const adj = 0.5;
     score += adj;
+    motionComponent = adj;
     details.push(`Oblique motion: +${adj.toFixed(2)}`);
   } else if (motion.type === 'contrary') {
     const adj = 0.5;
     score += adj;
+    motionComponent = adj;
     details.push(`Contrary motion: +${adj.toFixed(2)}`);
   } else if (motion.type === 'parallel') {
     const adj = -1.5 * restModifier;
     score += adj;
+    motionComponent = adj;
     details.push(`Parallel motion: ${adj.toFixed(2)}${restNote}`);
   } else if (motion.type === 'similar_same_type') {
     const adj = -1.0 * restModifier;
     score += adj;
+    motionComponent = adj;
     details.push(`Similar motion (same interval type): ${adj.toFixed(2)}${restNote}`);
   } else if (motion.type === 'similar_step' || motion.type === 'similar') {
     const adj = -0.5 * restModifier;
     score += adj;
+    motionComponent = adj;
     details.push(`Similar motion: ${adj.toFixed(2)}${restNote}`);
   }
 
@@ -739,6 +745,7 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
     v1MelodicInterval,
     v2MelodicInterval,
     restModifier,
+    motionComponent, // between-voice motion penalty/reward for passingness mitigation
   };
 }
 
@@ -767,15 +774,22 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   let score;
   const details = [];
 
+  // baseExitComponent: D→D penalty or consonance resolution reward (NOT motion-magnitude dependent)
+  // Tracked separately so passingness can target the D→D penalty specifically (rule c)
+  let baseExitComponent;
+
   if (isImperfectConsonance) {
     score = 1.0;
+    baseExitComponent = 1.0;
     details.push('Resolves to imperfect consonance: +1.0');
   } else if (isPerfectConsonance) {
     score = 0.5;
+    baseExitComponent = 0.5;
     details.push('Resolves to perfect consonance: +0.5');
   } else if (isConsonant) {
     // Other consonances (should not reach here in two-voice counterpoint)
     score = 0.5;
+    baseExitComponent = 0.5;
     details.push('Resolves to consonance: +0.5');
   } else {
     // Resolution to another dissonance
@@ -784,9 +798,11 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     const isOffBeat = currSim.metricWeight < 0.75;
     if (shortNoteInfo.isShort && isOffBeat) {
       score = -0.375; // Halved penalty
+      baseExitComponent = -0.375;
       details.push('Leads to another dissonance: -0.375 (short note on off-beat - halved)');
     } else {
       score = -0.75;
+      baseExitComponent = -0.75;
       details.push('Leads to another dissonance (no resolution): -0.75');
     }
   }
@@ -829,8 +845,12 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   const v2InSequence = isOnsetInSequence(currSim.onset, ctx);
 
   // Resolution modifier - check how each voice resolves with proportional penalties
+  // v1ResolutionComponent / v2ResolutionComponent: single-voice motion penalties, tracked
+  // separately so passingness can mitigate each using that voice's passingness score
   let v1Resolution = null;
   let v2Resolution = null;
+  let v1ResolutionComponent = 0;
+  let v2ResolutionComponent = 0;
 
   if (motion.v1Moved) {
     const exitInterval = nextSim.voice1Note.pitch - currSim.voice1Note.pitch;
@@ -855,6 +875,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       );
       if (penaltyInfo.penalty !== 0) {
         score += penaltyInfo.penalty;
+        v1ResolutionComponent += penaltyInfo.penalty;
         details.push(`V1 ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
       }
 
@@ -863,6 +884,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       if ((entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap' || entryMag.type === 'octave') &&
           v1Resolution.direction !== 0 && v1Resolution.direction === entryDir) {
         score -= 0.25;
+        v1ResolutionComponent -= 0.25;
         details.push('V1 leap not followed by opposite motion: -0.25');
       }
     } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
@@ -885,6 +907,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
         reason += ' (mitigated: in sequence)';
       }
       score += penalty;
+      v1ResolutionComponent += penalty;
       details.push(`${reason}: ${penalty.toFixed(2)}`);
     }
   }
@@ -912,6 +935,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       );
       if (penaltyInfo.penalty !== 0) {
         score += penaltyInfo.penalty;
+        v2ResolutionComponent += penaltyInfo.penalty;
         details.push(`V2 ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
       }
 
@@ -919,6 +943,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       if ((entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap' || entryMag.type === 'octave') &&
           v2Resolution.direction !== 0 && v2Resolution.direction === entryDir) {
         score -= 0.25;
+        v2ResolutionComponent -= 0.25;
         details.push('V2 leap not followed by opposite motion: -0.25');
       }
     } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
@@ -941,6 +966,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
         reason += ' (mitigated: in sequence)';
       }
       score += penalty;
+      v2ResolutionComponent += penalty;
       details.push(`${reason}: ${penalty.toFixed(2)}`);
     }
   }
@@ -954,6 +980,9 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     v1Resolution,
     v2Resolution,
     resolvedByAbandonment: restContext?.resolvedByAbandonment || false,
+    baseExitComponent,       // D→D penalty or consonance reward — for passingness rule (c)
+    v1ResolutionComponent,   // V1-individual motion penalties — for passingness rule (a)
+    v2ResolutionComponent,   // V2-individual motion penalties — for passingness rule (a)
   };
 }
 
@@ -1191,7 +1220,8 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
       if ((exitInfo.v1Resolution.magnitude.type === 'skip' || exitInfo.v1Resolution.magnitude.type === 'perfect_leap') &&
           exitInfo.v1Resolution.direction === -entryDir) {
         bonus += 0.5;
-        patterns.push({ type: 'escape_tone', bonus: 0.5, voice: 1, description: 'Escape tone (step in, skip/leap out opposite)' });
+        exitBonuses.push({ amount: 0.5, reason: 'escape tone exit skip/leap' });
+        patterns.push({ type: 'escape_tone', bonus: 0.5, entryBonus: 0, exitBonus: 0.5, voice: 1, description: 'Escape tone (step in, skip/leap out opposite)' });
       }
     }
   }
@@ -1203,7 +1233,8 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
       if ((exitInfo.v2Resolution.magnitude.type === 'skip' || exitInfo.v2Resolution.magnitude.type === 'perfect_leap') &&
           exitInfo.v2Resolution.direction === -entryDir) {
         bonus += 0.5;
-        patterns.push({ type: 'escape_tone', bonus: 0.5, voice: 2, description: 'Escape tone (step in, skip/leap out opposite)' });
+        exitBonuses.push({ amount: 0.5, reason: 'escape tone exit skip/leap' });
+        patterns.push({ type: 'escape_tone', bonus: 0.5, entryBonus: 0, exitBonus: 0.5, voice: 2, description: 'Escape tone (step in, skip/leap out opposite)' });
       }
     }
   }
@@ -1712,23 +1743,22 @@ export function analyzeAllDissonances(sims, options = {}) {
     consecutiveGroups.push([...currentGroup]);
   }
 
-  // Now score passing motion for consecutive dissonances
+  // Pass 1: Compute and store passingness for all consecutive dissonance members.
+  // Done before applying any mitigations so that chain entries can reference the
+  // already-computed passingness of their successor (needed for rule c below).
   for (let i = 0; i < results.length; i++) {
     if (results[i].isConsecutiveDissonance) {
       const sim = sims[i];
       const prevSim = i > 0 ? sims[i - 1] : null;
       const nextSim = i < sims.length - 1 ? sims[i + 1] : null;
 
-      // Get melodic intervals for both voices
       const v1Interval = prevSim ? sim.voice1Note.pitch - prevSim.voice1Note.pitch : 0;
       const v2Interval = prevSim ? sim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
 
-      // Get previous melodic intervals
       const prevPrevSim = i > 1 ? sims[i - 2] : null;
       const prevV1Interval = prevPrevSim && prevSim ? prevSim.voice1Note.pitch - prevPrevSim.voice1Note.pitch : null;
       const prevV2Interval = prevPrevSim && prevSim ? prevSim.voice2Note.pitch - prevPrevSim.voice2Note.pitch : null;
 
-      // Determine motion type
       const v1Moved = v1Interval !== 0;
       const v2Moved = v2Interval !== 0;
       const entryMotion = {
@@ -1736,22 +1766,125 @@ export function analyzeAllDissonances(sims, options = {}) {
               (v1Moved || v2Moved) ? 'oblique' : 'static'
       };
 
-      // Score passing motion for each voice, take the better one
       const v1Passing = scorePassingMotion(sim, prevSim, nextSim, v1Interval, prevV1Interval, null, entryMotion, ctx);
       const v2Passing = scorePassingMotion(sim, prevSim, nextSim, v2Interval, prevV2Interval, null, entryMotion, ctx);
       const bestPassing = v1Passing.passingness >= v2Passing.passingness ? v1Passing : v2Passing;
 
+      // Store all three so the mitigation pass can use per-voice values
       results[i].passingMotion = bestPassing;
+      results[i].v1PassingMotion = v1Passing;
+      results[i].v2PassingMotion = v2Passing;
 
-      // Count mitigating factors
       let mitigationCount = 0;
       if (bestPassing.isPassing) mitigationCount++;
       if (isOnsetInSequence(sim.onset, ctx)) mitigationCount++;
-      // Check if any pattern was already detected (suspension through, etc.)
       if (results[i].patterns && results[i].patterns.length > 0) mitigationCount++;
-
       results[i].consecutiveMitigationCount = mitigationCount;
       results[i].consecutiveMitigation = bestPassing.mitigation;
+
+      // Flag as passing motion for stretto viability (passing D→D is a minor issue only)
+      results[i].isPassing = bestPassing.isPassing;
+    }
+  }
+
+  // Pass 2: Apply passingness mitigations per score component.
+  //
+  // Each component gets the mitigation appropriate to its voice(s) and sign:
+  // (a) Between-voice motion PENALTIES (parallel, similar entry): mitigate with bestPassing,
+  //     cap at 0 (never flip to reward)
+  // (b) Between-voice motion REWARDS (oblique, contrary entry): reduce by min(0.8, mit/2.5),
+  //     floor at 0 (never flip to penalty)
+  // (a) V1 single-voice motion PENALTIES (V1 exit resolution): mitigate with v1Passing
+  // (a) V2 single-voice motion PENALTIES (V2 exit resolution): mitigate with v2Passing
+  // (c) D→D base exit penalty on a consecutive member (middle of 3+ chain):
+  //     mitigate with bestPassing, cap at 0 (potentially complete)
+  // (c) D→D base exit penalty on the chain ENTRY: the -0.75 lives here, not on the
+  //     non-entry member; mitigate using the next (consecutive) member's bestPassing
+  //
+  // NOT touched: strong-beat meter penalty, consonance resolution reward,
+  //              abandonment/rest penalties, pattern bonuses
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].isConsecutiveDissonance) {
+      const bestPassing = results[i].passingMotion;
+      const v1Passing = results[i].v1PassingMotion;
+      const v2Passing = results[i].v2PassingMotion;
+      if (!bestPassing) continue;
+
+      const entryMotionComp = results[i].entry?.motionComponent || 0;
+      const v1ResComp = results[i].exit?.v1ResolutionComponent || 0;
+      const v2ResComp = results[i].exit?.v2ResolutionComponent || 0;
+      const ddComp = results[i].exit?.baseExitComponent || 0;
+
+      let entryAdj = 0;
+      let exitAdj = 0;
+      const adjDetails = [];
+
+      // (a/b) Between-voice entry motion component
+      if (entryMotionComp < 0 && bestPassing.mitigation > 0) {
+        const mitigated = Math.min(0, entryMotionComp + bestPassing.mitigation);
+        entryAdj += mitigated - entryMotionComp;
+        adjDetails.push(`entry motion (${bestPassing.mitigation.toFixed(2)}): +${(mitigated - entryMotionComp).toFixed(2)}`);
+      } else if (entryMotionComp > 0 && bestPassing.mitigation > 0) {
+        const reduction = Math.min(entryMotionComp, Math.min(0.8, bestPassing.mitigation / 2.5));
+        entryAdj -= reduction;
+        adjDetails.push(`entry reward reduction: -${reduction.toFixed(2)}`);
+      }
+
+      // (a) V1 single-voice exit motion penalties
+      if (v1ResComp < 0 && v1Passing.mitigation > 0) {
+        const mitigated = Math.min(0, v1ResComp + v1Passing.mitigation);
+        exitAdj += mitigated - v1ResComp;
+        adjDetails.push(`V1 resolution (${v1Passing.mitigation.toFixed(2)}): +${(mitigated - v1ResComp).toFixed(2)}`);
+      }
+
+      // (a) V2 single-voice exit motion penalties
+      if (v2ResComp < 0 && v2Passing.mitigation > 0) {
+        const mitigated = Math.min(0, v2ResComp + v2Passing.mitigation);
+        exitAdj += mitigated - v2ResComp;
+        adjDetails.push(`V2 resolution (${v2Passing.mitigation.toFixed(2)}): +${(mitigated - v2ResComp).toFixed(2)}`);
+      }
+
+      // (c) D→D penalty on THIS member (only present for middle of 3+ chains)
+      if (ddComp < 0 && bestPassing.mitigation > 0) {
+        const mitigated = Math.min(0, ddComp + bestPassing.mitigation);
+        exitAdj += mitigated - ddComp;
+        adjDetails.push(`D→D (own exit, ${bestPassing.mitigation.toFixed(2)}): +${(mitigated - ddComp).toFixed(2)}`);
+      }
+
+      const totalAdj = entryAdj + exitAdj;
+      if (Math.abs(totalAdj) > 0.005) {
+        results[i].score += totalAdj;
+        results[i].entryScore += entryAdj;
+        results[i].exitScore += exitAdj;
+        results[i].passingCharacterAdj = totalAdj;
+        const label = bestPassing.isPassing ? 'passing motion' : 'partial passing';
+        results[i].details.push(
+          `Passing character (${label}): +${totalAdj.toFixed(2)} [${adjDetails.join(', ')}]`
+        );
+      }
+
+    } else if (results[i].isChainEntry && results[i].chainLength > 1) {
+      // (c) The chain entry's D→D exit penalty (-0.75) is mitigated by the passingness
+      // of the immediately following consecutive member (i+1 in results, since consecutive
+      // dissonances are always adjacent simultaneities).
+      const nextIdx = i + 1;
+      if (nextIdx < results.length && results[nextIdx].isConsecutiveDissonance && results[nextIdx].passingMotion) {
+        const nextBestPassing = results[nextIdx].passingMotion;
+        const ddComp = results[i].exit?.baseExitComponent || 0;
+        if (ddComp < 0 && nextBestPassing.mitigation > 0) {
+          const mitigated = Math.min(0, ddComp + nextBestPassing.mitigation);
+          const adj = mitigated - ddComp;
+          if (Math.abs(adj) > 0.005) {
+            results[i].score += adj;
+            results[i].exitScore += adj;
+            results[i].passingCharacterAdj = (results[i].passingCharacterAdj || 0) + adj;
+            const label = nextBestPassing.isPassing ? 'next passing' : 'next partial passing';
+            results[i].details.push(
+              `D→D penalty mitigated (${label}, ${nextBestPassing.mitigation.toFixed(2)}): +${adj.toFixed(2)}`
+            );
+          }
+        }
+      }
     }
   }
 
@@ -1764,8 +1897,9 @@ export function analyzeAllDissonances(sims, options = {}) {
       totalConsonances: consonances.length,
       totalDissonances: dissonances.length,
       repetitiveConsonances: repetitiveConsonances.length,
-      goodCount: goodDissonances.length,
-      badCount: badDissonances.length,
+      // Recompute good/bad counts and averageScore using post-mitigation scores
+      goodCount: dissonances.filter(d => d.score >= 0).length,
+      badCount: dissonances.filter(d => d.score < 0).length,
       averageScore: dissonances.length > 0
         ? dissonances.reduce((sum, d) => sum + d.score, 0) / dissonances.length
         : 0,
