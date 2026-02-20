@@ -840,14 +840,16 @@ export function calculateTranspositionStabilityScore(result) {
   const totalIntervals = detailedScoring?.totalIntervals || 0;
 
   if (detailedScoring && totalIntervals > 0) {
-    const avgScore = detailedScoring.averageScore || 0;
-    // Scale: avg -3 to +3 maps to internal -15 to +15
+    // Use the duration-weighted overall score (same metric as the TwoVoiceViz badge).
+    // Falls back to dissonance-only average for older results that lack overallAvgScore.
+    const avgScore = detailedScoring.overallAvgScore ?? detailedScoring.averageScore ?? 0;
+    // Scale: avg roughly -3 to +1 maps to internal -15 to +5
     // Weight slightly by length (more intervals = more reliable assessment)
     const lengthFactor = Math.min(1.2, 0.8 + totalIntervals / 50);
     let internal = avgScore * 5 * lengthFactor;
 
     details.push({
-      factor: `CS vs answer avg quality: ${avgScore.toFixed(2)} × 5 × ${lengthFactor.toFixed(2)} (length) = ${(avgScore * 5 * lengthFactor).toFixed(1)}`,
+      factor: `CS vs answer overall quality: ${avgScore.toFixed(2)} × 5 × ${lengthFactor.toFixed(2)} (length) = ${(avgScore * 5 * lengthFactor).toFixed(1)}`,
       impact: parseFloat((avgScore * 5 * lengthFactor).toFixed(1)),
     });
 

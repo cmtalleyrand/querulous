@@ -160,13 +160,15 @@ Score is based on **inverted position dissonance quality**.
 
 | Factor | Impact | Condition |
 |--------|--------|-----------|
-| Counterpoint quality vs answer | ×5 | Average dissonance score |
+| CS vs answer overall quality | ×5 | `overallAvgScore` (duration-weighted, all intervals) |
 | No dissonances | +10 | Perfect consonance throughout |
 | ≥85% consonant on strong beats | +8 | Strong stability |
 | ≥70% consonant on strong beats | +3 | Good stability |
 | <50% consonant on strong beats | -8 | Problematic |
 | No parallel perfect violations | +3 | Clean voice-leading |
 | Parallel perfect violations | -5 per violation (max -15) | Critical issues |
+
+**Note on quality score**: The ×5 multiplier uses `overallAvgScore` — a duration-weighted average across **all** intervals (consonances contribute 0.2–0.5 by type; dissonances contribute their actual score). This is the same formula used by the "Score" badge in the visualization. Consonances improve this score, so a CS with many good consonances against the answer will score better than one measured by dissonances alone.
 
 ---
 
@@ -264,6 +266,57 @@ The scoring system uses a hierarchical metric weight system:
 - Main beats are dotted quarters (beats 1 and 2 in 6/8, etc.)
 - Beat 1 = strong (1.0), other main beats = medium (0.5-0.75)
 - Eighth-note subdivisions within beats = weak (0.25)
+
+---
+
+## Passing Character System
+
+After each dissonance is individually scored by `_scoreDissonance`, a two-pass post-processing step adjusts scores based on how ornamental ("passing") each dissonant note is.
+
+### Passingness Score
+
+Computed independently for each voice by `scorePassingMotion()`. Only notes with duration ≤ 0.5 (eighth note or shorter) receive non-zero passingness.
+
+| Factor | Points |
+|--------|--------|
+| Short note (base) | +0.5 |
+| Off-beat position (metricWeight < 0.5) | +0.5 |
+| Step entry (1-2 semitones) | +0.75 |
+| Oblique entry | +0.5 |
+| Sequence membership | +1.0 |
+
+**Maximum possible**: ~3.25 (step in from a sequence on an offbeat 16th note)
+
+```
+isPassing = (passingness >= 1.0)
+mitigation = passingness / 2
+```
+
+The voice with higher passingness is `bestPassing`; per-voice values (`v1Passing`, `v2Passing`) apply to single-voice exit resolution penalties.
+
+### What Passingness Affects
+
+Passingness applies to **all dissonances** — both standalone and consecutive:
+
+| Component | Mitigation Applied | Notes |
+|-----------|-------------------|-------|
+| Entry motion penalty (similar/parallel) | `bestPassing.mitigation` | Capped at 0 — cannot flip to reward |
+| Entry motion reward (oblique/contrary) | Reduced by `min(0.8, mitigation/2.5)` | Floored at 0 — cannot flip to penalty |
+| V1 exit resolution penalty | `v1Passing.mitigation` | Per-voice, capped at 0 |
+| V2 exit resolution penalty | `v2Passing.mitigation` | Per-voice, capped at 0 |
+| D→D base exit penalty (-0.75) | `bestPassing.mitigation` | Consecutive members only, capped at 0 |
+
+**Not affected by passingness**: strong-beat metric penalty, consonance resolution reward, abandonment/rest penalties, pattern bonuses (suspension, appoggiatura, etc.).
+
+### Pass Architecture
+
+**Pass 1** (`analyzeAllDissonances` ~line 1766): Iterate all dissonances; compute and store `v1PassingMotion`, `v2PassingMotion`, `passingMotion` on each result.
+
+**Pass 2** (`analyzeAllDissonances` ~line 1826): Apply per-component mitigations. If any adjustment occurs, append "Passing character (label): +X.XX [details]" to the result's detail strings. This line appears in the "Passing Character Adjustment" panel in the UI.
+
+### Displayed in UI
+
+When passingness produces a non-zero adjustment, a yellow "Passing Character Adjustment" box appears in the detail panel. Each line shows the component adjusted, the mitigation factor, and the adjustment amount.
 
 ---
 

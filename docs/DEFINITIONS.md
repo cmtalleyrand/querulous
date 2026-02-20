@@ -282,6 +282,121 @@ Thresholds by meter:
 
 ---
 
+## Passingness / Passing Character
+
+A measure of how ornamental or fleeting a dissonant note is. High passingness reduces (mitigates) penalties that would otherwise apply to a note's entry motion and exit resolution. It does **not** affect pattern bonuses, consonance resolution rewards, or the strong-beat metric penalty.
+
+### Passingness Score
+
+A continuous value computed per voice by `scorePassingMotion()`. The voice with the higher passingness is selected as `bestPassing`; per-voice values (`v1Passing`, `v2Passing`) are used for single-voice resolution penalties.
+
+**Base eligibility** — a note receives non-zero passingness only if its duration ≤ 0.5 quarter-note units (eighth note or shorter).
+
+**Contributing factors:**
+
+| Factor | Points | Condition |
+|--------|--------|-----------|
+| Base (short note) | +0.5 | Duration ≤ eighth note (always first) |
+| Off-beat position | +0.5 | `metricWeight < 0.5` (off the primary subdivision) |
+| Step entry | +0.75 | Melodic interval 1-2 semitones into this note |
+| Oblique entry | +0.5 | One voice moves by step while the other holds |
+| Sequence membership | +1.0 | Onset falls within a detected melodic sequence |
+
+**Thresholds:**
+
+| Value | Meaning |
+|-------|---------|
+| `passingness = 0` | Not short enough — no mitigation |
+| `0 < passingness < 1` | Partial passing — some mitigation |
+| `passingness ≥ 1` | `isPassing = true` — full passing-tone character |
+
+**Mitigation amount** (applied to penalties):
+
+```
+mitigation = passingness / 2
+```
+
+Example: passingness 1.75 → mitigation 0.875. A similar-motion penalty of -0.50 becomes `min(0, -0.50 + 0.875) = 0` (fully negated).
+
+### Standalone vs Consecutive Dissonances
+
+Passingness applies to **all dissonances**, not just those in a D→D chain:
+
+- **Standalone dissonance**: A single dissonant note surrounded by consonances. Before this revision, passingness was never computed for these. Now it is — so a CS playing a quick offbeat 16th note in oblique motion can receive passingness ≈ 1.75 and have its entry/exit penalties substantially mitigated.
+- **Consecutive dissonance**: Part of a D→D chain. Passingness additionally mitigates the -0.75 base D→D exit penalty.
+
+**Code**: `dissonanceScoring.js:scorePassingMotion()`, Pass 1 and Pass 2 in `analyzeAllDissonances()`.
+
+---
+
+## Dissonance Chain
+
+A sequence of two or more consecutive dissonant simultaneities, where each resolves not to a consonance but directly to another dissonance.
+
+### Chain Roles
+
+| Field | Meaning |
+|-------|---------|
+| `isChainEntry` | First dissonance of the chain (C→D) |
+| `isConsecutiveDissonance` | Second or later member (D→D) |
+| `isChainResolution` | First consonance after the chain ends |
+| `chainStartOnset` | Beat position of the first chain member |
+| `chainEndOnset` | Beat position of the last chain member |
+| `chainLength` | Total number of dissonant simultaneities in the chain |
+| `chainPosition` | 0-indexed position of this member within the chain |
+| `chainUnresolved` | `true` if the chain reaches the end of the passage without resolving |
+
+### Chain Scoring
+
+The chain entry (`isChainEntry`) bears the D→D exit penalty (-0.75) for moving into the chain. Each consecutive member also bears this penalty. These are stored separately as `baseExitComponent` in the exit info and can be mitigated by passingness.
+
+### Chain Visualization
+
+In the detail panel, chains are shown as a motion diagram (the outer wrapper with a purple dashed border). Tapping any note in the chain reveals the full chain from entry through resolution (or "Unresolved" if it never resolves). This diagram is not repeated — it appears once regardless of where in the chain you tap.
+
+**Code**: `dissonanceScoring.js:analyzeAllDissonances()` — chain labeling pass (~line 1700). `TwoVoiceViz.jsx` — chain motion diagram (~line 856).
+
+---
+
+## Per-Voice Mitigation (Pass 1 / Pass 2)
+
+After all dissonances are scored by `_scoreDissonance`, `analyzeAllDissonances` runs two additional passes to apply passingness mitigations.
+
+### Pass 1 — Compute Passingness
+
+For every dissonant simultaneity (`!isConsonant`), compute:
+- `v1Passing` — passingness of the V1 melodic line entering this dissonance
+- `v2Passing` — passingness of the V2 melodic line entering this dissonance
+- `bestPassing` — whichever voice has higher passingness
+
+Fields stored on each result:
+- `passingMotion` = `bestPassing`
+- `v1PassingMotion` = `v1Passing`
+- `v2PassingMotion` = `v2Passing`
+
+For consecutive members only (`isConsecutiveDissonance`):
+- `consecutiveMitigationCount` — number of mitigating factors present
+- `consecutiveMitigation` — `bestPassing.mitigation` value
+- `isPassing` — `true` if `bestPassing.passingness ≥ 1`
+
+### Pass 2 — Apply Mitigations Per Component
+
+For each dissonance with `passingMotion` set:
+
+| Component | Mitigation Used | Rule |
+|-----------|----------------|------|
+| Entry motion penalty (similar/parallel) | `bestPassing.mitigation` | Penalty → `min(0, penalty + mitigation)`. Cannot flip to reward. |
+| Entry motion reward (oblique/contrary) | `bestPassing.mitigation` | Reward reduced by `min(0.8, mitigation/2.5)`. Cannot flip to penalty. |
+| V1 exit resolution penalty | `v1Passing.mitigation` | Penalty → `min(0, penalty + v1Mit)`. |
+| V2 exit resolution penalty | `v2Passing.mitigation` | Penalty → `min(0, penalty + v2Mit)`. |
+| D→D base exit penalty | `bestPassing.mitigation` | **Consecutive members only.** Penalty → `min(0, penalty + mitigation)`. |
+
+The total adjustment is stored as `passingCharacterAdj` and appended to `results[i].details` as a "Passing character (label): +X.XX [...]" line.
+
+**Code**: `dissonanceScoring.js:analyzeAllDissonances()` Pass 1 (~line 1766) and Pass 2 (~line 1826).
+
+---
+
 ## Dissonance Treatment Patterns
 
 Each dissonance is evaluated in three phases: **Entry** (C -> D), **Dissonance** (type/position), **Exit** (D -> C or D -> D).
@@ -357,9 +472,11 @@ When a dissonance (D) moves to a consonance (C):
 - To perfect consonance (unison, P5, P8): +0.5
 
 ### Resolution to dissonance (D -> D)
-When a dissonance leads to another dissonance:
-- Normal: -0.75
+When a dissonance leads to another dissonance. This creates a **dissonance chain** (see below).
+- Normal: -0.75 (stored as `baseExitComponent`)
 - Short note on off-beat: -0.375 (halved)
+
+The chain entry (`isChainEntry`) bears this penalty for moving into the chain. Each consecutive member (`isConsecutiveDissonance`) also bears it for moving to the next dissonance. This penalty can be mitigated by passingness (see **Per-Voice Mitigation**).
 
 ### Resolution by abandonment
 One voice drops out (rests) leaving the dissonance unresolved: -0.5.
@@ -368,6 +485,30 @@ One voice drops out (rests) leaving the dissonance unresolved: -0.5.
 A note conceptually extends for `duration / 2` beats into a following rest. If the rest exceeds this phantom duration, the resolution is considered delayed (-0.3).
 
 **Code**: `dissonanceScoring.js:scoreExit()` (lines 568-760).
+
+---
+
+## Entry/Exit Score Components
+
+Each dissonance's total score is the sum of two independently tracked sub-scores:
+
+### entryScore
+Combines: entry motion base score + strong-beat penalty + pattern entry bonuses + (cross-referenced) leap→exit penalty preview.
+
+Stored as `result.entryScore` and `result.entry.score` (pre-mitigation base). After Pass 2, `entryScore` reflects the mitigated value.
+
+### exitScore
+Combines: exit resolution base score + exit pattern bonuses + voice-resolution leap penalties.
+
+Stored as `result.exitScore` and `result.exit.score` (pre-mitigation base). After Pass 2, `exitScore` reflects the mitigated value.
+
+### Cross-Reference (Entry → Exit Penalty)
+
+When a voice enters a dissonance by leap (P4/P5, skip, large leap), the resolution penalty is computed in `scoreExit` (because it depends on how the leap is resolved) but is **also previewed in the Entry Motion section** of the detail panel. This makes it clear that the entry leap is causally linked to any exit penalty incurred.
+
+Display format in Entry Motion: "V1 P4/P5 leap → exit: -1.50"
+
+**Code**: `dissonanceScoring.js:_scoreDissonance()` — cross-reference inserted after `exitInfo` is computed (~line 1524). Stored in `entryInfo.details`.
 
 ---
 
@@ -541,3 +682,7 @@ The spelling key determines how ABC accidentals are parsed. The analysis key det
 | D -> C | Dissonance resolving to consonance |
 | D -> D | Dissonance leading to another dissonance |
 | C -> D | Consonance moving to dissonance (entry) |
+| Sim | Simultaneity |
+| Mit | Mitigation / mitigation value |
+| overallAvgScore | Duration-weighted average score across all intervals (consonances + dissonances) |
+| averageScore | Unweighted average score across dissonances only |
