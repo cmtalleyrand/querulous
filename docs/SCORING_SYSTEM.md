@@ -1,5 +1,7 @@
 # Fugue Subject Analyzer: Scoring System Documentation
 
+// out of date needs updating
+
 This document provides a comprehensive summary of all scoring mechanisms used in the Fugue Subject Analyzer.
 
 ---
