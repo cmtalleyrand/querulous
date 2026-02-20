@@ -290,19 +290,23 @@ After each dissonance is individually scored by `_scoreDissonance`, a two-pass p
 
 ### Passingness Score
 
-Computed independently for each voice by `scorePassingMotion()`. Only notes with duration ≤ 0.5 (eighth note or shorter) receive non-zero passingness.
+Computed independently for each voice by `scorePassingMotion()`. Only notes with duration ≤ 0.5 (eighth note or shorter) receive non-zero passingness. // revised factors accoridg to previous instructions - a version of salience
 
 | Factor | Points |
 |--------|--------|
-| Short note (base) | +0.5 |
+| Eighth note | -0.5 |
+| Shorter than 16th note | +0.5 |
 | Off-beat position (metricWeight < 0.5) | +0.5 |
-| Off primary subdivision of the beat |
-| Same direction as previous move | + 0.25
-| Step entry (1-2 semitones) | +0.75 |
-| Oblique entry | +0.5 |
+| Off primary subdivision of the beat | +0.25 |
+| On strong beat | -0.5 |
+| Same direction as previous move | + 0.25 |
+| Different direction to previous move & not recovery | -0.25 |
+| Moving by step (1-2 semitones) | +0.75 |
+| Moving by skip | 0 |
+| Moving by leap | -0.5 |
+| Oblique entry | +0.5 | 
 | Sequence membership | +1.0 |
 
-**Maximum possible**: ~3.25 (step in from a sequence on an offbeat 16th note)
 
 ```
 isPassing = (passingness >= 1.0)
