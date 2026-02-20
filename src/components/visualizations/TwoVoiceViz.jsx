@@ -322,7 +322,7 @@ export function TwoVoiceViz({
           }
           if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
           const mitigLines = (chain.details || []).filter(d =>
-            d.startsWith('Passing character') || d.startsWith('D→D penalty mitigated'));
+            typeof d === 'string' && (d.startsWith('Passing character') || d.startsWith('D→D penalty mitigated')));
           if (mitigLines.length > 0) pt.mitigationDetails = mitigLines;
         }
       }
