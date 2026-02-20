@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { SCORE_THRESHOLDS, getScoreRating, getScoreColor, getScoreBgColor } from '../../utils/scoring';
 
 /**
  * IssuesSummary - Aggregates and displays all issues from various analyses
@@ -10,18 +9,36 @@ import { SCORE_THRESHOLDS, getScoreRating, getScoreColor, getScoreBgColor } from
  * @param {Function} onHighlight - Callback when an issue is clicked: onHighlight({ onset, type, voice })
  * @param {Object} highlightedItem - Currently highlighted item for visual feedback
  */
-export function IssuesSummary({ results, scoreResult, onHighlight, highlightedItem }) {
+export function IssuesSummary({ results, onHighlight, highlightedItem }) {
   const [expandedCategory, setExpandedCategory] = useState(null);
 
   if (!results) return null;
 
+  const withAnchors = (item, categoryName, rowType, fallbackIndex) => ({
+    ...item,
+    sourceCategory: item.sourceCategory ?? categoryName,
+    sourceType: item.sourceType ?? rowType,
+    sourceId: item.sourceId ?? item.id ?? null,
+    sourceIndex: item.sourceIndex ?? item.index ?? fallbackIndex,
+  });
+
+  const getUndrillableReason = (item) => {
+    if (item.onset === undefined) return 'missing onset';
+    return null;
+  };
+
   // Helper to handle item clicks
   const handleItemClick = (item, categoryName) => {
-    if (onHighlight && item.onset !== undefined) {
+    const undrillableReason = getUndrillableReason(item);
+    if (onHighlight && !undrillableReason) {
       onHighlight({
         onset: item.onset,
         type: categoryName,
         description: item.description,
+        sourceCategory: item.sourceCategory,
+        sourceType: item.sourceType,
+        sourceId: item.sourceId,
+        sourceIndex: item.sourceIndex,
       });
     }
   };
@@ -29,7 +46,13 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
   // Check if an item is currently highlighted
   const isHighlighted = (item) => {
     if (!highlightedItem || item.onset === undefined) return false;
-    return Math.abs(highlightedItem.onset - item.onset) < 0.01;
+
+    const onsetMatch = Math.abs(highlightedItem.onset - item.onset) < 0.01;
+    const categoryMatch = !highlightedItem.sourceCategory || !item.sourceCategory || highlightedItem.sourceCategory === item.sourceCategory;
+    const idMatch = highlightedItem.sourceId == null || item.sourceId == null || highlightedItem.sourceId === item.sourceId;
+    const indexMatch = highlightedItem.sourceIndex == null || item.sourceIndex == null || highlightedItem.sourceIndex === item.sourceIndex;
+
+    return onsetMatch && categoryMatch && idMatch && indexMatch;
   };
 
   // Collect all issues from various analyses
@@ -37,8 +60,12 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
 
   // Harmonic issues
   if (results.harmonicImplication?.observations) {
-    const issues = results.harmonicImplication.observations.filter(o => o.type === 'issue');
-    const warnings = results.harmonicImplication.observations.filter(o => o.type === 'consideration');
+    const issues = results.harmonicImplication.observations
+      .filter(o => o.type === 'issue')
+      .map((o, i) => withAnchors(o, 'Harmonic Implication', 'issue', i));
+    const warnings = results.harmonicImplication.observations
+      .filter(o => o.type === 'consideration')
+      .map((o, i) => withAnchors(o, 'Harmonic Implication', 'warning', i));
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Harmonic Implication',
@@ -51,8 +78,12 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
 
   // Tonal answer issues
   if (results.tonalAnswer?.observations) {
-    const issues = results.tonalAnswer.observations.filter(o => o.type === 'issue');
-    const warnings = results.tonalAnswer.observations.filter(o => o.type === 'consideration');
+    const issues = results.tonalAnswer.observations
+      .filter(o => o.type === 'issue')
+      .map((o, i) => withAnchors(o, 'Tonal Answer', 'issue', i));
+    const warnings = results.tonalAnswer.observations
+      .filter(o => o.type === 'consideration')
+      .map((o, i) => withAnchors(o, 'Tonal Answer', 'warning', i));
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Tonal Answer',
@@ -71,7 +102,7 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
       categories.push({
         name: 'Stretto Viability',
         issues: [],
-        warnings: [{ description: 'No viable stretto found at any transposition or distance' }],
+        warnings: [withAnchors({ description: 'No viable stretto found at any transposition or distance' }, 'Stretto Viability', 'warning', 0)],
         icon: '🎼',
       });
     }
@@ -85,18 +116,18 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
     // Show each inverted position issue separately
     if (results.doubleCounterpoint.inverted?.issues?.length > 0) {
       for (const issue of results.doubleCounterpoint.inverted.issues) {
-        issues.push({
+        issues.push(withAnchors({
           description: `Inverted: ${issue.description || issue}`,
           onset: issue.onset,
-        });
+        }, 'Invertible Counterpoint', 'issue', issues.length));
       }
     }
 
     if (results.doubleCounterpoint.observations) {
       const obsIssues = results.doubleCounterpoint.observations.filter(o => o.type === 'issue');
       const obsWarnings = results.doubleCounterpoint.observations.filter(o => o.type === 'consideration');
-      issues.push(...obsIssues);
-      warnings.push(...obsWarnings);
+      issues.push(...obsIssues.map((o, i) => withAnchors(o, 'Invertible Counterpoint', 'issue', i)));
+      warnings.push(...obsWarnings.map((o, i) => withAnchors(o, 'Invertible Counterpoint', 'warning', i)));
     }
 
     if (issues.length > 0 || warnings.length > 0) {
@@ -119,7 +150,7 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
       categories.push({
         name: 'Contour Independence',
         issues: [],
-        warnings: warnings.map(w => ({ description: w.description })),
+        warnings: warnings.map((w, i) => withAnchors({ description: w.description, onset: w.onset }, 'Contour Independence', 'warning', i)),
         icon: '📈',
       });
     }
@@ -127,8 +158,12 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
 
   // Rhythmic complementarity issues
   if (results.rhythmicComplementarity?.observations) {
-    const issues = results.rhythmicComplementarity.observations.filter(o => o.type === 'issue');
-    const warnings = results.rhythmicComplementarity.observations.filter(o => o.type === 'consideration');
+    const issues = results.rhythmicComplementarity.observations
+      .filter(o => o.type === 'issue')
+      .map((o, i) => withAnchors(o, 'Rhythmic Complementarity', 'issue', i));
+    const warnings = results.rhythmicComplementarity.observations
+      .filter(o => o.type === 'consideration')
+      .map((o, i) => withAnchors(o, 'Rhythmic Complementarity', 'warning', i));
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Rhythmic Complementarity',
@@ -269,12 +304,13 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
                   </div>
                 )}
                 {cat.issues.map((issue, i) => {
-                  const hasOnset = issue.onset !== undefined;
+                  const undrillableReason = getUndrillableReason(issue);
+                  const isDrillable = !undrillableReason;
                   const highlighted = isHighlighted(issue);
                   return (
                     <div
                       key={`issue-${i}`}
-                      onClick={hasOnset ? () => handleItemClick(issue, cat.name) : undefined}
+                      onClick={isDrillable ? () => handleItemClick(issue, cat.name) : undefined}
                       style={{
                         fontSize: '12px',
                         color: '#dc2626',
@@ -282,29 +318,36 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
                         borderLeft: highlighted ? '4px solid #dc2626' : '2px solid #fca5a5',
                         marginBottom: '4px',
                         borderRadius: '0 4px 4px 0',
-                        backgroundColor: highlighted ? '#fef2f2' : hasOnset ? '#fff' : 'transparent',
-                        cursor: hasOnset ? 'pointer' : 'default',
+                        backgroundColor: highlighted ? '#fef2f2' : isDrillable ? '#fff' : '#fff7f7',
+                        cursor: isDrillable ? 'pointer' : 'default',
                         transition: 'all 0.15s',
+                        opacity: isDrillable ? 1 : 0.9,
                       }}
-                      onMouseEnter={hasOnset ? (e) => e.currentTarget.style.backgroundColor = '#fef2f2' : undefined}
-                      onMouseLeave={hasOnset && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
+                      onMouseEnter={isDrillable ? (e) => e.currentTarget.style.backgroundColor = '#fef2f2' : undefined}
+                      onMouseLeave={isDrillable && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
                     >
-                      {hasOnset && (
+                      {isDrillable && (
                         <span style={{ marginRight: '6px', opacity: 0.6 }}>
                           ▸
                         </span>
                       )}
                       {issue.description}
+                      {!isDrillable && (
+                        <span style={{ marginLeft: '8px', fontSize: '11px', color: '#991b1b', opacity: 0.8 }}>
+                          (not drillable: {undrillableReason})
+                        </span>
+                      )}
                     </div>
                   );
                 })}
                 {cat.warnings.map((warning, i) => {
-                  const hasOnset = warning.onset !== undefined;
+                  const undrillableReason = getUndrillableReason(warning);
+                  const isDrillable = !undrillableReason;
                   const highlighted = isHighlighted(warning);
                   return (
                     <div
                       key={`warn-${i}`}
-                      onClick={hasOnset ? () => handleItemClick(warning, cat.name) : undefined}
+                      onClick={isDrillable ? () => handleItemClick(warning, cat.name) : undefined}
                       style={{
                         fontSize: '12px',
                         color: '#92400e',
@@ -312,19 +355,25 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
                         borderLeft: highlighted ? '4px solid #f59e0b' : '2px solid #fcd34d',
                         marginBottom: '4px',
                         borderRadius: '0 4px 4px 0',
-                        backgroundColor: highlighted ? '#fffbeb' : hasOnset ? '#fff' : 'transparent',
-                        cursor: hasOnset ? 'pointer' : 'default',
+                        backgroundColor: highlighted ? '#fffbeb' : isDrillable ? '#fff' : '#fffcf2',
+                        cursor: isDrillable ? 'pointer' : 'default',
                         transition: 'all 0.15s',
+                        opacity: isDrillable ? 1 : 0.9,
                       }}
-                      onMouseEnter={hasOnset ? (e) => e.currentTarget.style.backgroundColor = '#fffbeb' : undefined}
-                      onMouseLeave={hasOnset && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
+                      onMouseEnter={isDrillable ? (e) => e.currentTarget.style.backgroundColor = '#fffbeb' : undefined}
+                      onMouseLeave={isDrillable && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
                     >
-                      {hasOnset && (
+                      {isDrillable && (
                         <span style={{ marginRight: '6px', opacity: 0.6 }}>
                           ▸
                         </span>
                       )}
                       {warning.description}
+                      {!isDrillable && (
+                        <span style={{ marginLeft: '8px', fontSize: '11px', color: '#92400e', opacity: 0.8 }}>
+                          (not drillable: {undrillableReason})
+                        </span>
+                      )}
                     </div>
                   );
                 })}
