@@ -49,7 +49,7 @@ The "junction" is the harmonic progression implied when the subject's terminal n
 
 ---
 
-### 2. Rhythmic Character (Weight: 0.8)
+### 2. Rhythmic Character (Weight: 0.2) // reduce weight
 **Group:** Melodic
 **Purpose:** Measures rhythmic distinctiveness and variety
 
@@ -66,7 +66,7 @@ The "junction" is the harmonic progression implied when the subject's terminal n
 
 ---
 
-### 3. Stretto Potential (Weight: 1.0)
+### 3. Stretto Potential (Weight: 1.0) 
 **Group:** Fugal
 **Purpose:** Evaluates counterpoint quality when subject overlaps with itself at various distances
 
@@ -76,11 +76,11 @@ The score is based on the **average dissonance score** across all tested stretto
 | Factor | Impact | Condition |
 |--------|--------|-----------|
 | Average counterpoint score | ×5 | Maps -3 to +3 range → -15 to +15 |
-| 70%+ distances workable | +8 | Most distances have avgScore ≥ 0 |
+| 70%+ distances workable | +8 | Most distances have avgScore ≥ 0 | // a very bad idea, thankfully out of date
 | 50-70% distances workable | +4 | Half the distances work |
 | <30% distances workable | -5 | Few viable entry points |
-| Close stretto possible (≥60% overlap, good score) | +5 | Tight stretto opportunity |
-| Parallel perfects present | -2 per distance (max -10) | Critical voice-leading error |
+| Close stretto possible (≥60% overlap, good score) | +5 | Tight stretto opportunity | // should be more continuous and actually clearly defined. let's say fhen
+// removed parallel perfects, already affects score through viability 
 
 ---
 
@@ -96,28 +96,22 @@ Score is based on **inverted position dissonance quality**.
 | Inverted position quality | ×5 | Average dissonance score in inverted position |
 | Inverted much worse than original | -3 to -8 | Quality difference > 1.0 |
 | Inverted better than original | +3 | Rare but valuable |
-| Parallel perfects (inverted) | -2 per issue (max -6) | Voice-leading error (reduced from -5 to avoid overlap with quality score which already penalizes consecutive perfects) | // just denoce actually
+| Parallel perfects (inverted) | -2 per issue (max -6) | Voice-leading error (reduced from -5 to avoid overlap with quality score which already penalizes consecutive perfects) | // just deno actually
 // removed unused indicators 
 
 ---
 
-### 5. Rhythmic Interplay (Weight: 0.8)
+### 5. Rhythmic Interplay (Weight: 0.5)
 **Group:** Combination
 **Purpose:** Measures rhythmic independence between subject and countersubject
 
-**Scale based on attack overlap:**
+**Scale based on attack overlap:** // should be more nuanced - punish extremes and mildy reward anything between 1/3 and 2/3 of shared onsets.
 | Overlap Range | Score | Description |
 |--------------|-------|-------------|
-| 0-30% | +15 | Strong complementarity |
+| 0-30% | +15 | Strong complementarity |// excessive
 | 30-50% | +8 to 0 | Good independence (linear interpolation) |
 | 50-70% | 0 to -8 | Moderate overlap |
 | 70-100% | -8 to -15 | Homorhythmic (voices too similar) |
-
----
-
-### 6. Voice Independence (Weight: 0.9)
-**Group:** Combination
-**Purpose:** Evaluates melodic contour differentiation
 
 **Motion Ratio Analysis (Target: 4:1 independent:dependent):** // shoukd use sigmoids for these
 
