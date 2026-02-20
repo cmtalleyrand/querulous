@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, Fragment } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { scoreDissonance, analyzeAllDissonances } from '../../utils/dissonanceScoring';
@@ -321,6 +321,9 @@ export function TwoVoiceViz({
             pt.exitScore = chain.exitScore;
           }
           if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
+          const mitigLines = (chain.details || []).filter(d =>
+            d.startsWith('Passing character') || d.startsWith('D→D penalty mitigated'));
+          if (mitigLines.length > 0) pt.mitigationDetails = mitigLines;
         }
       }
     }
@@ -812,7 +815,7 @@ export function TwoVoiceViz({
                 {!pt.isConsonant && pt.isConsecutiveDissonance && (
                   <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600',
                     backgroundColor: '#fff7ed', color: '#c2410c' }}>
-                    Consecutive{pt.consecutiveMitigationCount > 0 ? ` (${pt.consecutiveMitigationCount} mitigating)` : ''}
+                    Consecutive{pt.passingMotion?.isPassing ? ' (passing)' : pt.consecutiveMitigationCount > 0 ? ' (partial)' : ''}
                   </span>
                 )}
                 {pt.isChainResolution && (
@@ -887,8 +890,58 @@ export function TwoVoiceViz({
                   </div>
                 );
               })()}
-              {/* Motion diagram */}
-              {pt.prevInterval && (
+              {/* Motion diagram — full chain flow or single hop */}
+              {pt.chainStartOnset !== undefined ? (() => {
+                const chainPts = intervalPoints
+                  .filter(p => p.chainStartOnset === pt.chainStartOnset)
+                  .sort((a, b) => a.onset - b.onset);
+                if (!chainPts.length) return null;
+                const firstPt = chainPts[0];
+                return (
+                  <div style={{ overflowX: 'auto', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px',
+                      padding: '10px', backgroundColor: '#f1f5f9', borderRadius: '6px',
+                      minWidth: 'max-content' }}>
+                      {firstPt.prevInterval && (
+                        <div style={{ textAlign: 'center', padding: '6px 10px', borderRadius: '5px',
+                          backgroundColor: '#e2e8f0', border: '1.5px solid #cbd5e1', minWidth: '54px' }}>
+                          <div style={{ fontSize: '9px', color: '#94a3b8' }}>Before</div>
+                          <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>{firstPt.prevInterval.intervalName}</div>
+                          <div style={{ fontSize: '9px', color: '#94a3b8' }}>{pitchName(firstPt.prevInterval.v1Pitch)}/{pitchName(firstPt.prevInterval.v2Pitch)}</div>
+                        </div>
+                      )}
+                      {chainPts.map((cp, ci) => {
+                        const isThis = cp.onset === pt.onset;
+                        const stepColor = cp.isChainEntry ? '#6366f1' : cp.isChainResolution ? '#059669' : '#c2410c';
+                        const stepBg = cp.isChainEntry ? '#ede9fe' : cp.isChainResolution ? '#d1fae5' : '#fff7ed';
+                        return (
+                          <Fragment key={ci}>
+                            {(ci > 0 || firstPt.prevInterval) && (
+                              <div style={{ textAlign: 'center', padding: '0 4px', minWidth: '64px' }}>
+                                <div style={{ fontSize: '14px', color: '#6366f1' }}>→</div>
+                                <div style={{ fontSize: '9px', color: '#64748b' }}>{voice1Label}: {formatMotion(cp.v1Motion)}</div>
+                                <div style={{ fontSize: '9px', color: '#64748b' }}>{voice2Label}: {formatMotion(cp.v2Motion)}</div>
+                              </div>
+                            )}
+                            <div onClick={() => handleIntervalClick(cp)}
+                              style={{ cursor: 'pointer', textAlign: 'center', padding: '6px 10px',
+                                borderRadius: '5px', minWidth: '54px',
+                                backgroundColor: isThis ? stepColor : stepBg,
+                                border: `2px solid ${stepColor}`,
+                                color: isThis ? 'white' : stepColor }}>
+                              <div style={{ fontSize: '9px', fontWeight: '600', opacity: 0.85 }}>
+                                {cp.isChainEntry ? 'Entry' : cp.isChainResolution ? 'Resolves' : 'Cont.'}
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: '700' }}>{cp.intervalName}</div>
+                              <div style={{ fontSize: '9px', opacity: 0.7 }}>{pitchName(cp.v1Pitch)}/{pitchName(cp.v2Pitch)}</div>
+                            </div>
+                          </Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })() : pt.prevInterval ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '8px',
                   alignItems: 'center', marginBottom: '12px', padding: '10px',
                   backgroundColor: '#f1f5f9', borderRadius: '6px' }}>
@@ -912,8 +965,7 @@ export function TwoVoiceViz({
                     </div>
                   </div>
                 </div>
-              )}
-              {!pt.prevInterval && (
+              ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '12px' }}>
                   <div style={{ padding: '8px 10px', backgroundColor: `${voice1Color}18`, borderRadius: '4px', borderLeft: `3px solid ${voice1Color}` }}>
                     <div style={{ fontSize: '10px', color: '#64748b' }}>{voice1Label}</div>
@@ -1020,6 +1072,31 @@ export function TwoVoiceViz({
                         );
                       })}
                     </div>
+
+                    {pt.mitigationDetails?.length > 0 && (
+                      <div style={{ marginBottom: '12px', backgroundColor: '#fef9c3',
+                        borderLeft: '3px solid #ca8a04', borderRadius: '4px', padding: '10px' }}>
+                        <div style={{ fontWeight: '700', color: '#92400e', fontSize: '12px',
+                          textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                          Passing Character Adjustment
+                        </div>
+                        {pt.mitigationDetails.map((d, i) => {
+                          const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
+                          const match = text.match(/^(.*): ([+-]\d+\.?\d*)/);
+                          return (
+                            <div key={i} style={{ fontSize: '11px', color: '#78350f', marginBottom: '2px',
+                              paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
+                              <span style={{ color: '#ca8a04', marginRight: '6px', fontWeight: '600' }}>•</span>
+                              {match ? (
+                                <span>{match[1]}: <span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{text.slice(match[0].length)}</span>
+                              ) : (
+                                <span>{text}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     <div style={{ backgroundColor: '#ffffff', border: '2px solid #e2e8f0', borderRadius: '6px', padding: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
