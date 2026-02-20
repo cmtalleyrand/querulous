@@ -974,13 +974,13 @@ export function TwoVoiceViz({
                       </div>
                       {(pt.entry.details || []).map((d, i) => {
                         const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)$/);
+                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
                         return (
                           <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
                             paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                             <span style={{ color: '#6366f1', marginRight: '6px', fontWeight: '600' }}>•</span>
                             {match ? (
-                              <span>{match[1]}: <span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span></span>
+                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
                             ) : (
                               <span>{text}</span>
                             )}
@@ -1032,13 +1032,13 @@ export function TwoVoiceViz({
                       </div>
                       {(pt.exit.details || []).map((d, i) => {
                         const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)$/);
+                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
                         return (
                           <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
                             paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                             <span style={{ color: '#059669', marginRight: '6px', fontWeight: '600' }}>•</span>
                             {match ? (
-                              <span>{match[1]}: <span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span></span>
+                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
                             ) : (
                               <span>{text}</span>
                             )}
@@ -1056,13 +1056,13 @@ export function TwoVoiceViz({
                         </div>
                         {pt.mitigationDetails.map((d, i) => {
                           const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                          const match = text.match(/^(.*): ([+-]\d+\.?\d*)/);
+                          const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
                           return (
                             <div key={i} style={{ fontSize: '11px', color: '#78350f', marginBottom: '2px',
                               paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                               <span style={{ color: '#ca8a04', marginRight: '6px', fontWeight: '600' }}>•</span>
                               {match ? (
-                                <span>{match[1]}: <span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{text.slice(match[0].length)}</span>
+                                <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
                               ) : (
                                 <span>{text}</span>
                               )}
