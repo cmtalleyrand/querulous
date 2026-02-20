@@ -19,7 +19,7 @@ All category scores are aggregated into an overall weighted average.
 
 ## Score Categories
 
-### 1. Tonal Clarity (Weight: 0.5)
+### 1. Tonal Clarity (Weight: 0.5) // remove
 **Group:** Melodic
 **Purpose:** Assesses basic tonal orientation of the subject
 
@@ -32,7 +32,7 @@ All category scores are aggregated into an overall weighted average.
 | Answer junction: strong/good | +3 | Clear I→V or ii→V motion |
 | Answer junction: static/unusual | -3 | V→V stasis or problematic junction |
 
-**Answer Junction Explained:**
+**Answer Junction Explained:** // out of date - remove
 The "junction" is the harmonic progression implied when the subject's terminal note connects to the answer's entry on the dominant. A **problematic junction** occurs when:
 - **Static**: Subject ends on ^5, creating V→V (dominant to dominant, no harmonic motion)
 - **Unusual**: Subject ends on chromatic degrees or ^6, creating unclear harmonic connection
@@ -61,8 +61,8 @@ The "junction" is the harmonic progression implied when the subject's terminal n
 | 3 unique note values | +5 | Moderate variety |
 | 2 unique note values | 0 | Minimal (baseline) |
 | 1 note value (uniform) | -15 | Monotonous rhythm |
-| Good rhythmic contrast | +10 | Long-short and short-long patterns present |
-| Recognizable pattern | +5 | Clear rhythmic motive detected |
+| Good rhythmic contrast | +10 | Long-short and short-long patterns present | // implementation pending 
+| Recognizable pattern | +5 | Clear rhythmic motive detected | // implementation pending
 
 ---
 
@@ -71,7 +71,7 @@ The "junction" is the harmonic progression implied when the subject's terminal n
 **Purpose:** Evaluates counterpoint quality when subject overlaps with itself at various distances
 
 **Primary Calculation:**
-The score is based on the **average dissonance score** across all tested stretto distances.
+The score is based on the **average dissonance score** across all tested stretto distances. // out of date
 
 | Factor | Impact | Condition |
 |--------|--------|-----------|
@@ -96,9 +96,8 @@ Score is based on **inverted position dissonance quality**.
 | Inverted position quality | ×5 | Average dissonance score in inverted position |
 | Inverted much worse than original | -3 to -8 | Quality difference > 1.0 |
 | Inverted better than original | +3 | Rare but valuable |
-| Parallel perfects (inverted) | -2 per issue (max -6) | Voice-leading error (reduced from -5 to avoid overlap with quality score which already penalizes consecutive perfects) |
-| High imperfect consonance ratio (≥60%) | +5 | 3rds/6ths are safe for inversion |
-| Low imperfect consonance ratio (<30%) | -3 | Too many perfect intervals |
+| Parallel perfects (inverted) | -2 per issue (max -6) | Voice-leading error (reduced from -5 to avoid overlap with quality score which already penalizes consecutive perfects) | // just denoce actually
+// removed unused indicators 
 
 ---
 
@@ -120,11 +119,11 @@ Score is based on **inverted position dissonance quality**.
 **Group:** Combination
 **Purpose:** Evaluates melodic contour differentiation
 
-**Motion Ratio Analysis (Target: 4:1 independent:dependent):**
+**Motion Ratio Analysis (Target: 4:1 independent:dependent):** // shoukd use sigmoids for these
 
 | Main Ratio (ind:dep) | Score | Description |
 |---------------------|-------|-------------|
-| 3.5-5:1 | +10 | Ideal (around 4:1) |
+| 3.5-6:1 | +10 | Ideal (around 4:1) | // adjusted
 | 2.5-3.5:1 | +5 | Acceptable (3:1 range) |
 | 1.5-2.5:1 | -5 | Too low (2:1 range) |
 | <1.5:1 | -12 | Very poor |
@@ -139,7 +138,7 @@ Score is based on **inverted position dissonance quality**.
 | >3:1 | -1 to -5 | Lacking oblique (penalty scales with skew) |
 | <1:3 | -1 to -5 | Excessive oblique (penalty scales with skew) |
 
-**Similar:Parallel Balance (Target: at least 2:1):**
+**Similar:Parallel Balance (Target: at least 2:1):** // these shiukd take into account number of notes
 | Ratio | Score | Description |
 |-------|-------|-------------|
 | <1.5:1 | -5 | Too much parallel vs similar |
@@ -161,12 +160,12 @@ Score is based on **inverted position dissonance quality**.
 | Factor | Impact | Condition |
 |--------|--------|-----------|
 | CS vs answer overall quality | ×5 | `overallAvgScore` (duration-weighted, all intervals) |
-| No dissonances | +10 | Perfect consonance throughout |
+| No dissonances | +10 | Perfect consonance throughout | // everything after this shouldnbe reflected in adore and is redundant 
 | ≥85% consonant on strong beats | +8 | Strong stability |
 | ≥70% consonant on strong beats | +3 | Good stability |
 | <50% consonant on strong beats | -8 | Problematic |
 | No parallel perfect violations | +3 | Clean voice-leading |
-| Parallel perfect violations | -5 per violation (max -15) | Critical issues |
+| Parallel perfect violations | -5 per violation (max -15) | Critical issues | 
 
 **Note on quality score**: The ×5 multiplier uses `overallAvgScore` — a duration-weighted average across **all** intervals (consonances contribute 0.2–0.5 by type; dissonances contribute their actual score). This is the same formula used by the "Score" badge in the visualization. Consonances improve this score, so a CS with many good consonances against the answer will score better than one measured by dissonances alone.
 
@@ -177,22 +176,31 @@ Score is based on **inverted position dissonance quality**.
 The dissonance scoring system evaluates each interval in context, following species counterpoint principles.
 
 ### Score Range
-- **+2.0 to +3.0**: Exceptionally well-handled (strong suspension, appoggiatura)
-- **+1.0 to +2.0**: Good handling (proper passing tone, neighbor)
-- **0.0**: Acceptable/neutral
-- **-1.0 to 0.0**: Marginal
-- **Below -1.0**: Problematic
+- **+2.0 to +3.0**: Strong (strong suspension, appoggiatura)
+- **+1.0 to +2.0**: Good (proper passing tone, neighbor)
+- **0.0**: Acceptable
+- **-1.0 to 0.0**: Mediocre
+- **Below -1.0**: Poor
 
 ### Entry Scoring (C → D)
 Motion type into the dissonance:
 
+// User: tweaked these 
 | Motion Type | Impact |
 |-------------|--------|
 | Oblique | +0.5 |
 | Contrary | +0.5 |
-| Similar (step involved) | -0.5 |
-| Similar (same interval type) | -1.0 |
-| Parallel | -1.5 |
+| Similar (at least one step) | -0.25 |
+| Similar (different intervals, no step) |  -0.5 |
+| Similar (same interval type) | -0.75 |
+// deleted parallel - not possible to enter into a dissonance by parallel motion - was disonnant already 
+
+// add motion interval (by voice): the logic is that larger moves and changes in direction draw attention to the dissonance 
+- Step or static: 0
+- Skip (same direction as previous move or recovering leap): -0.25
+- Skip (opposite direction of previous move & not recovering): -0.5
+- perfect leap (P4,P5,P8): -0.75
+- other leap: -1
 
 **Metric Position:**
 - Strong beat entry: **-0.5** (accented passing tones and neighbor tones are acceptable)
@@ -202,40 +210,47 @@ Resolution quality:
 
 | Resolution | Impact |
 |------------|--------|
-| To imperfect consonance (3rd, 6th) | +1.0 |
+| To imperfect consonance (3rd, 6th) | +0.75 | // lowered - please action
 | To perfect consonance (unison, 5th, 8ve) | +0.5 |
 | To another dissonance | **-0.75** |
 | Resolved by abandonment | -0.5 |
 | Delayed resolution (long rest) | -0.3 |
 
+### Motion Type
+
+Score once for both voices
+
+| Motion Type | Impact |
+|-------------|--------|
+| Oblique | +0.25 |
+| Contrary | +0.5 |
+| Similar (at least one step) | -0.25 |
+| Similar (no step) |  -0.5 |
+
 ### Resolution Penalties (Leap-based)
-When entering by leap, the exit must compensate:
+When entering by leap, the exit must compensate: // lowered these throughout 
 
 **Skip entry (m3/M3, 3-4 semitones):**
 | Exit Type | Penalty |
 |-----------|---------|
-| Skip | -0.5 |
-| P4/P5 | -1.0 |
-| Large leap | -2.0 |
+| Step |  0 |
+| Skip opposite direction to previous move | -0.25 |
+| Skip same direction | -0.5 |
+| P4/P5 | -0.75 |
+| Large leap | -1.0 |
 
-**P4/P5 entry:**
+**Leap entry:** // more of this is now in entry
 | Exit Type | Penalty |
 |-----------|---------|
-| Opposite skip | -1.0 |
-| Opposite P4/P5 or same-dir skip | -1.5 |
-| Other | -2.0 |
-
-**Large leap entry (6th+):**
-| Exit Type | Penalty |
-|-----------|---------|
-| Step | 0 |
-| Opposite skip | -1.5 |
-| Other | -2.5 |
+| Step or static | 0 |
+| Opposite skip | -0.25 |
+| Opposite P4/P5 or same-dir skip | -0.75 |
+| Other | -1.0 |
 
 ### Sequence Mitigation
 Leaps within detected melodic sequences receive **75% penalty reduction**, since sequences justify unusual intervals through structural repetition.
 
-### Pattern Recognition Bonuses
+### Pattern Recognition Bonuses // needs to be revised down goven changes on main scoring 
 
 | Pattern | Bonus | Detection Criteria |
 |---------|-------|-------------------|
@@ -251,7 +266,7 @@ Leaps within detected melodic sequences receive **75% penalty reduction**, since
 
 ### Metric Weight Hierarchy
 
-The scoring system uses a hierarchical metric weight system:
+The scoring system uses a hierarchical metric weight system: // for what?
 
 **Strong Beats (weight 0.75-1.0):**
 1. Beat 1 in all time signatures (weight: 1.0)
@@ -264,7 +279,7 @@ The scoring system uses a hierarchical metric weight system:
 
 **Compound Meters (6/8, 9/8, 12/8):**
 - Main beats are dotted quarters (beats 1 and 2 in 6/8, etc.)
-- Beat 1 = strong (1.0), other main beats = medium (0.5-0.75)
+- Beat 1 = strong (1.0), other main beats = medium (0.5-0.75) / which of the two
 - Eighth-note subdivisions within beats = weak (0.25)
 
 ---
@@ -281,6 +296,8 @@ Computed independently for each voice by `scorePassingMotion()`. Only notes with
 |--------|--------|
 | Short note (base) | +0.5 |
 | Off-beat position (metricWeight < 0.5) | +0.5 |
+| Off primary subdivision of the beat |
+| Same direction as previous move | + 0.25
 | Step entry (1-2 semitones) | +0.75 |
 | Oblique entry | +0.5 |
 | Sequence membership | +1.0 |
