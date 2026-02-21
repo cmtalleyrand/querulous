@@ -758,7 +758,29 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
  */
 function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   if (!nextSim) {
-    return { score: -1.0, details: ['Unresolved (no following note)'], motion: null, v1Resolution: null, v2Resolution: null, resolvedByAbandonment: false };
+    let score = -1.0;
+    const details = ['Unresolved (no following note)'];
+
+    // Keep abandonment handling consistent with the normal exit path.
+    // This can occur at phrase boundaries when one voice drops out first.
+    if (restContext && restContext.resolvedByAbandonment) {
+      score -= 0.5;
+      details.push('Resolved by abandonment (voice dropped out): -0.5');
+    }
+
+    return {
+      score,
+      details,
+      motion: null,
+      v1Resolution: null,
+      v2Resolution: null,
+      resolvedByAbandonment: Boolean(restContext && restContext.resolvedByAbandonment),
+      baseExitComponent: score,
+      // No evaluated motion exists without a following simultaneity.
+      // Keep these as null so downstream code doesn't treat them as measured penalties.
+      v1ResolutionComponent: null,
+      v2ResolutionComponent: null,
+    };
   }
 
   // Check if this is actually a resolution (D → C) or just movement (D → D)
@@ -1519,12 +1541,14 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
   // Cross-reference: show exit resolution penalty in the Entry section so users can
   // see that the entry leap is what drives the penalty (it's a combined entry+exit issue).
   const _xl = { skip: 'skip (3rd)', perfect_leap: 'P4/P5 leap', large_leap: 'large leap', octave: 'octave leap' };
-  if (exitInfo.v1ResolutionComponent !== 0 && entryInfo.v1MelodicInterval !== 0) {
+  // Keep this finite check as a defensive guard for null/unset resolution components
+  // on unresolved endpoints and any future malformed intermediate states.
+  if (Number.isFinite(exitInfo.v1ResolutionComponent) && exitInfo.v1ResolutionComponent !== 0 && entryInfo.v1MelodicInterval !== 0) {
     const mag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
     const c = exitInfo.v1ResolutionComponent;
     entryInfo.details.push(`V1 ${_xl[mag.type] || mag.type} → exit: ${c >= 0 ? '+' : ''}${c.toFixed(2)}`);
   }
-  if (exitInfo.v2ResolutionComponent !== 0 && entryInfo.v2MelodicInterval !== 0) {
+  if (Number.isFinite(exitInfo.v2ResolutionComponent) && exitInfo.v2ResolutionComponent !== 0 && entryInfo.v2MelodicInterval !== 0) {
     const mag = getIntervalMagnitude(entryInfo.v2MelodicInterval);
     const c = exitInfo.v2ResolutionComponent;
     entryInfo.details.push(`V2 ${_xl[mag.type] || mag.type} → exit: ${c >= 0 ? '+' : ''}${c.toFixed(2)}`);
