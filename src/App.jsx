@@ -66,6 +66,11 @@ const DEFAULT_CS = `F4 E4 | D2 C2 D2 E2 | F2 G2 F2 E2 | D2 C2 D4 |]`;
  * Main Fugue Analyzer Application
  */
 export default function App() {
+  const safeToFixed = (value, digits = 1) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
+  };
+
   // Input state
   const [subjectInput, setSubjectInput] = useState(DEFAULT_SUBJECT);
   const [csInput, setCsInput] = useState(DEFAULT_CS);
@@ -1370,7 +1375,7 @@ export default function App() {
                     const warningCount = s.warningCount || 0;
 
                     // Get the dissonance score for this stretto
-                    const strettoScore = s.dissonanceAnalysis?.summary?.averageScore || 0;
+                    const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
 
                     // Gradation: based on score AND issues
                     let bgColor, borderColor, textColor, badge, scoreDisplay;
@@ -1378,42 +1383,42 @@ export default function App() {
                       bgColor = '#1f2937';
                       borderColor = '#1f2937';
                       textColor = 'white';
-                      scoreDisplay = strettoScore.toFixed(1);
+                      scoreDisplay = safeToFixed(strettoScore, 1);
                     } else if (s.clean) {
                       // Clean - bright green
                       bgColor = '#dcfce7';
                       borderColor = '#86efac';
                       textColor = '#166534';
                       badge = '✓';
-                      scoreDisplay = `+${strettoScore.toFixed(1)}`;
+                      scoreDisplay = `+${safeToFixed(strettoScore, 1)}`;
                     } else if (s.viable) {
                       // Viable with warnings - yellow-green
                       bgColor = '#fef9c3';
                       borderColor = '#fde047';
                       textColor = '#854d0e';
                       badge = `⚠${warningCount}`;
-                      scoreDisplay = strettoScore >= 0 ? `+${strettoScore.toFixed(1)}` : strettoScore.toFixed(1);
+                      scoreDisplay = strettoScore >= 0 ? `+${safeToFixed(strettoScore, 1)}` : safeToFixed(strettoScore, 1);
                     } else if (strettoScore >= 0) {
                       // Positive score but has issues - light orange
                       bgColor = '#ffedd5';
                       borderColor = '#fdba74';
                       textColor = '#c2410c';
                       badge = issueCount.toString();
-                      scoreDisplay = `+${strettoScore.toFixed(1)}`;
+                      scoreDisplay = `+${safeToFixed(strettoScore, 1)}`;
                     } else if (strettoScore >= -1) {
                       // Slightly negative - orange
                       bgColor = '#fee2e2';
                       borderColor = '#fca5a5';
                       textColor = '#b91c1c';
                       badge = issueCount.toString();
-                      scoreDisplay = strettoScore.toFixed(1);
+                      scoreDisplay = safeToFixed(strettoScore, 1);
                     } else {
                       // Very negative - red
                       bgColor = '#fecaca';
                       borderColor = '#f87171';
                       textColor = '#991b1b';
                       badge = issueCount.toString();
-                      scoreDisplay = strettoScore.toFixed(1);
+                      scoreDisplay = safeToFixed(strettoScore, 1);
                     }
 
                     return (
@@ -1481,7 +1486,7 @@ export default function App() {
                     }}
                   >
                     {(() => {
-                      const strettoScore = s.dissonanceAnalysis?.summary?.averageScore || 0;
+                      const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
                       return (
                         <div
                           style={{
@@ -1506,7 +1511,7 @@ export default function App() {
                             color: strettoScore >= 0.5 ? '#16a34a' : strettoScore >= 0 ? '#ca8a04' : '#dc2626',
                             border: `1px solid ${strettoScore >= 0.5 ? '#86efac' : strettoScore >= 0 ? '#fde047' : '#fca5a5'}`,
                           }}>
-                            Score: {strettoScore >= 0 ? '+' : ''}{strettoScore.toFixed(2)}
+                            Score: {strettoScore >= 0 ? '+' : ''}{safeToFixed(strettoScore, 2)}
                           </span>
                           <span style={{
                             fontSize: '11px',
@@ -1549,7 +1554,7 @@ export default function App() {
                             {w.score !== undefined && (
                               <span style={{ marginLeft: '6px', fontWeight: '700',
                                 color: w.score >= 0 ? '#059669' : '#dc2626' }}>
-                                ({w.score >= 0 ? '+' : ''}{w.score.toFixed(1)})
+                                ({w.score >= 0 ? '+' : ''}{safeToFixed(w.score, 1)})
                               </span>
                             )}
                           </div>
