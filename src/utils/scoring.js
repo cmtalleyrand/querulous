@@ -372,6 +372,23 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
     details.push({ factor: `Close stretto possible with good counterpoint`, impact: +5 });
   }
 
+  // Component B: variety — distinct viable transpositions, direction-aware (raw semitones, not mod-12)
+  const viableResults = allResults.filter(r => r.viable);
+  const distinctTranspositions = new Set(viableResults.map(r => r.transposition));
+  const transpCount = distinctTranspositions.size;
+  const varietyBonus = transpCount >= 5 ? 6
+    : transpCount === 4 ? 5
+    : transpCount === 3 ? 4
+    : transpCount === 2 ? 2
+    : 0;
+  internal += varietyBonus;
+  details.push({
+    factor: transpCount === 0 ? 'No viable transpositions'
+      : transpCount === 1 ? 'Viable stretto at 1 transposition only'
+      : `Viable stretto across ${transpCount} distinct transpositions`,
+    impact: varietyBonus,
+  });
+
   // Context
   const context = {
     subjectLength,
@@ -379,6 +396,7 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
     goodDistances,
     avgCounterpointScore: weightedAvg,
     distanceScores,
+    distinctViableTranspositions: transpCount,
   };
 
   if (subjectLength && goodDistances > 0) {
