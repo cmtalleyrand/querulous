@@ -1,8 +1,9 @@
-import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
+import { NoteEvent, Simultaneity, ScaleDegree } from '../types';
 import { metricWeight, pitchName, isDuringRest } from './formatter';
 import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis';
 import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants';
+import { classifyMotion } from './motionClassification';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -351,22 +352,25 @@ export function checkParallelPerfects(sims, formatter) {
 export function testContourIndependence(subject, cs, formatter) {
   // Get adjusted thresholds based on note count
   const noteCount = Math.min(subject.length, cs.length);
-  const thresholds = getAdjustedThresholds(noteCount);
 
   // Adjust ratio thresholds for small note counts
   // With few motions, ratios are less meaningful
   const parallelWarningThreshold = noteCount <= 8 ? 0.7 : 0.6;
   const contraryGoodThreshold = noteCount <= 8 ? 0.25 : 0.35;
 
-  const sMotions = [];
-  const csMotions = [];
+  const rawSims = findSimultaneities(subject, cs, formatter?.meter || [4, 4]);
+  const seen = new Set();
+  const uniqueSims = [];
 
-  for (let i = 1; i < subject.length; i++) {
-    sMotions.push(new MelodicMotion(subject[i].onset, subject[i - 1].pitch, subject[i].pitch));
+  for (const sim of rawSims) {
+    const key = `${sim.voice1Note.onset}-${sim.voice1Note.pitch}-${sim.voice2Note.onset}-${sim.voice2Note.pitch}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueSims.push(sim);
+    }
   }
-  for (let i = 1; i < cs.length; i++) {
-    csMotions.push(new MelodicMotion(cs[i].onset, cs[i - 1].pitch, cs[i].pitch));
-  }
+
+  uniqueSims.sort((a, b) => a.onset - b.onset);
 
   let parallel = 0,
     similar = 0,
@@ -374,25 +378,32 @@ export function testContourIndependence(subject, cs, formatter) {
     oblique = 0;
   const details = [];
 
-  for (const sm of sMotions) {
-    for (const cm of csMotions) {
-      if (Math.abs(sm.time - cm.time) <= thresholds.MOTION_SIMILARITY_WINDOW) {
-        if (sm.direction === 0 || cm.direction === 0) {
-          oblique++;
-        } else if (sm.direction === cm.direction) {
-          if (sm.semitones === cm.semitones) {
-            parallel++;
-            if (sm.semitones > ANALYSIS_THRESHOLDS.LEAP_THRESHOLD) {
-              details.push({ description: `Parallel leaps at ${formatter.formatBeat(sm.time)}` });
-            }
-          } else {
-            similar++;
-          }
-        } else {
-          contrary++;
-        }
-        break;
+  // Example of this transition-based method:
+  // t0: v1=C4, v2=G4
+  // t1: v1=C4, v2=F4  -> oblique (v1 holds, v2 moves)
+  // t2: v1=D4, v2=F4  -> oblique (v1 moves, v2 holds)
+  // By comparing adjacent simultaneities, both directions of oblique are counted.
+  for (let i = 1; i < uniqueSims.length; i++) {
+    const prev = uniqueSims[i - 1];
+    const curr = uniqueSims[i];
+
+    const motion = classifyMotion(prev, curr);
+
+    // No motion at all for this transition (same note pair repeated)
+    if (motion.type === 'static' || motion.type === 'unknown') continue;
+
+    if (motion.type === 'oblique') {
+      oblique++;
+    } else if (motion.type === 'contrary') {
+      contrary++;
+    } else if (motion.type === 'parallel') {
+      parallel++;
+      if (motion.v1Interval > ANALYSIS_THRESHOLDS.LEAP_THRESHOLD) {
+        details.push({ description: `Parallel leaps at ${formatter.formatBeat(curr.onset)}` });
       }
+    } else {
+      // similar / similar_step / similar_same_type
+      similar++;
     }
   }
 
