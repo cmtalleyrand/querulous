@@ -47,6 +47,7 @@ The "junction" is the harmonic progression implied when the subject's terminal n
 | ^5 | V→V | Static (problematic) |
 | Other | ?→V | Unusual (problematic) |
 
+// monophonic subjects cant end on chords anyway.
 ---
 
 ### 2. Rhythmic Character (Weight: 0.2) // reduce weight
@@ -86,7 +87,7 @@ The score is based on the **average dissonance score** across all tested stretto
 
 ### 4. Invertibility (Weight: 1.0)
 **Group:** Combination (requires countersubject)
-**Purpose:** Evaluates double counterpoint at the octave
+**Purpose:** Evaluates double counterpoint at the octave // above amd below not just above
 
 **Primary Calculation:**
 Score is based on **inverted position dissonance quality**.
@@ -95,8 +96,8 @@ Score is based on **inverted position dissonance quality**.
 |--------|--------|-----------|
 | Inverted position quality | ×5 | Average dissonance score in inverted position |
 | Inverted much worse than original | -3 to -8 | Quality difference > 1.0 |
-| Inverted better than original | +3 | Rare but valuable |
-| Parallel perfects (inverted) | -2 per issue (max -6) | Voice-leading error (reduced from -5 to avoid overlap with quality score which already penalizes consecutive perfects) | // just deno actually
+| Inverted better than original | +3 | Rare but valuable | // should be asp sigmoid around the (score_original - 0.5×score_invertedoctaveabove -0.5×scoreintervedoctavebelow)×5 turning negarive at -0.25 and tapering off quickly after around 0.1
+| Parallel perfects (inverted) | -2 per issue (max -6) | Voice-leading error (reduced from -5 to avoid overlap with quality score which already penalizes consecutive perfects) | // just remove - I dont understand fhe need to double count here. it woukd be good to have a breakdown though, of the difference in score
 // removed unused indicators 
 
 ---
@@ -124,15 +125,15 @@ Score is based on **inverted position dissonance quality**.
 | >6:1 | +5 | Slightly excessive |
 | 5-6:1 | +8 | Strong |
 
-**Contrary:Oblique Balance (Target: around 5:2 = 2.5:1):**
+**Contrary:Oblique Balance:** // simplify to punish less than 1 (or 10% rounded down) oblique and thats it
 | Ratio | Score | Description |
 |-------|-------|-------------|
 | 1.5-2.5:1 | +5 | Good balance (healthy oblique) |
-| 2.5-3:1 | +2 | Acceptable |
+| 2-4:1 | +2 | Acceptable |
 | >3:1 | -1 to -5 | Lacking oblique (penalty scales with skew) |
-| <1:3 | -1 to -5 | Excessive oblique (penalty scales with skew) |
+| <1:3 | -1 to -2 | Excessive oblique (penalty scales with skew) |
 
-**Similar:Parallel Balance (Target: at least 2:1):** // these shiukd take into account number of notes
+**Similar:Parallel Balance (Target: at least 2:1):** //  should take into account number of notes - soemthing  like more than 1 per 10 note should be punished 
 | Ratio | Score | Description |
 |-------|-------|-------------|
 | <1.5:1 | -5 | Too much parallel vs similar |
@@ -140,7 +141,7 @@ Score is based on **inverted position dissonance quality**.
 | >2:1 | 0 | Acceptable |
 
 **Size of Motion:**
-| Condition | Penalty |
+| Condition | Penalty | // weaken
 |-----------|---------|
 | >2 large parallel leaps (>4 semitones) | -1 to -5 |
 | >3 large similar motion leaps | -1 to -3 |
@@ -154,7 +155,7 @@ Score is based on **inverted position dissonance quality**.
 | Factor | Impact | Condition |
 |--------|--------|-----------|
 | CS vs answer overall quality | ×5 | `overallAvgScore` (duration-weighted, all intervals) |
-| No dissonances | +10 | Perfect consonance throughout | // everything after this shouldnbe reflected in adore and is redundant 
+| No dissonances | +10 | Perfect consonance throughout | // everything after this shouldnbe reflected in scpore and is redundant 
 | ≥85% consonant on strong beats | +8 | Strong stability |
 | ≥70% consonant on strong beats | +3 | Good stability |
 | <50% consonant on strong beats | -8 | Problematic |
