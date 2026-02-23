@@ -92,7 +92,7 @@ export function createAnalysisContext(options = {}) {
 
 /**
  * Check if P4 should be treated as dissonant based on user setting
- * Default behavior: P4 is treated as consonant (unchecked checkbox)
+ * Default behavior: P4 is treated as DISSONANT // CODE SHOULD ALIGN WITH THIS
  * When checkbox is checked: P4 is treated as dissonant
  * @param {Simultaneity} sim - The simultaneity to check
  * @param {Object} ctx - Analysis context
@@ -136,9 +136,7 @@ function isOnsetInSequence(onset, ctx) {
 
 /**
  * Calculate sub-subdivision threshold for short note detection.
- * Notes shorter than a triplet of the main subdivision are considered "very short"
- * and should have reduced penalties (they pass too quickly to be very noticeable).
- *
+ * 
  * For 4/4 meter: main beat = 1 quarter, subdivision = 8th note (0.5), triplet = ~0.167
  * For 6/8 meter: main beat = dotted quarter (1.5), subdivision = 8th (0.5), triplet = ~0.167
  *
@@ -160,11 +158,7 @@ function getShortNoteThreshold(ctx) {
 }
 
 /**
- * Check if a note is "short" (below sub-subdivision level).
- * Short notes get special treatment for penalties:
- * - Consecutive dissonances: penalty halved if on off-beat
- * - Motion/parallels: penalty halved if NOT repeated
- * - Repetition penalties: halved
+ * // Out of date - part of passigness now
  *
  * @param {Simultaneity} sim - The simultaneity to check
  * @param {Object} ctx - Analysis context
@@ -208,7 +202,7 @@ function getShortNoteInfo(sim, ctx) {
  * - repeating same interval class (step/skip/perfect leap): +0.25
  * - in sequence: +1
  *
- * Penalty mitigation = sum of passingness / 2
+ * Penalty mitigation = min(1, max(sum of passingness / 2, 0))
  * If passingness >= 1 → is passing motion
  *
  * @param {Simultaneity} currSim - Current simultaneity
@@ -382,12 +376,7 @@ function getIntervalMagnitude(semitones) {
 /**
  * Calculate resolution penalty based on entry leap type and resolution type
  * User specification:
- * - Skip (m3/M3, 3-4 st) entered: -0.5 if resolved by skip, -1 if P4/P5, -2 otherwise
- * - P4/P5 entered: -1 if opposite skip, -1.5 if opposite P4/P5 or same-dir skip, -2 otherwise
- *
- * SEQUENCE MITIGATION: If the leap is part of a detected melodic sequence,
- * the penalty is reduced by 75% (mitigating the "size and direction" penalties).
- * Sequences are structured repetitions that justify unusual leaps.
+ * // update
  *
  * @param {number} entryInterval - Entry interval in semitones
  * @param {number} exitInterval - Exit interval in semitones
@@ -414,14 +403,14 @@ function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, 
   if (entryMag.type === 'skip') {
     if (exitMag.type === 'skip') {
       basePenalty = -0.5;
-      reason = 'melodic skip into dissonance, left by skip';
+      reason = 'Skip entry, skip exit';
     } else if (exitMag.type === 'perfect_leap') {
       basePenalty = -1.0;
-      reason = 'melodic skip into dissonance, left by P4/P5';
+      reason = 'Skip entry, perfect leap exit';
     } else {
       // Large leap or octave
       basePenalty = -2.0;
-      reason = 'melodic skip into dissonance, left by large leap';
+      reason = 'Skip entry, large leap';
     }
   }
   // Perfect leap entry (P4/P5)
