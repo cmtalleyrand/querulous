@@ -190,7 +190,7 @@ SUSPENSIONS (sus)
 • Common suspensions: 7-6, 4-3, 9-8 (above bass); 2-3 (below bass)
 
 PASSING TONES (PT)
-• Occur on weak beats (beats 2, 4 or off-beats)
+• Common on weak beats; accented cases may occur
 • Approached by step from one direction
 • Left by step in the same direction
 • Connect two consonances
@@ -198,7 +198,7 @@ PASSING TONES (PT)
 NEIGHBOR TONES (N)
 • Also called auxiliary notes
 • Step away from a consonance and return to the same note
-• Usually on weak beats
+• Usually on weak beats, but accented neighbors can occur
 
 CAMBIATA (Cam) — Nota Cambiata
 The cambiata is a 5-note melodic figure with a characteristic "skip past" the resolution:
@@ -224,8 +224,8 @@ ANTICIPATIONS (Ant)
 • Usually short and on weak beats
 
 APPOGGIATURAS (App)
-• Approach by leap to a strong beat dissonance
-• Resolve by step (usually down)
+• Approach by leap to an accented dissonance
+• Resolve by step (same or opposite direction; usually down)
 • Creates expressive emphasis
 
 UNPREPARED DISSONANCES

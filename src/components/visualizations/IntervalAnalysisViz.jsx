@@ -9,19 +9,19 @@ import { METRIC_STRENGTH_CUTOFFS, SCORE_BAND_BOUNDARIES } from '../../utils/cons
 const DISSONANCE_DEFINITIONS = {
   passing: {
     name: 'Passing Tone (PT)',
-    definition: 'Occurs on a weak beat, approached by step from one direction, left by step in the same direction. Connects two consonances.',
+    definition: 'Approached by step and left by step in the same direction. Commonly weak-beat, but accented instances are allowed with reduced reward.',
   },
   neighbor: {
     name: 'Neighbor Tone (N)',
-    definition: 'Steps away from a consonance and returns to the same note. Also called auxiliary note. Usually on weak beats.',
+    definition: 'Steps away from a consonance and returns to the same note. Also called auxiliary note. Usually weak-beat, but accented instances are allowed with reduced reward.',
   },
   suspension: {
     name: 'Suspension (Sus)',
-    definition: 'Preparation: consonant note held into next beat. Dissonance: held note clashes with moving voice. Resolution: suspended note moves DOWN by step.',
+    definition: 'Preparation: consonant note held into next beat. Dissonance: held note clashes with moving voice. Resolution: suspended note moves DOWN by step // NOTE: SHOULD ALLOW UP WITH NO EXIT BONUS.',
   },
   appoggiatura: {
     name: 'Appoggiatura (App)',
-    definition: 'Approached by leap to a strong beat dissonance, resolves by step (usually down). Creates expressive emphasis.',
+    definition: 'Approached by leap or skip on a strong beat and resolves by step (direction may continue or reverse). Creates expressive emphasis.',
   },
   anticipation: {
     name: 'Anticipation (Ant)',
@@ -53,7 +53,7 @@ const DISSONANCE_DEFINITIONS = {
   },
   unprepared: {
     name: 'Unprepared Dissonance',
-    definition: 'Strong-beat dissonance not fitting standard ornamental patterns. Generally avoided in strict style.',
+    definition: 'Strong-beat dissonance not fitting standard ornamental patterns. Generally avoided in strict style. // SHOULD BE NOT APPROACHED BY STEP IN EITHER VOICE',
   },
 };
 
