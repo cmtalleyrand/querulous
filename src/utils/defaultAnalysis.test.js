@@ -12,6 +12,21 @@ describe('runDefaultAnalysis', () => {
     expect(typeof scoreResult.overall).toBe('number');
   });
 
+
+
+  it('uses updated C# minor 2/2 defaults', () => {
+    const { input } = runDefaultAnalysis();
+
+    expect(input.key).toBe('C#');
+    expect(input.mode).toBe('natural_minor');
+    expect(input.noteLength).toBe('1/8');
+    expect(input.meter).toEqual([2, 2]);
+    expect(input.subject).toContain('C8');
+    expect(input.countersubject).toContain('e2 d2 e2 f2');
+    expect(input.countersubject2).toContain('c2 B2 c2 d2');
+    expect(input.answer).toContain('G8');
+  });
+
   it('applies CS position/shift controls to countersubject pitches', () => {
     const base = runDefaultAnalysis({ csPos: 'above', csShift: '0' });
     const shifted = runDefaultAnalysis({ csPos: 'below', csShift: '0' });

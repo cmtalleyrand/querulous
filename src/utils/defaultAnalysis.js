@@ -18,12 +18,14 @@ import { BeatFormatter } from './formatter';
 import { setMeter, setP4Treatment } from './dissonanceScoring';
 
 export const DEFAULT_ANALYSIS_INPUT = {
-  subject: 'D4 A4 | F2 E2 D2 C2 | _B,2 A,2 G,2 A,2 | _B,2 C2 D4 |]',
-  countersubject: 'F4 E4 | D2 C2 D2 E2 | F2 G2 F2 E2 | D2 C2 D4 |]',
-  key: 'D',
+  subject: 'C8 | ^B,4 E4 | D8 |',
+  countersubject: 'e2 d2 e2 f2 | g2 f2 g2 a2 | g2 f2 e2 g2 | f2 e2 f2 g2 |',
+  countersubject2: 'c2 B2 c2 d2 | e2 d2 e2 f2 | e2 d2 c2 e2 | d2 c2 d2 e2 |',
+  answer: 'G8 | =G4 B4 | ^A8 |',
+  key: 'C#',
   mode: 'natural_minor',
   noteLength: '1/8',
-  meter: [4, 4],
+  meter: [2, 2],
   csPos: 'above',
   csShift: '0',
 };
