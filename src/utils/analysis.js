@@ -1,8 +1,9 @@
 import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
-import { metricWeight, pitchName, isDuringRest } from './formatter';
+import { metricWeight, pitchName } from './formatter';
 import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis';
 import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants';
+import { METRIC_STRENGTH_CUTOFFS } from './constants/thresholds';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -64,7 +65,7 @@ export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
   }
 
   // Check for PASSING TONE in voice 1 (stepwise through, weak beat)
-  if (v1Prev && v1Next && sim.metricWeight < 0.75) {
+  if (v1Prev && v1Next && sim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG) {
     const dir1 = v1Note.pitch - v1Prev.pitch;
     const dir2 = v1Next.pitch - v1Note.pitch;
     // Same direction, both steps
@@ -79,7 +80,7 @@ export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
   }
 
   // Check for PASSING TONE in voice 2
-  if (v2Prev && v2Next && sim.metricWeight < 0.75) {
+  if (v2Prev && v2Next && sim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG) {
     const dir1 = v2Note.pitch - v2Prev.pitch;
     const dir2 = v2Next.pitch - v2Note.pitch;
     if (Math.sign(dir1) === Math.sign(dir2) && dir1 !== 0 && isStep(v2Prev.pitch, v2Note.pitch) && isStep(v2Note.pitch, v2Next.pitch)) {
@@ -93,7 +94,7 @@ export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
   }
 
   // Check for NEIGHBOR TONE in voice 1 (step away and back)
-  if (v1Prev && v1Next && sim.metricWeight < 0.75) {
+  if (v1Prev && v1Next && sim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG) {
     if (v1Prev.pitch === v1Next.pitch && isStep(v1Prev.pitch, v1Note.pitch)) {
       return {
         type: 'neighbor',
@@ -105,7 +106,7 @@ export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
   }
 
   // Check for NEIGHBOR TONE in voice 2
-  if (v2Prev && v2Next && sim.metricWeight < 0.75) {
+  if (v2Prev && v2Next && sim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG) {
     if (v2Prev.pitch === v2Next.pitch && isStep(v2Prev.pitch, v2Note.pitch)) {
       return {
         type: 'neighbor',
@@ -118,7 +119,7 @@ export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
 
   // Check for ANTICIPATION in voice 1 (arrives early, same as next consonance)
   if (v1Next && nextSim && nextSim.interval.isConsonant()) {
-    if (v1Note.pitch === v1Next.pitch && sim.metricWeight < 0.5) {
+    if (v1Note.pitch === v1Next.pitch && sim.metricWeight < METRIC_STRENGTH_CUTOFFS.MEDIUM) {
       return {
         type: 'anticipation',
         label: 'Ant',
@@ -130,7 +131,7 @@ export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
 
   // Check for ANTICIPATION in voice 2
   if (v2Next && nextSim && nextSim.interval.isConsonant()) {
-    if (v2Note.pitch === v2Next.pitch && sim.metricWeight < 0.5) {
+    if (v2Note.pitch === v2Next.pitch && sim.metricWeight < METRIC_STRENGTH_CUTOFFS.MEDIUM) {
       return {
         type: 'anticipation',
         label: 'Ant',
@@ -141,7 +142,7 @@ export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
   }
 
   // Check for APPOGGIATURA in voice 1 (leap to dissonance on strong beat, resolves by step)
-  if (v1Prev && v1Next && sim.metricWeight >= 0.5) {
+  if (v1Prev && v1Next && sim.metricWeight >= METRIC_STRENGTH_CUTOFFS.MEDIUM) {
     const approach = Math.abs(v1Note.pitch - v1Prev.pitch);
     if (approach > 2 && isStep(v1Note.pitch, v1Next.pitch)) {
       return {
@@ -154,7 +155,7 @@ export function classifyDissonance(sim, allSims, v1Notes, v2Notes, formatter) {
   }
 
   // Check for APPOGGIATURA in voice 2
-  if (v2Prev && v2Next && sim.metricWeight >= 0.5) {
+  if (v2Prev && v2Next && sim.metricWeight >= METRIC_STRENGTH_CUTOFFS.MEDIUM) {
     const approach = Math.abs(v2Note.pitch - v2Prev.pitch);
     if (approach > 2 && isStep(v2Note.pitch, v2Next.pitch)) {
       return {
@@ -302,7 +303,6 @@ export function checkParallelPerfects(sims, formatter) {
     if (!curr.interval.isConsonant()) continue;
 
     // Find the IMMEDIATELY next simultaneity where BOTH voices have moved
-    let foundNext = false;
     for (let j = i + 1; j < uniqueSims.length; j++) {
       const next = uniqueSims[j];
 
@@ -311,7 +311,6 @@ export function checkParallelPerfects(sims, formatter) {
       if (!v1Moved || !v2Moved) continue;
 
       // Found the next simultaneity where both voices moved
-      foundNext = true;
 
       // BOTH intervals must be perfect 5ths or octaves (class 1 or 5)
       // AND both must be consonant (perfect quality, not augmented/diminished)
@@ -704,17 +703,13 @@ export function testRhythmicVariety(subject, formatter) {
 
   // Off-beat (syncopated) attacks: notes starting off the beat create variety
   // even with uniform note values
-  const measureLength = (meter[0] * 4) / meter[1]; // Internal units per measure
   const beatUnit = meter[1] >= 8 && meter[0] % 3 === 0 ? 1.5 : 1; // Compound vs simple
   let offBeatCount = 0;
-  let onBeatCount = 0;
 
   for (const note of subject) {
     const beatPosition = note.onset % beatUnit;
     const isOnBeat = beatPosition < 0.05 || beatPosition > beatUnit - 0.05;
-    if (isOnBeat) {
-      onBeatCount++;
-    } else {
+    if (!isOnBeat) {
       offBeatCount++;
     }
   }
@@ -842,8 +837,6 @@ export function testRhythmicComplementarity(subject, cs, meter) {
   }
   if (!subject.length || !cs.length) return { error: 'Empty' };
 
-  const beatsPerMeasure = meter[0];
-
   // Get all onsets rounded for comparison
   const sOnsets = new Set(subject.map((n) => Math.round(n.onset * 100) / 100));
   const cOnsets = new Set(cs.map((n) => Math.round(n.onset * 100) / 100));
@@ -936,7 +929,7 @@ export function testRhythmicComplementarity(subject, cs, meter) {
  * Test stretto viability at various time intervals
  * Issues are weighted by: beat strength, note duration, and consecutiveness
  */
-export function testStrettoViability(subject, formatter, minOverlap = 0.5, increment = 1, octaveDisp = 12, scoringOptions = {}) {
+export function testStrettoViability(subject, formatter, minOverlap = 0.5, increment = 1, octaveDisp = 12) {
   if (subject.length < 2) return { error: 'Too short' };
 
   const meter = formatter.meter;
@@ -1269,7 +1262,6 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
     : null;
 
   // Transposition diversity statistics
-  const testedTranspositions = allTranspositions;
   const viableTranspositions = [...new Set(results.filter(r => r.viable).map(r => r.transposition))];
   const viableDistances = [...new Set(results.filter(r => r.viable).map(r => r.distance))];
   const totalDistancesPerTransposition = Math.max(1, Math.floor(maxDist / increment));
@@ -1861,7 +1853,7 @@ function formatSeqDuration(beats) {
  * Analyze sequences in a voice - returns factual description only
  * No interpretive commentary, just the pattern itself
  */
-export function testSequentialPotential(notes, formatter) {
+export function testSequentialPotential(notes) {
   const sequenceAnalysis = detectSequences(notes, 3);
   const detailedSequences = [];
 
@@ -1908,13 +1900,4 @@ export function testSequentialPotential(notes, formatter) {
     ...sequenceAnalysis,
     detailedSequences,
   };
-}
-
-// Helper function
-function arraysEqual(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
 }

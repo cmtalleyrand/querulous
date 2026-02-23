@@ -6,10 +6,10 @@ import {
   generateGridLines,
   VIZ_COLORS,
   getIntervalStyle,
-  getIntervalName,
   isParallelFifthOrOctave,
 } from '../../utils/vizConstants';
 import { CounterpointScoreDisplay } from '../ui/CounterpointScoreDisplay';
+import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES, TWO_VOICE_SCORING } from '../../utils/constants/thresholds';
 
 /**
  * TwoVoiceViz — unified two-voice counterpoint visualization.
@@ -122,8 +122,8 @@ export function TwoVoiceViz({
           const prevV2End = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
           const v1RestDur = sim.onset - prevV1End;
           const v2RestDur = sim.onset - prevV2End;
-          const v1Rested = v1RestDur > 0.05;
-          const v2Rested = v2RestDur > 0.05;
+          const v1Rested = v1RestDur > 0.05; // local epsilon to avoid floating-point jitter in rest detection
+          const v2Rested = v2RestDur > 0.05; // local epsilon to avoid floating-point jitter in rest detection
 
           if (v1Rested || v2Rested) {
             const restingVoice = v1Rested && (!v2Rested || v1RestDur >= v2RestDur) ? 1 : 2;
@@ -152,7 +152,7 @@ export function TwoVoiceViz({
               restInfo = `Re-entry (other voice played during rest)`;
             } else {
               restCategory = 'asynchronous';
-              motionScoreMultiplier = 0.5;
+              motionScoreMultiplier = PENALTY_MULTIPLIERS.HALF;
               restInfo = `Asynchronous (${restDur.toFixed(2)} beat offset)`;
             }
           }
@@ -216,7 +216,7 @@ export function TwoVoiceViz({
         const simDuration = Math.min(v1End, v2End) - sim.onset;
         const minNoteDuration = Math.min(sim.voice1Note.duration, sim.voice2Note.duration);
         const isShortNote = minNoteDuration <= shortNoteThreshold;
-        const isOffBeat = sim.metricWeight < 0.75;
+        const isOffBeat = sim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG;
         const motionType = restCategory === 'asynchronous' ? 'asynchronous' : isAnyReentry ? 'reentry' : 'normal';
 
         const point = {
@@ -227,7 +227,7 @@ export function TwoVoiceViz({
           intervalClass: sim.interval.class,
           intervalName: sim.interval.toString(),
           isConsonant: isConsonantInterval,
-          isStrong: sim.metricWeight >= 0.75,
+          isStrong: sim.metricWeight >= METRIC_STRENGTH_CUTOFFS.STRONG,
           metricWeight: sim.metricWeight,
           category: scoring.category || 'consonant_normal',
           score: scoring.score,
@@ -349,17 +349,17 @@ export function TwoVoiceViz({
     let parallelPenalty = 0, repetitionPenalty = 0, motionBonus = 0;
 
     for (const pt of intervalPoints) {
-      const dur = Math.max(0.25, pt.duration || 0.25);
+      const dur = Math.max(TWO_VOICE_SCORING.MIN_INTERVAL_DURATION, pt.duration || TWO_VOICE_SCORING.MIN_INTERVAL_DURATION);
       totalDuration += dur;
       if (pt.isConsonant) {
         const isImperfect = [3, 6].includes(pt.intervalClass);
         const isP4 = pt.intervalClass === 4;
-        const baseConsonance = isImperfect ? 0.5 : pt.intervalClass === 5 ? 0.3 : isP4 ? 0.25 : 0.2;
+        const baseConsonance = isImperfect ? TWO_VOICE_SCORING.IMPERFECT_CONSONANCE_BASE : pt.intervalClass === 5 ? TWO_VOICE_SCORING.PERFECT_FIFTH_BASE : isP4 ? TWO_VOICE_SCORING.PERFECT_FOURTH_BASE : TWO_VOICE_SCORING.OTHER_CONSONANCE_BASE;
         let adjusted = baseConsonance;
-        if (pt.category === 'consonant_good_resolution') { resolutionBonus += 0.3 * dur; adjusted += 0.3; }
-        if (pt.category === 'consonant_bad_resolution') { resolutionPenalty += 0.2 * dur; adjusted -= 0.2; }
+        if (pt.category === 'consonant_good_resolution') { resolutionBonus += TWO_VOICE_SCORING.GOOD_RESOLUTION_BONUS * dur; adjusted += TWO_VOICE_SCORING.GOOD_RESOLUTION_BONUS; }
+        if (pt.category === 'consonant_bad_resolution') { resolutionPenalty += TWO_VOICE_SCORING.BAD_RESOLUTION_PENALTY * dur; adjusted -= TWO_VOICE_SCORING.BAD_RESOLUTION_PENALTY; }
         if (pt.isRepeated) {
-          const repAmount = 0.15 * (pt.isShortNote ? 0.5 : 1.0);
+          const repAmount = TWO_VOICE_SCORING.REPETITION_PENALTY_BASE * (pt.isShortNote ? PENALTY_MULTIPLIERS.HALF : TWO_VOICE_SCORING.PARALLEL_BASE_PENALTY);
           repetitionPenalty += repAmount * dur;
           adjusted -= repAmount;
         }
@@ -371,21 +371,21 @@ export function TwoVoiceViz({
         totalWeightedScore += ds;
       }
       if (pt.isParallel) {
-        let mult = pt.motionScoreMultiplier || 1.0;
-        if (pt.parallelInSequence) mult *= 0.25;
-        else if (pt.isShortNote && !pt.isRepeatedParallel) mult *= 0.5;
-        const pp = 1.0 * dur * mult;
+        let mult = pt.motionScoreMultiplier || TWO_VOICE_SCORING.PARALLEL_BASE_PENALTY;
+        if (pt.parallelInSequence) mult *= PENALTY_MULTIPLIERS.QUARTER;
+        else if (pt.isShortNote && !pt.isRepeatedParallel) mult *= PENALTY_MULTIPLIERS.HALF;
+        const pp = TWO_VOICE_SCORING.PARALLEL_BASE_PENALTY * dur * mult;
         parallelPenalty += pp;
         totalWeightedScore -= pp;
       }
       if (pt.v1Motion !== undefined && pt.v2Motion !== undefined) {
         if (Math.abs(pt.v1Motion) <= 2 && pt.v1Motion !== 0 && Math.abs(pt.v2Motion) <= 2 && pt.v2Motion !== 0) {
-          motionBonus += 0.1 * dur;
-          totalWeightedScore += 0.1 * dur;
+          motionBonus += TWO_VOICE_SCORING.MOTION_STEPWISE_BONUS * dur;
+          totalWeightedScore += TWO_VOICE_SCORING.MOTION_STEPWISE_BONUS * dur;
         }
       }
     }
-    const avgScore = totalDuration > 0 ? totalWeightedScore / totalDuration : 0;
+    const avgScore = totalDuration > 0 ? totalWeightedScore / totalDuration : SCORE_BAND_BOUNDARIES.NEGATIVE;
 
     const scoreBreakdown = {
       totalIntervals: intervalPoints.length,
@@ -421,7 +421,7 @@ export function TwoVoiceViz({
       setPreviousIssueCount(prev => prev === null ? analysis.issues.length : prev);
       if (onAnalysis) onAnalysis({ issues: analysis.issues, warnings: analysis.warnings, avgScore: analysis.avgScore });
     }
-  }, [analysis]);
+  }, [analysis, onAnalysis]);
 
   useEffect(() => {
     if (analysis && previousIssueCount !== null && previousIssueCount !== analysis.issues.length) {
@@ -430,7 +430,7 @@ export function TwoVoiceViz({
     }
   }, [analysis, previousIssueCount]);
 
-  const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
+  const getOnsetKey = (onset) => Math.round(onset * 4) / 4; // local quarter-note snapping for UI selection consistency
 
   const handleIntervalClick = useCallback((pt, event) => {
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -477,10 +477,10 @@ export function TwoVoiceViz({
   const issues = propIssues !== null ? propIssues : computedIssues;
   const warnings = propWarnings !== null ? propWarnings : computedWarnings;
   const pRange = maxPitch - minPitch;
-  const noteHeight = 18;
-  const headerHeight = 32;
+  const noteHeight = 18; // local layout: fixed note lane height for readability
+  const headerHeight = 32; // local layout: compact header row height
   const h = pRange * noteHeight + headerHeight + 20;
-  const pixelsPerBeat = 70;
+  const pixelsPerBeat = 70; // local layout: horizontal density in px per beat
   const w = Math.max(500, maxTime * pixelsPerBeat + 100);
   const tScale = (w - 80) / maxTime;
   const pToY = (p) => h - 20 - (p - minPitch) * noteHeight;
