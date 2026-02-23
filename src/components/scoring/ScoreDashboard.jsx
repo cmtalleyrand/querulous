@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ScoreGauge } from './ScoreGauge';
 import { ScoreBar } from './ScoreBar';
-import { SCORE_CATEGORIES, getScoreSummary } from '../../utils/scoring';
+import { getScoreSummary } from '../../utils/scoring';
 
 /**
  * Main scoring dashboard component
@@ -15,6 +15,7 @@ import { SCORE_CATEGORIES, getScoreSummary } from '../../utils/scoring';
 export function ScoreDashboard({ scoreResult, hasCountersubject }) {
   const [showDetails, setShowDetails] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
+  const categoryRefs = useRef({});
 
   if (!scoreResult) return null;
 
@@ -42,6 +43,18 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
         ? ['transpositionStability', 'invertibility', 'rhythmicInterplay', 'voiceIndependence']
         : [],
     },
+  };
+
+  const groupedCategoryKeys = Object.values(categoryGroups).flatMap(group => group.categories);
+  const summaryCategoryKeys = [...new Set([...strengths, ...improvements].map(item => item.key))];
+  const ungroupedSummaryKeys = summaryCategoryKeys.filter(key => !groupedCategoryKeys.includes(key));
+
+  const openCategory = (key) => {
+    setShowDetails(true);
+    setExpandedCategory(key);
+    requestAnimationFrame(() => {
+      categoryRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   };
 
   return (
@@ -131,10 +144,24 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
             </div>
             {strengths.length > 0 ? (
               <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: '#37474f' }}>
-                {strengths.slice(0, 3).map((s, i) => (
-                  <li key={i}>{s.category}</li>
+                {strengths.map((s, i) => (
+                  <li key={i} style={{ marginBottom: '4px' }}>
+                    <button
+                      onClick={() => openCategory(s.key)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: '#2e7d32',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                      }}
+                    >
+                      {s.category}
+                    </button>
+                  </li>
                 ))}
-                {strengths.length > 3 && <li>+{strengths.length - 3} more</li>}
               </ul>
             ) : (
               <div style={{ fontSize: '11px', color: '#757575', fontStyle: 'italic' }}>
@@ -157,10 +184,24 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
             </div>
             {improvements.length > 0 ? (
               <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: '#37474f' }}>
-                {improvements.slice(0, 3).map((s, i) => (
-                  <li key={i}>{s.category}</li>
+                {improvements.map((s, i) => (
+                  <li key={i} style={{ marginBottom: '4px' }}>
+                    <button
+                      onClick={() => openCategory(s.key)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: '#e65100',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                      }}
+                    >
+                      {s.category}
+                    </button>
+                  </li>
                 ))}
-                {improvements.length > 3 && <li>+{improvements.length - 3} more</li>}
               </ul>
             ) : (
               <div style={{ fontSize: '11px', color: '#757575', fontStyle: 'italic' }}>
@@ -196,7 +237,13 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
                 const data = scoreResult.categories[key];
                 if (!data) return null;
                 return (
-                  <div key={key} onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}>
+                  <div
+                    key={key}
+                    ref={(el) => {
+                      categoryRefs.current[key] = el;
+                    }}
+                    onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}
+                  >
                     <ScoreBar
                       categoryKey={key}
                       score={data.internal}
@@ -210,6 +257,44 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
             </div>
           );
         })}
+
+        {ungroupedSummaryKeys.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <h3
+              style={{
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#37474f',
+                marginBottom: '4px',
+                paddingBottom: '6px',
+                borderBottom: '2px solid #90a4ae',
+              }}
+            >
+              Additional Categories
+            </h3>
+            {ungroupedSummaryKeys.map((key) => {
+              const data = scoreResult.categories[key];
+              if (!data) return null;
+              return (
+                <div
+                  key={key}
+                  ref={(el) => {
+                    categoryRefs.current[key] = el;
+                  }}
+                  onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}
+                >
+                  <ScoreBar
+                    categoryKey={key}
+                    score={data.internal}
+                    internalScore={data.internal}
+                    showDetails={showDetails || expandedCategory === key}
+                    details={data.details}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Improvement suggestions */}
         {improvements.length > 0 && (

@@ -897,7 +897,6 @@ export default function App() {
             {/* Issues Summary - Show problems first */}
             <IssuesSummary
               results={results}
-              scoreResult={scoreResult}
               onHighlight={setHighlightedItem}
               highlightedItem={highlightedItem}
             />

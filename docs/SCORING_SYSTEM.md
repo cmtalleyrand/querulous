@@ -19,38 +19,7 @@ All category scores are aggregated into an overall weighted average.
 
 ## Score Categories
 
-### 1. Tonal Clarity (Weight: 0.5) // remove
-**Group:** Melodic
-**Purpose:** Assesses basic tonal orientation of the subject
-
-**Factors:**
-| Factor | Impact | Condition |
-|--------|--------|-----------|
-| Opens on tonic chord tone | +3 | Opening note is ^1, ^3, or ^5 |
-| Terminal quality: strong/good | +3 | Ends on ^1, ^7 (strong) or ^2, ^3 (good) |
-| Terminal quality: ambiguous/unusual | -3 | Ends on ^5 (stasis) or chromatic degree |
-| Answer junction: strong/good | +3 | Clear I→V or ii→V motion |
-| Answer junction: static/unusual | -3 | V→V stasis or problematic junction |
-
-**Answer Junction Explained:** // out of date - remove
-The "junction" is the harmonic progression implied when the subject's terminal note connects to the answer's entry on the dominant. A **problematic junction** occurs when:
-- **Static**: Subject ends on ^5, creating V→V (dominant to dominant, no harmonic motion)
-- **Unusual**: Subject ends on chromatic degrees or ^6, creating unclear harmonic connection
-
-| Terminal Degree | Junction | Quality |
-|-----------------|----------|---------|
-| ^1 | I→V | Strong |
-| ^7 | vii°→V | Strong |
-| ^4 | IV→V | Strong |
-| ^2 | ii→V | Good |
-| ^3 | I→V | Good |
-| ^5 | V→V | Static (problematic) |
-| Other | ?→V | Unusual (problematic) |
-
-// monophonic subjects cant end on chords anyway.
----
-
-### 2. Rhythmic Character (Weight: 0.2) // reduce weight
+### 1. Rhythmic Character (Weight: 10%)
 **Group:** Melodic
 **Purpose:** Measures rhythmic distinctiveness and variety
 
@@ -67,7 +36,7 @@ The "junction" is the harmonic progression implied when the subject's terminal n
 
 ---
 
-### 3. Stretto Potential (Weight: 1.0) 
+### 2. Stretto Potential (Weight: 25%)
 **Group:** Fugal
 **Purpose:** Evaluates counterpoint quality when subject overlaps with itself at various distances
 
@@ -85,7 +54,7 @@ The score is based on the **average dissonance score** across all tested stretto
 
 ---
 
-### 4. Invertibility (Weight: 1.0)
+### 3. Invertibility (Weight: 10%)
 **Group:** Combination (requires countersubject)
 **Purpose:** Evaluates double counterpoint at the octave // above amd below not just above
 
@@ -102,7 +71,7 @@ Score is based on **inverted position dissonance quality**.
 
 ---
 
-### 5. Rhythmic Interplay (Weight: 0.5)
+### 4. Rhythmic Interplay (Weight: 5%)
 **Group:** Combination
 **Purpose:** Measures rhythmic independence between subject and countersubject
 
@@ -114,7 +83,13 @@ Score is based on **inverted position dissonance quality**.
 | 50-70% | 0 to -8 | Moderate overlap |
 | 70-100% | -8 to -15 | Homorhythmic (voices too similar) |
 
-**Motion Ratio Analysis (Target: 4:1 independent:dependent):** // shoukd use sigmoids for these
+---
+
+### 5. Voice Independence (Weight: 5%)
+**Group:** Combination
+**Purpose:** Evaluates melodic contour differentiation
+
+**Motion Ratio Analysis (Target: 4:1 independent:dependent):**
 
 | Main Ratio (ind:dep) | Score | Description |
 |---------------------|-------|-------------|
@@ -148,7 +123,7 @@ Score is based on **inverted position dissonance quality**.
 
 ---
 
-### 7. Transposition Stability (Weight: 1.0)
+### 6. Transposition Stability (Weight: 30%)
 **Group:** Combination
 **Purpose:** How well countersubject works against the dominant-level answer
 
@@ -156,11 +131,6 @@ Score is based on **inverted position dissonance quality**.
 |--------|--------|-----------|
 | CS vs answer overall quality | ×5 | `overallAvgScore` (duration-weighted, all intervals) |
 | No dissonances | +10 | Perfect consonance throughout | // everything after this shouldnbe reflected in scpore and is redundant 
-| ≥85% consonant on strong beats | +8 | Strong stability |
-| ≥70% consonant on strong beats | +3 | Good stability |
-| <50% consonant on strong beats | -8 | Problematic |
-| No parallel perfect violations | +3 | Clean voice-leading |
-| Parallel perfect violations | -5 per violation (max -15) | Critical issues | 
 
 **Note on quality score**: The ×5 multiplier uses `overallAvgScore` — a duration-weighted average across **all** intervals (consonances contribute 0.2–0.5 by type; dissonances contribute their actual score). This is the same formula used by the "Score" badge in the visualization. Consonances improve this score, so a CS with many good consonances against the answer will score better than one measured by dissonances alone.
 
@@ -361,7 +331,6 @@ Overall = Σ(category_score × weight) / Σ(weights)
 ```
 
 ### Without Countersubject:
-- Tonal Clarity (0.5)
 - Rhythmic Character (0.8)
 - Stretto Potential (1.0)
 

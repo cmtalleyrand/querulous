@@ -80,18 +80,7 @@ if (categories.strettoPotential.score < -10) {
 
 **Files to modify**: `scoring.js:calculateOverallScore()`
 
-### 2.2 Re-weight Tonal Clarity Factors
-
-**Current**: Opening, terminal, and junction all have ±3 impact.
-
-**Proposed** (based on relative importance):
-- Terminal quality: ±5 (endings matter most)
-- Answer junction: ±4 (crucial for fugal flow)
-- Opening note: ±2 (important but recoverable)
-
-**Files to modify**: `scoring.js:calculateTonalClarityScore()`
-
-### 2.3 Add "Worst Moment" Factor
+### 2.2 Add "Worst Moment" Factor
 
 **Problem**: Average dissonance score may not reflect the listening experience. One terrible dissonance at a critical moment can be more damaging than several minor issues.
 
