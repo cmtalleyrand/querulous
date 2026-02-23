@@ -16,11 +16,11 @@ const DISSONANCE_DEFINITIONS = {
   },
   suspension: {
     name: 'Suspension (Sus)',
-    definition: 'Preparation: consonant note held into next beat. Dissonance: held note clashes with moving voice. Resolution: suspended note moves DOWN by step.',
+    definition: 'Preparation: consonant note held into next beat. Dissonance: held note clashes with moving voice. Resolution: suspended note moves DOWN by step // NOTE: SHOULD ALLOW UP WITH NO EXIT BONUS.',
   },
   appoggiatura: {
     name: 'Appoggiatura (App)',
-    definition: 'Approached by leap to an accented dissonance and resolves by step (direction may continue or reverse). Creates expressive emphasis.',
+    definition: 'Approached by leap or skip on a strong beat and resolves by step (direction may continue or reverse). Creates expressive emphasis.',
   },
   anticipation: {
     name: 'Anticipation (Ant)',
@@ -52,7 +52,7 @@ const DISSONANCE_DEFINITIONS = {
   },
   unprepared: {
     name: 'Unprepared Dissonance',
-    definition: 'Strong-beat dissonance not fitting standard ornamental patterns. Generally avoided in strict style.',
+    definition: 'Strong-beat dissonance not fitting standard ornamental patterns. Generally avoided in strict style. // SHOULD BE NOT APPROACHED BY STEP IN EITHER VOICE',
   },
 };
 
