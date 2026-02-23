@@ -25,7 +25,7 @@ const DISSONANCE_DEFINITIONS = {
   },
   anticipation: {
     name: 'Anticipation (Ant)',
-    definition: 'Arrives early—the note of the next consonance sounds before its time. Usually short and on weak beats.',
+    definition: 'Early-arrival behavior is folded into weak-beat suspension/retardation handling with reduced bonus rather than a separate anticipation class.',
   },
   cambiata: {
     name: 'Cambiata (Cam)',

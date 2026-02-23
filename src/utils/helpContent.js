@@ -219,9 +219,9 @@ ESCAPE TONE (Esc)
 • Approached by step, left by leap in opposite direction
 • Creates a "leaving" gesture—steps toward a note but leaps away
 
-ANTICIPATIONS (Ant)
-• Arrive early—the note of the next consonance sounds before its time
-• Usually short and on weak beats
+ANTICIPATION-LIKE EVENTS
+• Early-arrival weak-beat dissonances are folded into weak-beat suspension/retardation handling
+• They receive reduced suspension/retardation bonus instead of a separate Ant label
 
 APPOGGIATURAS (App)
 • Approach by leap to an accented dissonance

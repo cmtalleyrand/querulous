@@ -968,28 +968,26 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
   const entryBonuses = []; // Track bonuses allocated to entry
   const exitBonuses = [];  // Track bonuses allocated to exit
 
-  // SUSPENSION/RETARDATION: Oblique entry (one voice held), step resolution by the held voice
-  // Split bonuses: +0.75 for oblique entry pattern, +0.5 for step resolution, +0.25 for downward (vs upward)
+  // SUSPENSION/RETARDATION: Oblique entry (one voice held), step resolution by the held voice.
+  // Weak-beat versions (formerly often classified as anticipation) are treated as
+  // weak suspensions/retardations with reduced bonus.
   if (entryInfo.motion.type === 'oblique') {
     const heldVoice = !entryInfo.motion.v1Moved ? 1 : (!entryInfo.motion.v2Moved ? 2 : null);
     if (heldVoice) {
       const resolution = heldVoice === 1 ? exitInfo.v1Resolution : exitInfo.v2Resolution;
       if (resolution && resolution.magnitude.type === 'step') {
         const isDownward = resolution.direction < 0;
+        const strongBeat = isStrongBeat(currSim.onset, ctx);
         const patternType = isDownward ? 'suspension' : 'retardation';
 
-        // Entry bonus: oblique motion with preparation
-        const entryBonus = 0.75;
-        entryBonuses.push({ amount: entryBonus, reason: `${patternType} preparation (oblique)` });
+        const entryBonus = strongBeat ? 0.75 : 0.4;
+        const stepBonus = strongBeat ? 0.5 : 0.2;
+        const dirBonus = isDownward ? (strongBeat ? 0.25 : 0.1) : 0;
 
-        // Exit bonus: step resolution
-        const stepBonus = 0.5;
-        exitBonuses.push({ amount: stepBonus, reason: 'step resolution' });
-
-        // Exit bonus: direction bonus (downward is more traditional)
-        const dirBonus = isDownward ? 0.25 : 0;
+        entryBonuses.push({ amount: entryBonus, reason: `${patternType} preparation (oblique${strongBeat ? '' : ', weak-beat reduced'})` });
+        exitBonuses.push({ amount: stepBonus, reason: strongBeat ? 'step resolution' : 'step resolution (weak-beat reduced)' });
         if (isDownward) {
-          exitBonuses.push({ amount: dirBonus, reason: 'downward resolution' });
+          exitBonuses.push({ amount: dirBonus, reason: strongBeat ? 'downward resolution' : 'downward resolution (weak-beat reduced)' });
         }
 
         const totalBonus = entryBonus + stepBonus + dirBonus;
@@ -999,28 +997,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
           bonus: totalBonus,
           entryBonus,
           exitBonus: stepBonus + dirBonus,
-          description: `${isDownward ? 'Suspension' : 'Retardation'} (oblique entry, step ${isDownward ? 'down' : 'up'} resolution)`
-        });
-      }
-    }
-  }
-
-  // ANTICIPATION: Early arrival creating momentary dissonance (typically oblique, weak beat)
-  // Like suspension but reversed - the moving voice anticipates the next harmony
-  if (entryInfo.motion.type === 'oblique' && !isStrongBeat(currSim.onset, ctx)) {
-    const movingVoice = entryInfo.motion.v1Moved ? 1 : (entryInfo.motion.v2Moved ? 2 : null);
-    if (movingVoice) {
-      // Anticipation typically "resolves" by the other voice moving (oblique exit) or both moving
-      if (exitInfo.motion && exitInfo.motion.type !== 'parallel') {
-        const anticipationBonus = 0.5; // Moderate bonus for recognized pattern
-        bonus += anticipationBonus;
-        entryBonuses.push({ amount: anticipationBonus, reason: 'anticipation pattern' });
-        patterns.push({
-          type: 'anticipation',
-          bonus: anticipationBonus,
-          entryBonus: anticipationBonus,
-          exitBonus: 0,
-          description: 'Anticipation (early arrival on weak beat)'
+          description: `${isDownward ? 'Suspension' : 'Retardation'} (oblique entry, step ${isDownward ? 'down' : 'up'} resolution${strongBeat ? '' : ', weak-beat reduced'})`
         });
       }
     }
@@ -1038,18 +1015,18 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
           const oppositeStep = exitInfo.v1Resolution.direction === -entryDir;
           const bonusFactor = oppositeStep ? 0.5 : 1.0;
           const entryBonus = 2.0 * bonusFactor; // Offset leap penalty (halved on opposite-step exits)
-          const exitBonus = 0.5 * bonusFactor;  // Acknowledge resolution quality
+          const exitBonus = oppositeStep ? 0 : 0.5;  // Opposite-step exits get no exit bonus
           const totalBonus = entryBonus + exitBonus;
           bonus += totalBonus;
           entryBonuses.push({ amount: entryBonus, reason: oppositeStep ? 'appoggiatura leap entry (opposite-step reduced)' : 'appoggiatura leap entry' });
-          exitBonuses.push({ amount: exitBonus, reason: oppositeStep ? 'step resolution (opposite-step reduced)' : 'step resolution' });
+          exitBonuses.push({ amount: exitBonus, reason: oppositeStep ? 'step resolution (opposite-step: no exit bonus)' : 'step resolution' });
           patterns.push({
             type: 'appoggiatura',
             bonus: totalBonus,
             entryBonus,
             exitBonus,
             voice: 1,
-            description: oppositeStep ? 'Appoggiatura (V1 leaps in, opposite-step exit — reduced bonus)' : 'Appoggiatura (V1 leaps in, resolves by step)'
+            description: oppositeStep ? 'Appoggiatura (V1 leaps in, opposite-step exit — entry-only bonus)' : 'Appoggiatura (V1 leaps in, resolves by step)'
           });
         }
       }
@@ -1063,18 +1040,18 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
           const oppositeStep = exitInfo.v2Resolution.direction === -entryDir;
           const bonusFactor = oppositeStep ? 0.5 : 1.0;
           const entryBonus = 2.0 * bonusFactor;
-          const exitBonus = 0.5 * bonusFactor;
+          const exitBonus = oppositeStep ? 0 : 0.5;
           const totalBonus = entryBonus + exitBonus;
           bonus += totalBonus;
           entryBonuses.push({ amount: entryBonus, reason: oppositeStep ? 'appoggiatura leap entry (opposite-step reduced)' : 'appoggiatura leap entry' });
-          exitBonuses.push({ amount: exitBonus, reason: oppositeStep ? 'step resolution (opposite-step reduced)' : 'step resolution' });
+          exitBonuses.push({ amount: exitBonus, reason: oppositeStep ? 'step resolution (opposite-step: no exit bonus)' : 'step resolution' });
           patterns.push({
             type: 'appoggiatura',
             bonus: totalBonus,
             entryBonus,
             exitBonus,
             voice: 2,
-            description: oppositeStep ? 'Appoggiatura (V2 leaps in, opposite-step exit — reduced bonus)' : 'Appoggiatura (V2 leaps in, resolves by step)'
+            description: oppositeStep ? 'Appoggiatura (V2 leaps in, opposite-step exit — entry-only bonus)' : 'Appoggiatura (V2 leaps in, resolves by step)'
           });
         }
       }
