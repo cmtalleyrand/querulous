@@ -220,12 +220,53 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
   const notes = [];
   let currentOnset = 0;
 
+  const gcd = (a, b) => {
+    let x = Math.abs(a);
+    let y = Math.abs(b);
+    while (y !== 0) {
+      const t = y;
+      y = x % y;
+      x = t;
+    }
+    return x || 1;
+  };
+
+  const durationToABCSuffix = (durationInQuarters) => {
+    const multiplier = (durationInQuarters / 4) / defaultNoteLength;
+    if (Math.abs(multiplier - 1) < 1e-9) return '';
+
+    const maxDenominator = 64;
+    let bestNumerator = null;
+    let bestDenominator = null;
+    let bestError = Infinity;
+
+    for (let d = 1; d <= maxDenominator; d++) {
+      const n = Math.round(multiplier * d);
+      const error = Math.abs(multiplier - n / d);
+      if (error < bestError) {
+        bestNumerator = n;
+        bestDenominator = d;
+        bestError = error;
+      }
+      if (error < 1e-9) break;
+    }
+
+    const divisor = gcd(bestNumerator, bestDenominator);
+    const numerator = bestNumerator / divisor;
+    const denominator = bestDenominator / divisor;
+
+    if (denominator === 1) return `${numerator}`;
+    if (numerator === 1) return `/${denominator}`;
+    return `${numerator}/${denominator}`;
+  };
+
   // Pattern matches bar lines, rests, OR notes
   // Rests are 'z' (audible rest) or 'x' (invisible rest) followed by optional duration
   const pat = /(\|+:?|:\|+)|([zx])([\d]*\/?[\d]*)?|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?(-)?/g;
   let m;
   let tieSourceIndex = null;
   let tieSourcePitch = null;
+  let tieSourceTokenBase = null;
 
   while ((m = pat.exec(noteText)) !== null) {
     // Skip bar lines - they don't affect accidentals in ABC (accidentals don't carry through bars)
@@ -304,10 +345,11 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
 
     const durationInQuarters = dur * 4;
     const incomingTieMatchesSource = tieSourceIndex !== null && tieSourcePitch === pitch;
+    const currentTokenBase = (accStr || '') + letter + (octMod || '');
 
     if (incomingTieMatchesSource) {
       notes[tieSourceIndex].duration += durationInQuarters;
-      notes[tieSourceIndex].abcNote += '-' + (accStr || '') + letter + (octMod || '') + (durStr || '');
+      notes[tieSourceIndex].abcNote = tieSourceTokenBase + durationToABCSuffix(notes[tieSourceIndex].duration);
     } else {
       notes.push(
         new NoteEvent(
@@ -321,11 +363,13 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
       );
       tieSourceIndex = notes.length - 1;
       tieSourcePitch = pitch;
+      tieSourceTokenBase = currentTokenBase;
     }
 
     if (!tieMarker) {
       tieSourceIndex = null;
       tieSourcePitch = null;
+      tieSourceTokenBase = null;
     }
 
     currentOnset += dur * 4;
