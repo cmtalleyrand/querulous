@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   PianoRoll,
-  IntervalTimeline,
   TwoVoiceViz,
-  IntervalAnalysisViz,
-  InvertibilityViz,
-  UnifiedCounterpointViz,
   CounterpointComparisonViz,
   Section,
   ObservationList,
@@ -15,7 +11,6 @@ import {
   ScoreDashboard,
   IssuesSummary,
   ChordAnalysisDisplay,
-  CounterpointScoreDisplay,
 } from './components';
 import {
   NOTE_TO_MIDI,
@@ -498,6 +493,20 @@ export default function App() {
 
           {/* Spelling Key Option */}
           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eee' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(170px, 1fr))', gap: '14px', marginBottom: '12px' }}>
+              <Select
+                label="CS Position"
+                value={csPos}
+                onChange={setCsPos}
+                options={CS_POSITION_OPTIONS}
+              />
+              <Select
+                label="CS Shift"
+                value={csShift}
+                onChange={setCsShift}
+                options={STRETTO_TRANSPOSITION_OPTIONS}
+              />
+            </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
               <input
                 type="checkbox"

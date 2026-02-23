@@ -18,6 +18,7 @@
  */
 
 import { pitchName, metricWeight } from './formatter';
+import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES } from './constants/thresholds';
 
 // ===========================================================================
 // Global state for backward compatibility
@@ -60,15 +61,6 @@ export function getSequenceBeatRanges() {
   return _globalSequenceBeatRanges;
 }
 
-// Helper to get a context from global state (for legacy callers)
-function getGlobalContext() {
-  return {
-    treatP4AsDissonant: _globalP4Treatment,
-    meter: _globalMeter,
-    sequenceBeatRanges: _globalSequenceBeatRanges,
-    sequenceNoteRanges: _globalSequenceRanges,
-  };
-}
 
 /**
  * Create an analysis context with all configuration needed for scoring.
@@ -92,7 +84,7 @@ export function createAnalysisContext(options = {}) {
 
 /**
  * Check if P4 should be treated as dissonant based on user setting
- * Default behavior: P4 is treated as consonant (unchecked checkbox)
+ * Default behavior: P4 is treated as DISSONANT // CODE SHOULD ALIGN WITH THIS
  * When checkbox is checked: P4 is treated as dissonant
  * @param {Simultaneity} sim - The simultaneity to check
  * @param {Object} ctx - Analysis context
@@ -104,20 +96,6 @@ function isP4DissonantInContext(sim, ctx) {
   return ctx.treatP4AsDissonant !== false;
 }
 
-/**
- * Check if a note index is within a sequence
- * @param {number} noteIndex - The index of the note in the voice
- * @param {Object} ctx - Analysis context
- * @returns {boolean}
- */
-function isNoteInSequence(noteIndex, ctx) {
-  for (const range of ctx.sequenceNoteRanges) {
-    if (noteIndex >= range.start && noteIndex <= range.end) {
-      return true;
-    }
-  }
-  return false;
-}
 
 /**
  * Check if an onset time falls within a sequence
@@ -136,9 +114,7 @@ function isOnsetInSequence(onset, ctx) {
 
 /**
  * Calculate sub-subdivision threshold for short note detection.
- * Notes shorter than a triplet of the main subdivision are considered "very short"
- * and should have reduced penalties (they pass too quickly to be very noticeable).
- *
+ * 
  * For 4/4 meter: main beat = 1 quarter, subdivision = 8th note (0.5), triplet = ~0.167
  * For 6/8 meter: main beat = dotted quarter (1.5), subdivision = 8th (0.5), triplet = ~0.167
  *
@@ -160,11 +136,7 @@ function getShortNoteThreshold(ctx) {
 }
 
 /**
- * Check if a note is "short" (below sub-subdivision level).
- * Short notes get special treatment for penalties:
- * - Consecutive dissonances: penalty halved if on off-beat
- * - Motion/parallels: penalty halved if NOT repeated
- * - Repetition penalties: halved
+ * // Out of date - part of passigness now
  *
  * @param {Simultaneity} sim - The simultaneity to check
  * @param {Object} ctx - Analysis context
@@ -208,7 +180,7 @@ function getShortNoteInfo(sim, ctx) {
  * - repeating same interval class (step/skip/perfect leap): +0.25
  * - in sequence: +1
  *
- * Penalty mitigation = sum of passingness / 2
+ * Penalty mitigation = min(1, max(sum of passingness / 2, 0))
  * If passingness >= 1 → is passing motion
  *
  * @param {Simultaneity} currSim - Current simultaneity
@@ -234,7 +206,7 @@ function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, pre
 
   // If on strong or medium beat, must be shorter than eighth
   const beatStrength = metricWeight(currSim.onset, ctx.meter);
-  if (beatStrength >= 0.75 && noteDuration >= 0.5 - 0.01) {
+  if (beatStrength >= METRIC_STRENGTH_CUTOFFS.STRONG && noteDuration >= 0.5 - 0.01) {
     return { passingness: 0, isPassing: false, mitigation: 0, details: ['Strong beat + eighth note: not eligible'] };
   }
 
@@ -285,7 +257,7 @@ function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, pre
   }
 
   // Beat position
-  if (beatStrength >= 0.75) {
+  if (beatStrength >= METRIC_STRENGTH_CUTOFFS.STRONG) {
     passingness -= 0.5;
     details.push('On the beat: -0.5');
   } else if (beatStrength < 0.5) {
@@ -360,7 +332,7 @@ function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, pre
     details.push('In sequence: +1');
   }
 
-  const mitigation = passingness / 2;
+  const mitigation = passingness * PENALTY_MULTIPLIERS.HALF;
   const isPassing = passingness >= 1;
 
   return { passingness, isPassing, mitigation: Math.max(0, mitigation), details };
@@ -382,12 +354,7 @@ function getIntervalMagnitude(semitones) {
 /**
  * Calculate resolution penalty based on entry leap type and resolution type
  * User specification:
- * - Skip (m3/M3, 3-4 st) entered: -0.5 if resolved by skip, -1 if P4/P5, -2 otherwise
- * - P4/P5 entered: -1 if opposite skip, -1.5 if opposite P4/P5 or same-dir skip, -2 otherwise
- *
- * SEQUENCE MITIGATION: If the leap is part of a detected melodic sequence,
- * the penalty is reduced by 75% (mitigating the "size and direction" penalties).
- * Sequences are structured repetitions that justify unusual leaps.
+ * // update
  *
  * @param {number} entryInterval - Entry interval in semitones
  * @param {number} exitInterval - Exit interval in semitones
@@ -414,14 +381,14 @@ function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, 
   if (entryMag.type === 'skip') {
     if (exitMag.type === 'skip') {
       basePenalty = -0.5;
-      reason = 'melodic skip into dissonance, left by skip';
+      reason = 'Skip entry, skip exit';
     } else if (exitMag.type === 'perfect_leap') {
       basePenalty = -1.0;
-      reason = 'melodic skip into dissonance, left by P4/P5';
+      reason = 'Skip entry, perfect leap exit';
     } else {
       // Large leap or octave
       basePenalty = -2.0;
-      reason = 'melodic skip into dissonance, left by large leap';
+      reason = 'Skip entry, large leap';
     }
   }
   // Perfect leap entry (P4/P5)
@@ -567,10 +534,10 @@ function getMotionType(prevSim, currSim, restContext = null) {
 }
 
 /**
- * Check if this is a strong beat (weight >= 0.75)
+ * Check if this is a strong beat (weight >= METRIC_STRENGTH_CUTOFFS.STRONG)
  */
 function isStrongBeat(onset, ctx) {
-  return metricWeight(onset, ctx.meter) >= 0.75;
+  return metricWeight(onset, ctx.meter) >= METRIC_STRENGTH_CUTOFFS.STRONG;
 }
 
 /**
@@ -633,28 +600,6 @@ function analyzeRestContext(prevSim, currSim, nextSim) {
   return result;
 }
 
-/**
- * Check if entry is from a "fresh start" (rest longer than note duration)
- * In this case, motion bonuses/penalties should be reduced
- */
-function getEntryRestModifier(restContext, currSim) {
-  let modifier = 1.0; // Default: full motion scoring
-
-  if (restContext.entryFromRest.v1) {
-    const noteDur = currSim.voice1Note.duration;
-    if (restContext.entryFromRest.v1RestDuration > noteDur) {
-      modifier *= 0.5; // Halve if rest was longer than note
-    }
-  }
-  if (restContext.entryFromRest.v2) {
-    const noteDur = currSim.voice2Note.duration;
-    if (restContext.entryFromRest.v2RestDuration > noteDur) {
-      modifier *= 0.5;
-    }
-  }
-
-  return modifier;
-}
 
 /**
  * Score the entry into a dissonance (C → D)
@@ -818,7 +763,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     // Resolution to another dissonance
     // Short note + off-beat: halve the penalty (two quick consecutive dissonances on off-beats not a big deal)
     const shortNoteInfo = getShortNoteInfo(currSim, ctx);
-    const isOffBeat = currSim.metricWeight < 0.75;
+    const isOffBeat = currSim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG;
     if (shortNoteInfo.isShort && isOffBeat) {
       score = -0.375; // Halved penalty
       baseExitComponent = -0.375;
@@ -843,8 +788,8 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   if (restContext) {
     const v1RestDur = restContext.exitToRest?.v1RestDuration || 0;
     const v2RestDur = restContext.exitToRest?.v2RestDuration || 0;
-    const v1PhantomLimit = currSim.voice1Note.duration / 2;
-    const v2PhantomLimit = currSim.voice2Note.duration / 2;
+    const v1PhantomLimit = currSim.voice1Note.duration * PENALTY_MULTIPLIERS.HALF;
+    const v2PhantomLimit = currSim.voice2Note.duration * PENALTY_MULTIPLIERS.HALF;
 
     // Check if this is a "both moved after rest" situation (invalid resolution)
     const v1HadLongRest = v1RestDur > v1PhantomLimit;
@@ -926,7 +871,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       }
       // Apply sequence mitigation
       if (v1InSequence) {
-        penalty *= 0.25;
+        penalty *= PENALTY_MULTIPLIERS.QUARTER;
         reason += ' (mitigated: in sequence)';
       }
       score += penalty;
@@ -985,7 +930,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       }
       // Apply sequence mitigation
       if (v2InSequence) {
-        penalty *= 0.25;
+        penalty *= PENALTY_MULTIPLIERS.QUARTER;
         reason += ' (mitigated: in sequence)';
       }
       score += penalty;
@@ -1562,9 +1507,9 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
   let label = '!';
   let category = 'dissonant_bad';
 
-  if (totalScore >= 1.0) {
+  if (totalScore >= SCORE_BAND_BOUNDARIES.DISSONANT_GOOD_MIN) {
     category = 'dissonant_good';
-  } else if (totalScore >= -0.5) {
+  } else if (totalScore >= SCORE_BAND_BOUNDARIES.DISSONANT_MARGINAL_MIN) {
     category = 'dissonant_marginal';
   }
 
@@ -1711,8 +1656,6 @@ export function analyzeAllDissonances(sims, options = {}) {
   // Calculate summary statistics
   const consonances = results.filter(r => r.isConsonant);
   const dissonances = results.filter(r => !r.isConsonant);
-  const goodDissonances = dissonances.filter(r => r.score >= 0);
-  const badDissonances = dissonances.filter(r => r.score < 0);
   const repetitiveConsonances = consonances.filter(r => r.category === 'consonant_repetitive');
 
   // Track pattern types
