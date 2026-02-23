@@ -222,8 +222,10 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
 
   // Pattern matches bar lines, rests, OR notes
   // Rests are 'z' (audible rest) or 'x' (invisible rest) followed by optional duration
-  const pat = /(\|+:?|:\|+)|([zx])([\d]*\/?[\d]*)?|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?/g;
+  const pat = /(\|+:?|:\|+)|([zx])([\d]*\/?[\d]*)?|(\^{1,2}|_{1,2}|=)?([A-Ga-g])([,']*)([\d]*\/?[\d]*)?(-)?/g;
   let m;
+  let tieSourceIndex = null;
+  let tieSourcePitch = null;
 
   while ((m = pat.exec(noteText)) !== null) {
     // Skip bar lines - they don't affect accidentals in ABC (accidentals don't carry through bars)
@@ -247,7 +249,7 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
       continue;
     }
 
-    const [, , , , acc, letter, octMod, durStr] = m;
+    const [, , , , acc, letter, octMod, durStr, tieMarker] = m;
     if (!letter) continue;
 
     let pitch = NOTE_TO_MIDI[letter];
@@ -300,16 +302,32 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
     // Use flat display if this note uses a flat (explicit or from key sig)
     const noteUsesFlat = usesFlat || (keyUsesFlats && !accStr.includes('^'));
 
-    notes.push(
-      new NoteEvent(
-        pitch,
-        dur * 4,
-        currentOnset,
-        computeScaleDegree(pitch, tonic, mode),
-        accStr + letter + (octMod || '') + (durStr || ''),
-        noteUsesFlat
-      )
-    );
+    const durationInQuarters = dur * 4;
+    const incomingTieMatchesSource = tieSourceIndex !== null && tieSourcePitch === pitch;
+
+    if (incomingTieMatchesSource) {
+      notes[tieSourceIndex].duration += durationInQuarters;
+      notes[tieSourceIndex].abcNote += '-' + (accStr || '') + letter + (octMod || '') + (durStr || '');
+    } else {
+      notes.push(
+        new NoteEvent(
+          pitch,
+          durationInQuarters,
+          currentOnset,
+          computeScaleDegree(pitch, tonic, mode),
+          accStr + letter + (octMod || '') + (durStr || ''),
+          noteUsesFlat
+        )
+      );
+      tieSourceIndex = notes.length - 1;
+      tieSourcePitch = pitch;
+    }
+
+    if (!tieMarker) {
+      tieSourceIndex = null;
+      tieSourcePitch = null;
+    }
+
     currentOnset += dur * 4;
   }
 
