@@ -849,47 +849,6 @@ export function TwoVoiceViz({
             </div>
 
             <div style={{ padding: '12px 14px' }}>
-              {/* Chain overview strip — shown whenever this point belongs to a dissonance chain */}
-              {pt.chainStartOnset !== undefined && (() => {
-                const chainPts = intervalPoints.filter(p => p.chainStartOnset === pt.chainStartOnset);
-                const entryPt = chainPts.find(p => p.isChainEntry);
-                const resPt = chainPts.find(p => p.isChainResolution);
-                if (!chainPts.length) return null;
-                return (
-                  <div style={{ marginBottom: '12px', backgroundColor: '#ede9fe', borderRadius: '6px',
-                    border: '1.5px dashed rgba(139,92,246,0.6)', padding: '10px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: '700', color: '#6d28d9', marginBottom: '8px',
-                      textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                      Dissonance chain ({chainPts.length + (resPt ? 0 : 0)} notes)
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      {chainPts.map((cp, ci) => {
-                        const isThis = cp.onset === pt.onset;
-                        const role = cp.isChainEntry ? 'Entry' : cp.isChainResolution ? 'Resolves' : 'Continues';
-                        const roleColor = cp.isChainEntry ? '#6366f1' : cp.isChainResolution ? '#059669' : '#c2410c';
-                        const roleBg = cp.isChainEntry ? '#ede9fe' : cp.isChainResolution ? '#d1fae5' : '#fff7ed';
-                        return (
-                          <div key={ci}
-                            onClick={() => handleIntervalClick(cp)}
-                            style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: '5px',
-                              backgroundColor: isThis ? roleColor : roleBg,
-                              border: `1.5px solid ${roleColor}`,
-                              color: isThis ? 'white' : roleColor, fontSize: '11px', fontWeight: '700',
-                              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px' }}>
-                            <span>{formatter?.formatBeat(cp.onset) || `b${cp.onset + 1}`}</span>
-                            <span style={{ fontSize: '10px', fontWeight: '600', opacity: 0.85 }}>{cp.intervalName}</span>
-                            <span style={{ fontSize: '9px', fontWeight: '500', opacity: 0.75 }}>{role}</span>
-                          </div>
-                        );
-                      })}
-                      {!resPt && (
-                        <div style={{ padding: '4px 8px', borderRadius: '5px', border: '1.5px dashed #dc2626',
-                          color: '#dc2626', fontSize: '10px', fontWeight: '600' }}>Unresolved</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
               {/* Motion diagram — full chain flow or single hop */}
               {pt.chainStartOnset !== undefined ? (() => {
                 const chainPts = intervalPoints
@@ -897,8 +856,22 @@ export function TwoVoiceViz({
                   .sort((a, b) => a.onset - b.onset);
                 if (!chainPts.length) return null;
                 const firstPt = chainPts[0];
+                const resPt = chainPts.find(p => p.isChainResolution);
                 return (
-                  <div style={{ overflowX: 'auto', marginBottom: '12px' }}>
+                  <div style={{ marginBottom: '12px', backgroundColor: '#ede9fe', borderRadius: '6px',
+                    border: '1.5px dashed rgba(139,92,246,0.6)', padding: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: '700', color: '#6d28d9',
+                        textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                        Dissonance chain ({chainPts.length} notes)
+                      </div>
+                      {!resPt && (
+                        <div style={{ padding: '2px 7px', borderRadius: '4px', border: '1.5px dashed #dc2626',
+                          color: '#dc2626', fontSize: '10px', fontWeight: '600' }}>Unresolved</div>
+                      )}
+                    </div>
+                  <div style={{ overflowX: 'auto' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '2px',
                       padding: '10px', backgroundColor: '#f1f5f9', borderRadius: '6px',
                       minWidth: 'max-content' }}>
@@ -939,6 +912,7 @@ export function TwoVoiceViz({
                         );
                       })}
                     </div>
+                  </div>
                   </div>
                 );
               })() : pt.prevInterval ? (
@@ -1000,13 +974,13 @@ export function TwoVoiceViz({
                       </div>
                       {(pt.entry.details || []).map((d, i) => {
                         const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)$/);
+                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
                         return (
                           <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
                             paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                             <span style={{ color: '#6366f1', marginRight: '6px', fontWeight: '600' }}>•</span>
                             {match ? (
-                              <span>{match[1]}: <span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span></span>
+                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
                             ) : (
                               <span>{text}</span>
                             )}
@@ -1058,13 +1032,13 @@ export function TwoVoiceViz({
                       </div>
                       {(pt.exit.details || []).map((d, i) => {
                         const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)$/);
+                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
                         return (
                           <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
                             paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                             <span style={{ color: '#059669', marginRight: '6px', fontWeight: '600' }}>•</span>
                             {match ? (
-                              <span>{match[1]}: <span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span></span>
+                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
                             ) : (
                               <span>{text}</span>
                             )}
@@ -1082,13 +1056,13 @@ export function TwoVoiceViz({
                         </div>
                         {pt.mitigationDetails.map((d, i) => {
                           const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                          const match = text.match(/^(.*): ([+-]\d+\.?\d*)/);
+                          const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
                           return (
                             <div key={i} style={{ fontSize: '11px', color: '#78350f', marginBottom: '2px',
                               paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                               <span style={{ color: '#ca8a04', marginRight: '6px', fontWeight: '600' }}>•</span>
                               {match ? (
-                                <span>{match[1]}: <span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{text.slice(match[0].length)}</span>
+                                <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
                               ) : (
                                 <span>{text}</span>
                               )}

@@ -414,44 +414,44 @@ function calculateResolutionPenalty(entryInterval, exitInterval, exitDirection, 
   if (entryMag.type === 'skip') {
     if (exitMag.type === 'skip') {
       basePenalty = -0.5;
-      reason = 'skip resolved by skip';
+      reason = 'melodic skip into dissonance, left by skip';
     } else if (exitMag.type === 'perfect_leap') {
       basePenalty = -1.0;
-      reason = 'skip resolved by P4/P5';
+      reason = 'melodic skip into dissonance, left by P4/P5';
     } else {
       // Large leap or octave
       basePenalty = -2.0;
-      reason = 'skip resolved by large leap';
+      reason = 'melodic skip into dissonance, left by large leap';
     }
   }
   // Perfect leap entry (P4/P5)
   else if (entryMag.type === 'perfect_leap') {
     if (exitMag.type === 'skip' && oppositeDirection) {
       basePenalty = -1.0;
-      reason = 'P4/P5 resolved by opposite skip';
+      reason = 'melodic P4/P5 leap into dissonance, left by opposite skip';
     } else if (exitMag.type === 'perfect_leap' && oppositeDirection) {
       basePenalty = -1.5;
-      reason = 'P4/P5 resolved by opposite P4/P5';
+      reason = 'melodic P4/P5 leap into dissonance, left by opposite P4/P5';
     } else if (exitMag.type === 'skip' && sameDirection) {
       basePenalty = -1.5;
-      reason = 'P4/P5 resolved by same-direction skip';
+      reason = 'melodic P4/P5 leap into dissonance, continued by same-dir skip';
     } else {
       // Any other resolution
       basePenalty = -2.0;
-      reason = 'P4/P5 poorly resolved';
+      reason = 'melodic P4/P5 leap into dissonance, poorly resolved';
     }
   }
   // Large leap entry (6th, 7th, etc.)
   else if (entryMag.type === 'large_leap' || entryMag.type === 'octave') {
     if (exitMag.type === 'step') {
-      return { penalty: 0, reason: 'large leap resolved by step', inSequence };
+      return { penalty: 0, reason: 'large melodic leap into dissonance, resolved by step', inSequence };
     }
     if (exitMag.type === 'skip' && oppositeDirection) {
       basePenalty = -1.5;
-      reason = 'large leap resolved by opposite skip';
+      reason = 'large melodic leap into dissonance, left by opposite skip';
     } else {
       basePenalty = -2.5;
-      reason = 'large leap poorly resolved';
+      reason = 'large melodic leap into dissonance, poorly resolved';
     }
   }
 
@@ -716,17 +716,18 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   const v1MelodicInterval = motion.v1Moved ? currSim.voice1Note.pitch - prevSim.voice1Note.pitch : 0;
   const v2MelodicInterval = motion.v2Moved ? currSim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
 
-  // Note entry leap types for reference
+  // Note entry leap types for reference (human-readable labels, not raw enum)
+  const _leapLabel = { skip: 'skip (3rd)', perfect_leap: 'P4/P5 leap', large_leap: 'large leap', octave: 'octave leap' };
   if (motion.v1Moved) {
     const mag = getIntervalMagnitude(v1MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
-      details.push(`V1 entry: ${mag.type} (${Math.abs(v1MelodicInterval)} st)`);
+      details.push(`V1 entered by ${_leapLabel[mag.type] || mag.type} (${Math.abs(v1MelodicInterval)} st)`);
     }
   }
   if (motion.v2Moved) {
     const mag = getIntervalMagnitude(v2MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
-      details.push(`V2 entry: ${mag.type} (${Math.abs(v2MelodicInterval)} st)`);
+      details.push(`V2 entered by ${_leapLabel[mag.type] || mag.type} (${Math.abs(v2MelodicInterval)} st)`);
     }
   }
 
@@ -757,7 +758,29 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
  */
 function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   if (!nextSim) {
-    return { score: -1.0, details: ['Unresolved (no following note)'], motion: null, v1Resolution: null, v2Resolution: null, resolvedByAbandonment: false };
+    let score = -1.0;
+    const details = ['Unresolved (no following note)'];
+
+    // Keep abandonment handling consistent with the normal exit path.
+    // This can occur at phrase boundaries when one voice drops out first.
+    if (restContext && restContext.resolvedByAbandonment) {
+      score -= 0.5;
+      details.push('Resolved by abandonment (voice dropped out): -0.5');
+    }
+
+    return {
+      score,
+      details,
+      motion: null,
+      v1Resolution: null,
+      v2Resolution: null,
+      resolvedByAbandonment: Boolean(restContext && restContext.resolvedByAbandonment),
+      baseExitComponent: score,
+      // No evaluated motion exists without a following simultaneity.
+      // Keep these as null so downstream code doesn't treat them as measured penalties.
+      v1ResolutionComponent: null,
+      v2ResolutionComponent: null,
+    };
   }
 
   // Check if this is actually a resolution (D → C) or just movement (D → D)
@@ -885,7 +908,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
           v1Resolution.direction !== 0 && v1Resolution.direction === entryDir) {
         score -= 0.25;
         v1ResolutionComponent -= 0.25;
-        details.push('V1 leap not followed by opposite motion: -0.25');
+        details.push('V1 melodic leap not followed by opposite motion: -0.25');
       }
     } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
       // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
@@ -893,13 +916,13 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       let reason = '';
       if (exitMag.type === 'skip') {
         penalty = -0.5;
-        reason = 'V1 skip resolution';
+        reason = 'V1 leaves dissonance by melodic skip';
       } else if (exitMag.type === 'perfect_leap') {
         penalty = -0.5;
-        reason = 'V1 P4/P5 resolution';
+        reason = 'V1 leaves dissonance by melodic P4/P5';
       } else {
         penalty = -1.5;
-        reason = 'V1 large leap resolution';
+        reason = 'V1 leaves dissonance by large melodic leap';
       }
       // Apply sequence mitigation
       if (v1InSequence) {
@@ -944,7 +967,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
           v2Resolution.direction !== 0 && v2Resolution.direction === entryDir) {
         score -= 0.25;
         v2ResolutionComponent -= 0.25;
-        details.push('V2 leap not followed by opposite motion: -0.25');
+        details.push('V2 melodic leap not followed by opposite motion: -0.25');
       }
     } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
       // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
@@ -952,13 +975,13 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       let reason = '';
       if (exitMag.type === 'skip') {
         penalty = -0.5;
-        reason = 'V2 skip resolution';
+        reason = 'V2 leaves dissonance by melodic skip';
       } else if (exitMag.type === 'perfect_leap') {
         penalty = -0.5;
-        reason = 'V2 P4/P5 resolution';
+        reason = 'V2 leaves dissonance by melodic P4/P5';
       } else {
         penalty = -1.5;
-        reason = 'V2 large leap resolution';
+        reason = 'V2 leaves dissonance by large melodic leap';
       }
       // Apply sequence mitigation
       if (v2InSequence) {
@@ -1515,6 +1538,22 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
   const isP4 = currSim.interval.class === 4 && currSim.interval.quality === 'perfect';
   const p4Bonus = isP4 ? 0.5 : 0;
 
+  // Cross-reference: show exit resolution penalty in the Entry section so users can
+  // see that the entry leap is what drives the penalty (it's a combined entry+exit issue).
+  const _xl = { skip: 'skip (3rd)', perfect_leap: 'P4/P5 leap', large_leap: 'large leap', octave: 'octave leap' };
+  // Keep this finite check as a defensive guard for null/unset resolution components
+  // on unresolved endpoints and any future malformed intermediate states.
+  if (Number.isFinite(exitInfo.v1ResolutionComponent) && exitInfo.v1ResolutionComponent !== 0 && entryInfo.v1MelodicInterval !== 0) {
+    const mag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
+    const c = exitInfo.v1ResolutionComponent;
+    entryInfo.details.push(`V1 ${_xl[mag.type] || mag.type} → exit: ${c >= 0 ? '+' : ''}${c.toFixed(2)}`);
+  }
+  if (Number.isFinite(exitInfo.v2ResolutionComponent) && exitInfo.v2ResolutionComponent !== 0 && entryInfo.v2MelodicInterval !== 0) {
+    const mag = getIntervalMagnitude(entryInfo.v2MelodicInterval);
+    const c = exitInfo.v2ResolutionComponent;
+    entryInfo.details.push(`V2 ${_xl[mag.type] || mag.type} → exit: ${c >= 0 ? '+' : ''}${c.toFixed(2)}`);
+  }
+
   // Calculate ENTRY score: entry motion + entry-allocated pattern bonuses + P4 bonus
   const entryBonusTotal = (patternInfo.entryBonuses || []).reduce((sum, b) => sum + b.amount, 0);
   const entryScore = entryInfo.score + entryBonusTotal + p4Bonus;
@@ -1663,8 +1702,13 @@ export function analyzeAllDissonances(sims, options = {}) {
     }
 
     const scoring = _scoreDissonance(sim, sims, i, intervalHistory, ctx);
+    const overlapEnd = Math.min(
+      sim.voice1Note.onset + sim.voice1Note.duration,
+      sim.voice2Note.onset + sim.voice2Note.duration
+    );
     results.push({
       onset: sim.onset,
+      duration: Math.max(0.25, overlapEnd - sim.onset),
       ...scoring,
     });
 
@@ -1743,28 +1787,23 @@ export function analyzeAllDissonances(sims, options = {}) {
     consecutiveGroups.push([...currentGroup]);
   }
 
-  // Pass 1: Compute and store passingness for all consecutive dissonance members.
+  // Pass 1: Compute and store passingness for ALL dissonances (not just consecutive ones).
   // Done before applying any mitigations so that chain entries can reference the
   // already-computed passingness of their successor (needed for rule c below).
   for (let i = 0; i < results.length; i++) {
-    if (results[i].isConsecutiveDissonance) {
+    if (!results[i].isConsonant) {
       const sim = sims[i];
       const prevSim = i > 0 ? sims[i - 1] : null;
       const nextSim = i < sims.length - 1 ? sims[i + 1] : null;
 
-      const v1Interval = prevSim ? sim.voice1Note.pitch - prevSim.voice1Note.pitch : 0;
-      const v2Interval = prevSim ? sim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
+      // Reuse already-computed melodic intervals and motion from scoreEntry
+      const v1Interval = results[i].entry?.v1MelodicInterval ?? 0;
+      const v2Interval = results[i].entry?.v2MelodicInterval ?? 0;
+      const entryMotion = results[i].entry?.motion ?? { type: 'unknown' };
 
       const prevPrevSim = i > 1 ? sims[i - 2] : null;
       const prevV1Interval = prevPrevSim && prevSim ? prevSim.voice1Note.pitch - prevPrevSim.voice1Note.pitch : null;
       const prevV2Interval = prevPrevSim && prevSim ? prevSim.voice2Note.pitch - prevPrevSim.voice2Note.pitch : null;
-
-      const v1Moved = v1Interval !== 0;
-      const v2Moved = v2Interval !== 0;
-      const entryMotion = {
-        type: v1Moved && v2Moved ? (Math.sign(v1Interval) !== Math.sign(v2Interval) ? 'contrary' : 'similar') :
-              (v1Moved || v2Moved) ? 'oblique' : 'static'
-      };
 
       const v1Passing = scorePassingMotion(sim, prevSim, nextSim, v1Interval, prevV1Interval, null, entryMotion, ctx);
       const v2Passing = scorePassingMotion(sim, prevSim, nextSim, v2Interval, prevV2Interval, null, entryMotion, ctx);
@@ -1775,15 +1814,18 @@ export function analyzeAllDissonances(sims, options = {}) {
       results[i].v1PassingMotion = v1Passing;
       results[i].v2PassingMotion = v2Passing;
 
-      let mitigationCount = 0;
-      if (bestPassing.isPassing) mitigationCount++;
-      if (isOnsetInSequence(sim.onset, ctx)) mitigationCount++;
-      if (results[i].patterns && results[i].patterns.length > 0) mitigationCount++;
-      results[i].consecutiveMitigationCount = mitigationCount;
-      results[i].consecutiveMitigation = bestPassing.mitigation;
+      // Consecutive-only bookkeeping (chain mitigation count, stretto viability flag)
+      if (results[i].isConsecutiveDissonance) {
+        let mitigationCount = 0;
+        if (bestPassing.isPassing) mitigationCount++;
+        if (isOnsetInSequence(sim.onset, ctx)) mitigationCount++;
+        if (results[i].patterns && results[i].patterns.length > 0) mitigationCount++;
+        results[i].consecutiveMitigationCount = mitigationCount;
+        results[i].consecutiveMitigation = bestPassing.mitigation;
 
-      // Flag as passing motion for stretto viability (passing D→D is a minor issue only)
-      results[i].isPassing = bestPassing.isPassing;
+        // Flag as passing motion for stretto viability (passing D→D is a minor issue only)
+        results[i].isPassing = bestPassing.isPassing;
+      }
     }
   }
 
@@ -1804,7 +1846,7 @@ export function analyzeAllDissonances(sims, options = {}) {
   // NOT touched: strong-beat meter penalty, consonance resolution reward,
   //              abandonment/rest penalties, pattern bonuses
   for (let i = 0; i < results.length; i++) {
-    if (results[i].isConsecutiveDissonance) {
+    if (!results[i].isConsonant && results[i].passingMotion) {
       const bestPassing = results[i].passingMotion;
       const v1Passing = results[i].v1PassingMotion;
       const v2Passing = results[i].v2PassingMotion;
@@ -1813,7 +1855,6 @@ export function analyzeAllDissonances(sims, options = {}) {
       const entryMotionComp = results[i].entry?.motionComponent || 0;
       const v1ResComp = results[i].exit?.v1ResolutionComponent || 0;
       const v2ResComp = results[i].exit?.v2ResolutionComponent || 0;
-      const ddComp = results[i].exit?.baseExitComponent || 0;
 
       let entryAdj = 0;
       let exitAdj = 0;
@@ -1844,11 +1885,14 @@ export function analyzeAllDissonances(sims, options = {}) {
         adjDetails.push(`V2 resolution (${v2Passing.mitigation.toFixed(2)}): +${(mitigated - v2ResComp).toFixed(2)}`);
       }
 
-      // (c) D→D penalty on THIS member (only present for middle of 3+ chains)
-      if (ddComp < 0 && bestPassing.mitigation > 0) {
-        const mitigated = Math.min(0, ddComp + bestPassing.mitigation);
-        exitAdj += mitigated - ddComp;
-        adjDetails.push(`D→D (own exit, ${bestPassing.mitigation.toFixed(2)}): +${(mitigated - ddComp).toFixed(2)}`);
+      // (c) D→D penalty — only for consecutive members (middle of 3+ chains)
+      if (results[i].isConsecutiveDissonance) {
+        const ddComp = results[i].exit?.baseExitComponent || 0;
+        if (ddComp < 0 && bestPassing.mitigation > 0) {
+          const mitigated = Math.min(0, ddComp + bestPassing.mitigation);
+          exitAdj += mitigated - ddComp;
+          adjDetails.push(`D→D (own exit, ${bestPassing.mitigation.toFixed(2)}): +${(mitigated - ddComp).toFixed(2)}`);
+        }
       }
 
       const totalAdj = entryAdj + exitAdj;
@@ -1888,6 +1932,24 @@ export function analyzeAllDissonances(sims, options = {}) {
     }
   }
 
+  // Duration-weighted average across ALL intervals (same formula as TwoVoiceViz badge).
+  // Consonances are scored 0.2–0.5 by type; dissonances use their actual score.
+  let _totalW = 0, _totalD = 0;
+  for (const r of results) {
+    const dur = Math.max(0.25, r.duration || 0.25);
+    _totalD += dur;
+    if (r.isConsonant) {
+      const base = [3, 6].includes(r.intervalClass) ? 0.5
+        : r.intervalClass === 5 ? 0.3
+        : r.intervalClass === 4 ? 0.25
+        : 0.2;
+      _totalW += base * dur;
+    } else {
+      _totalW += (r.score || 0) * dur;
+    }
+  }
+  const overallAvgScore = _totalD > 0 ? _totalW / _totalD : 0;
+
   return {
     all: results,
     consonances,
@@ -1903,6 +1965,8 @@ export function analyzeAllDissonances(sims, options = {}) {
       averageScore: dissonances.length > 0
         ? dissonances.reduce((sum, d) => sum + d.score, 0) / dissonances.length
         : 0,
+      // Duration-weighted average across all intervals — matches the TwoVoiceViz badge score
+      overallAvgScore,
       typeCounts,
       allPatterns, // All recognized ornamental patterns
       consecutiveDissonanceGroups: consecutiveGroups, // Groups of 2+ adjacent dissonances
