@@ -27,7 +27,7 @@ export function ScoreDashboard({ scoreResult, hasCountersubject }) {
       title: 'Melodic Quality',
       subtitle: 'Properties of the subject line',
       color: '#5c6bc0',
-      categories: ['tonalClarity', 'rhythmicCharacter'],
+      categories: ['rhythmicCharacter'],
     },
     fugal: {
       title: 'Fugal Potential',

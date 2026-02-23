@@ -19,37 +19,7 @@ All category scores are aggregated into an overall weighted average.
 
 ## Score Categories
 
-### 1. Tonal Clarity (Weight: 0.5)
-**Group:** Melodic
-**Purpose:** Assesses basic tonal orientation of the subject
-
-**Factors:**
-| Factor | Impact | Condition |
-|--------|--------|-----------|
-| Opens on tonic chord tone | +3 | Opening note is ^1, ^3, or ^5 |
-| Terminal quality: strong/good | +3 | Ends on ^1, ^7 (strong) or ^2, ^3 (good) |
-| Terminal quality: ambiguous/unusual | -3 | Ends on ^5 (stasis) or chromatic degree |
-| Answer junction: strong/good | +3 | Clear I→V or ii→V motion |
-| Answer junction: static/unusual | -3 | V→V stasis or problematic junction |
-
-**Answer Junction Explained:**
-The "junction" is the harmonic progression implied when the subject's terminal note connects to the answer's entry on the dominant. A **problematic junction** occurs when:
-- **Static**: Subject ends on ^5, creating V→V (dominant to dominant, no harmonic motion)
-- **Unusual**: Subject ends on chromatic degrees or ^6, creating unclear harmonic connection
-
-| Terminal Degree | Junction | Quality |
-|-----------------|----------|---------|
-| ^1 | I→V | Strong |
-| ^7 | vii°→V | Strong |
-| ^4 | IV→V | Strong |
-| ^2 | ii→V | Good |
-| ^3 | I→V | Good |
-| ^5 | V→V | Static (problematic) |
-| Other | ?→V | Unusual (problematic) |
-
----
-
-### 2. Rhythmic Character (Weight: 0.8)
+### 1. Rhythmic Character (Weight: 0.8)
 **Group:** Melodic
 **Purpose:** Measures rhythmic distinctiveness and variety
 
@@ -66,7 +36,7 @@ The "junction" is the harmonic progression implied when the subject's terminal n
 
 ---
 
-### 3. Stretto Potential (Weight: 1.0)
+### 2. Stretto Potential (Weight: 1.0)
 **Group:** Fugal
 **Purpose:** Evaluates counterpoint quality when subject overlaps with itself at various distances
 
@@ -84,7 +54,7 @@ The score is based on the **average dissonance score** across all tested stretto
 
 ---
 
-### 4. Invertibility (Weight: 1.0)
+### 3. Invertibility (Weight: 1.0)
 **Group:** Combination (requires countersubject)
 **Purpose:** Evaluates double counterpoint at the octave
 
@@ -102,7 +72,7 @@ Score is based on **inverted position dissonance quality**.
 
 ---
 
-### 5. Rhythmic Interplay (Weight: 0.8)
+### 4. Rhythmic Interplay (Weight: 0.8)
 **Group:** Combination
 **Purpose:** Measures rhythmic independence between subject and countersubject
 
@@ -116,7 +86,7 @@ Score is based on **inverted position dissonance quality**.
 
 ---
 
-### 6. Voice Independence (Weight: 0.9)
+### 5. Voice Independence (Weight: 0.9)
 **Group:** Combination
 **Purpose:** Evaluates melodic contour differentiation
 
@@ -154,7 +124,7 @@ Score is based on **inverted position dissonance quality**.
 
 ---
 
-### 7. Transposition Stability (Weight: 1.0)
+### 6. Transposition Stability (Weight: 1.0)
 **Group:** Combination
 **Purpose:** How well countersubject works against the dominant-level answer
 
@@ -292,7 +262,6 @@ Overall = Σ(category_score × weight) / Σ(weights)
 ```
 
 ### Without Countersubject:
-- Tonal Clarity (0.5)
 - Rhythmic Character (0.8)
 - Stretto Potential (1.0)
 

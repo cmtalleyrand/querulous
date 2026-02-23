@@ -40,15 +40,6 @@ export function toInternalScore(displayScore) {
  */
 export const SCORE_CATEGORIES = {
   // === MELODIC GROUP: Subject line quality ===
-  tonalClarity: {
-    name: 'Tonal Clarity',
-    description: 'Basic tonal orientation (opening/ending notes, answer junction)',
-    group: 'melodic',
-    weight: 0.5,  // Reduced weight - basic indicator
-    baseline: 'Clear enough tonal center',
-    factors: ['Opening note', 'Terminal quality', 'Answer junction'],
-    isBasicIndicator: true,  // Flag for UI to de-emphasize
-  },
   rhythmicCharacter: {
     name: 'Rhythmic Character',
     description: 'Distinctiveness and variety of rhythmic profile',
@@ -440,64 +431,6 @@ export function calculateAnswerCompatibilityScore(result) {
     score: toDisplayScore(internal),
     internal,
     details,
-  };
-}
-
-/**
- * Calculate Tonal Clarity score (base-zero)
- * Combines harmonic implication + answer compatibility into one basic indicator.
- * (Opening/terminal removed - oversimplified and not purely harmonic)
- *
- * Baseline 0 = acceptable tonal orientation
- * Positive = clear tonal structure
- * Negative = unclear or problematic
- */
-export function calculateTonalClarityScore(harmonicResult, answerResult) {
-  const details = [];
-  let internal = 0;
-
-  // --- From Harmonic Implication ---
-  if (harmonicResult && !harmonicResult.error) {
-    // Dominant arrival bonus
-    if (harmonicResult.dominantArrival) {
-      const ratio = harmonicResult.dominantArrival.ratio;
-      if (ratio >= 0.3 && ratio <= 0.7) {
-        internal += 3;
-        details.push({ factor: 'Well-placed dominant arrival', impact: +3 });
-      } else {
-        internal += 1;
-        details.push({ factor: 'Dominant arrival present', impact: +1 });
-      }
-    }
-
-    // Harmonic clarity
-    if (harmonicResult.harmonicClarityScore > 1.5) {
-      internal += 2;
-      details.push({ factor: 'Clear harmonic implications', impact: +2 });
-    } else if (harmonicResult.harmonicClarityScore < 0.5) {
-      internal -= 2;
-      details.push({ factor: 'Ambiguous harmonic implications', impact: -2 });
-    }
-  }
-
-  // --- From Answer Compatibility ---
-  if (answerResult && !answerResult.error) {
-    // Junction quality (simplified)
-    const junctionQ = answerResult.junction?.q;
-    if (junctionQ === 'strong' || junctionQ === 'good') {
-      internal += 3;
-      details.push({ factor: `Answer junction: ${junctionQ}`, impact: +3 });
-    } else if (junctionQ === 'static' || junctionQ === 'unusual') {
-      internal -= 3;
-      details.push({ factor: `Answer junction: ${junctionQ}`, impact: -3 });
-    }
-  }
-
-  return {
-    score: internal,
-    internal,
-    details,
-    isBasicIndicator: true,
   };
 }
 
@@ -897,11 +830,6 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
 
   const scores = {};
 
-  // === Melodic group ===
-  // Combined tonal clarity (replaces separate tonalDefinition and answerCompatibility)
-  const tonalClarity = calculateTonalClarityScore(results.harmonicImplication, results.tonalAnswer);
-  scores.tonalClarity = tonalClarity;
-
   // Keep legacy scores for backward compatibility (but they don't contribute to overall)
   const tonalDef = calculateTonalDefinitionScore(results.harmonicImplication);
   scores.tonalDefinition = tonalDef;
@@ -990,7 +918,7 @@ export function getScoreSummary(scoreResult) {
 
   // Active category keys (skip deprecated ones)
   const activeKeys = [
-    'tonalClarity', 'rhythmicCharacter', 'strettoPotential',
+    'rhythmicCharacter', 'strettoPotential',
     'invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability'
   ];
 
@@ -1031,7 +959,6 @@ export function getScoreSummary(scoreResult) {
 function getSuggestion(category, data) {
   const suggestions = {
     // Active keys
-    tonalClarity: 'Consider the opening/ending notes and harmonic motion at the answer junction.',
     rhythmicCharacter: 'Try incorporating more diverse note values and rhythmic contrasts.',
     strettoPotential: 'Adjust melodic intervals to improve counterpoint quality when overlapping.',
     invertibility: 'Use more thirds and sixths to maintain quality when inverted.',

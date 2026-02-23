@@ -130,7 +130,6 @@ setSequenceRanges(ranges)     // For leap penalty mitigation
 ```javascript
 // Categories and weights
 const WEIGHTS = {
-  tonalClarity: 0.5,
   rhythmicCharacter: 0.8,
   strettoPotential: 1.0,
   invertibility: 1.0,

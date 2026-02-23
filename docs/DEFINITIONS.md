@@ -402,17 +402,16 @@ Overall score = weighted average of active categories.
 
 | # | Category | UI Label | Weight | Group | Code Function |
 |---|----------|----------|--------|-------|---------------|
-| 1 | Tonal Clarity | Tonal Definition | 0.5 | Melodic | `scoring.js:scoreTonalClarity()` |
-| 2 | Rhythmic Character | Rhythmic Character | 0.8 | Melodic | `scoring.js:scoreRhythmicCharacter()` |
-| 3 | Stretto Potential | Stretto Potential | 1.0 | Fugal | `scoring.js:scoreStrettoPotential()` |
-| 4 | Answer Compatibility | Answer Compatibility | 0.9 | Fugal | Part of tonal answer scoring |
-| 5 | Invertibility | Invertibility | 1.0 | Combination | `scoring.js:scoreInvertibility()` |
-| 6 | Rhythmic Interplay | Rhythmic Interplay | 0.8 | Combination | `scoring.js:scoreRhythmicInterplay()` |
-| 7 | Voice Independence | Voice Independence | 0.9 | Combination | `scoring.js:scoreVoiceIndependence()` |
-| 8 | Transposition Stability | Answer vs CS | 1.0 | Combination | `scoring.js:scoreTranspositionStability()` |
+| 1 | Rhythmic Character | Rhythmic Character | 0.8 | Melodic | `scoring.js:scoreRhythmicCharacter()` |
+| 2 | Stretto Potential | Stretto Potential | 1.0 | Fugal | `scoring.js:scoreStrettoPotential()` |
+| 3 | Answer Compatibility | Answer Compatibility | 0.9 | Fugal | Part of tonal answer scoring |
+| 4 | Invertibility | Invertibility | 1.0 | Combination | `scoring.js:scoreInvertibility()` |
+| 5 | Rhythmic Interplay | Rhythmic Interplay | 0.8 | Combination | `scoring.js:scoreRhythmicInterplay()` |
+| 6 | Voice Independence | Voice Independence | 0.9 | Combination | `scoring.js:scoreVoiceIndependence()` |
+| 7 | Transposition Stability | Answer vs CS | 1.0 | Combination | `scoring.js:scoreTranspositionStability()` |
 
-- Without countersubject: categories 1-4 only (Melodic + Fugal groups)
-- With countersubject: all 8 categories
+- Without countersubject: categories 1-3 only (Melodic + Fugal groups)
+- With countersubject: all 7 categories
 
 **Code**: `scoring.js:calculateOverallScore()`.
 
