@@ -146,11 +146,6 @@ export const STRETTO_TRANSPOSITION_OPTIONS = [
 ];
 
 /**
- * @deprecated Use STRETTO_TRANSPOSITION_OPTIONS
- */
-export const OCTAVE_OPTIONS = STRETTO_TRANSPOSITION_OPTIONS;
-
-/**
  * Countersubject position options
  */
 export const CS_POSITION_OPTIONS = [
