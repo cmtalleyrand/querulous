@@ -1025,7 +1025,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
 
   // SUSPENSION/RETARDATION: Oblique entry (one voice held), step resolution by the held voice
   // Split bonuses: +0.75 for oblique entry pattern, +0.5 for step resolution, +0.25 for downward (vs upward)
-  if (entryInfo.motion.type === 'oblique' && isStrongBeat(currSim.onset, ctx)) {
+  if (entryInfo.motion.type === 'oblique') {
     const heldVoice = !entryInfo.motion.v1Moved ? 1 : (!entryInfo.motion.v2Moved ? 2 : null);
     if (heldVoice) {
       const resolution = heldVoice === 1 ? exitInfo.v1Resolution : exitInfo.v2Resolution;
@@ -1065,7 +1065,6 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
   if (entryInfo.motion.type === 'oblique' && !isStrongBeat(currSim.onset, ctx)) {
     const movingVoice = entryInfo.motion.v1Moved ? 1 : (entryInfo.motion.v2Moved ? 2 : null);
     if (movingVoice) {
-      const resolution = movingVoice === 1 ? exitInfo.v1Resolution : exitInfo.v2Resolution;
       // Anticipation typically "resolves" by the other voice moving (oblique exit) or both moving
       if (exitInfo.motion && exitInfo.motion.type !== 'parallel') {
         const anticipationBonus = 0.5; // Moderate bonus for recognized pattern
@@ -1082,28 +1081,30 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
     }
   }
 
-  // APPOGGIATURA: Entry=Leap/Skip+Strong, Exit=Step Opposite by the voice that leaped
+  // APPOGGIATURA: Entry=Leap/Skip+Strong, Exit=Step by the voice that leaped
   // Allocate more to entry to offset leap penalty: +2.0 entry, +0.5 exit
   if (isStrongBeat(currSim.onset, ctx)) {
     // Check if V1 leaped in and steps out opposite
     if (entryInfo.v1MelodicInterval !== 0) {
       const entryMag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
       if ((entryMag.type === 'skip' || entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap') && exitInfo.v1Resolution) {
-        const entryDir = Math.sign(entryInfo.v1MelodicInterval);
-        if (exitInfo.v1Resolution.magnitude.type === 'step' && exitInfo.v1Resolution.direction === -entryDir) {
-          const entryBonus = 2.0; // Offset leap penalty
-          const exitBonus = 0.5;  // Acknowledge good resolution
+        if (exitInfo.v1Resolution.magnitude.type === 'step') {
+          const entryDir = Math.sign(entryInfo.v1MelodicInterval);
+          const oppositeStep = exitInfo.v1Resolution.direction === -entryDir;
+          const bonusFactor = oppositeStep ? 0.5 : 1.0;
+          const entryBonus = 2.0 * bonusFactor; // Offset leap penalty (halved on opposite-step exits)
+          const exitBonus = 0.5 * bonusFactor;  // Acknowledge resolution quality
           const totalBonus = entryBonus + exitBonus;
           bonus += totalBonus;
-          entryBonuses.push({ amount: entryBonus, reason: 'appoggiatura leap entry' });
-          exitBonuses.push({ amount: exitBonus, reason: 'opposite step resolution' });
+          entryBonuses.push({ amount: entryBonus, reason: oppositeStep ? 'appoggiatura leap entry (opposite-step reduced)' : 'appoggiatura leap entry' });
+          exitBonuses.push({ amount: exitBonus, reason: oppositeStep ? 'step resolution (opposite-step reduced)' : 'step resolution' });
           patterns.push({
             type: 'appoggiatura',
             bonus: totalBonus,
             entryBonus,
             exitBonus,
             voice: 1,
-            description: 'Appoggiatura (V1 leaps in, steps out opposite)'
+            description: oppositeStep ? 'Appoggiatura (V1 leaps in, opposite-step exit — reduced bonus)' : 'Appoggiatura (V1 leaps in, resolves by step)'
           });
         }
       }
@@ -1112,21 +1113,23 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
     if (entryInfo.v2MelodicInterval !== 0 && !patterns.some(p => p.type === 'appoggiatura')) {
       const entryMag = getIntervalMagnitude(entryInfo.v2MelodicInterval);
       if ((entryMag.type === 'skip' || entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap') && exitInfo.v2Resolution) {
-        const entryDir = Math.sign(entryInfo.v2MelodicInterval);
-        if (exitInfo.v2Resolution.magnitude.type === 'step' && exitInfo.v2Resolution.direction === -entryDir) {
-          const entryBonus = 2.0;
-          const exitBonus = 0.5;
+        if (exitInfo.v2Resolution.magnitude.type === 'step') {
+          const entryDir = Math.sign(entryInfo.v2MelodicInterval);
+          const oppositeStep = exitInfo.v2Resolution.direction === -entryDir;
+          const bonusFactor = oppositeStep ? 0.5 : 1.0;
+          const entryBonus = 2.0 * bonusFactor;
+          const exitBonus = 0.5 * bonusFactor;
           const totalBonus = entryBonus + exitBonus;
           bonus += totalBonus;
-          entryBonuses.push({ amount: entryBonus, reason: 'appoggiatura leap entry' });
-          exitBonuses.push({ amount: exitBonus, reason: 'opposite step resolution' });
+          entryBonuses.push({ amount: entryBonus, reason: oppositeStep ? 'appoggiatura leap entry (opposite-step reduced)' : 'appoggiatura leap entry' });
+          exitBonuses.push({ amount: exitBonus, reason: oppositeStep ? 'step resolution (opposite-step reduced)' : 'step resolution' });
           patterns.push({
             type: 'appoggiatura',
             bonus: totalBonus,
             entryBonus,
             exitBonus,
             voice: 2,
-            description: 'Appoggiatura (V2 leaps in, steps out opposite)'
+            description: oppositeStep ? 'Appoggiatura (V2 leaps in, opposite-step exit — reduced bonus)' : 'Appoggiatura (V2 leaps in, resolves by step)'
           });
         }
       }
@@ -1262,15 +1265,18 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
     }
   }
 
-  // PASSING TONE: Stepwise through in same direction (handled separately as it's weak beat)
-  if (!isStrongBeat(currSim.onset, ctx) && !patterns.length) {
+  // PASSING/NEIGHBOR TONES: stepwise weak or accented dissonances.
+  if (!patterns.length) {
     // Check V1 passing
     if (entryInfo.v1MelodicInterval !== 0 && exitInfo.v1Resolution) {
       const entryMag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
       const entryDir = Math.sign(entryInfo.v1MelodicInterval);
       if (entryMag.type === 'step' && exitInfo.v1Resolution.magnitude.type === 'step' &&
           exitInfo.v1Resolution.direction === entryDir) {
-        patterns.push({ type: 'passing', bonus: 0, voice: 1, description: 'Passing tone (stepwise through)' });
+        const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
+        if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented passing tone' });
+        bonus += accentedBonus;
+        patterns.push({ type: 'passing', bonus: accentedBonus, voice: 1, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
       }
     }
     // Check V2 passing
@@ -1279,7 +1285,10 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
       const entryDir = Math.sign(entryInfo.v2MelodicInterval);
       if (entryMag.type === 'step' && exitInfo.v2Resolution.magnitude.type === 'step' &&
           exitInfo.v2Resolution.direction === entryDir) {
-        patterns.push({ type: 'passing', bonus: 0, voice: 2, description: 'Passing tone (stepwise through)' });
+        const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
+        if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented passing tone' });
+        bonus += accentedBonus;
+        patterns.push({ type: 'passing', bonus: accentedBonus, voice: 2, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
       }
     }
 
@@ -1291,7 +1300,10 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
         const entryDir = Math.sign(entryInfo.v1MelodicInterval);
         if (entryMag.type === 'step' && exitInfo.v1Resolution.magnitude.type === 'step' &&
             exitInfo.v1Resolution.direction === -entryDir) {
-          patterns.push({ type: 'neighbor', bonus: 0, voice: 1, description: 'Neighbor tone (step out and back)' });
+          const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
+          if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented neighbor tone' });
+          bonus += accentedBonus;
+          patterns.push({ type: 'neighbor', bonus: accentedBonus, voice: 1, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
         }
       }
       // Check V2
@@ -1300,7 +1312,10 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
         const entryDir = Math.sign(entryInfo.v2MelodicInterval);
         if (entryMag.type === 'step' && exitInfo.v2Resolution.magnitude.type === 'step' &&
             exitInfo.v2Resolution.direction === -entryDir) {
-          patterns.push({ type: 'neighbor', bonus: 0, voice: 2, description: 'Neighbor tone (step out and back)' });
+          const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
+          if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented neighbor tone' });
+          bonus += accentedBonus;
+          patterns.push({ type: 'neighbor', bonus: accentedBonus, voice: 2, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
         }
       }
     }
