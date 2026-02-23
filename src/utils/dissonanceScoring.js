@@ -18,6 +18,7 @@
  */
 
 import { pitchName, metricWeight } from './formatter';
+import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES } from './constants/thresholds';
 
 // ===========================================================================
 // Global state for backward compatibility
@@ -60,15 +61,6 @@ export function getSequenceBeatRanges() {
   return _globalSequenceBeatRanges;
 }
 
-// Helper to get a context from global state (for legacy callers)
-function getGlobalContext() {
-  return {
-    treatP4AsDissonant: _globalP4Treatment,
-    meter: _globalMeter,
-    sequenceBeatRanges: _globalSequenceBeatRanges,
-    sequenceNoteRanges: _globalSequenceRanges,
-  };
-}
 
 /**
  * Create an analysis context with all configuration needed for scoring.
@@ -104,20 +96,6 @@ function isP4DissonantInContext(sim, ctx) {
   return ctx.treatP4AsDissonant !== false;
 }
 
-/**
- * Check if a note index is within a sequence
- * @param {number} noteIndex - The index of the note in the voice
- * @param {Object} ctx - Analysis context
- * @returns {boolean}
- */
-function isNoteInSequence(noteIndex, ctx) {
-  for (const range of ctx.sequenceNoteRanges) {
-    if (noteIndex >= range.start && noteIndex <= range.end) {
-      return true;
-    }
-  }
-  return false;
-}
 
 /**
  * Check if an onset time falls within a sequence
@@ -208,7 +186,7 @@ function getShortNoteInfo(sim, ctx) {
  * - repeating same interval class (step/skip/perfect leap): +0.25
  * - in sequence: +1
  *
- * Penalty mitigation = sum of passingness / 2
+ * Penalty mitigation = sum of passingness * PENALTY_MULTIPLIERS.HALF
  * If passingness >= 1 → is passing motion
  *
  * @param {Simultaneity} currSim - Current simultaneity
@@ -234,7 +212,7 @@ function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, pre
 
   // If on strong or medium beat, must be shorter than eighth
   const beatStrength = metricWeight(currSim.onset, ctx.meter);
-  if (beatStrength >= 0.75 && noteDuration >= 0.5 - 0.01) {
+  if (beatStrength >= METRIC_STRENGTH_CUTOFFS.STRONG && noteDuration >= 0.5 - 0.01) {
     return { passingness: 0, isPassing: false, mitigation: 0, details: ['Strong beat + eighth note: not eligible'] };
   }
 
@@ -285,7 +263,7 @@ function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, pre
   }
 
   // Beat position
-  if (beatStrength >= 0.75) {
+  if (beatStrength >= METRIC_STRENGTH_CUTOFFS.STRONG) {
     passingness -= 0.5;
     details.push('On the beat: -0.5');
   } else if (beatStrength < 0.5) {
@@ -360,7 +338,7 @@ function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, pre
     details.push('In sequence: +1');
   }
 
-  const mitigation = passingness / 2;
+  const mitigation = passingness * PENALTY_MULTIPLIERS.HALF;
   const isPassing = passingness >= 1;
 
   return { passingness, isPassing, mitigation: Math.max(0, mitigation), details };
@@ -567,10 +545,10 @@ function getMotionType(prevSim, currSim, restContext = null) {
 }
 
 /**
- * Check if this is a strong beat (weight >= 0.75)
+ * Check if this is a strong beat (weight >= METRIC_STRENGTH_CUTOFFS.STRONG)
  */
 function isStrongBeat(onset, ctx) {
-  return metricWeight(onset, ctx.meter) >= 0.75;
+  return metricWeight(onset, ctx.meter) >= METRIC_STRENGTH_CUTOFFS.STRONG;
 }
 
 /**
@@ -633,28 +611,6 @@ function analyzeRestContext(prevSim, currSim, nextSim) {
   return result;
 }
 
-/**
- * Check if entry is from a "fresh start" (rest longer than note duration)
- * In this case, motion bonuses/penalties should be reduced
- */
-function getEntryRestModifier(restContext, currSim) {
-  let modifier = 1.0; // Default: full motion scoring
-
-  if (restContext.entryFromRest.v1) {
-    const noteDur = currSim.voice1Note.duration;
-    if (restContext.entryFromRest.v1RestDuration > noteDur) {
-      modifier *= 0.5; // Halve if rest was longer than note
-    }
-  }
-  if (restContext.entryFromRest.v2) {
-    const noteDur = currSim.voice2Note.duration;
-    if (restContext.entryFromRest.v2RestDuration > noteDur) {
-      modifier *= 0.5;
-    }
-  }
-
-  return modifier;
-}
 
 /**
  * Score the entry into a dissonance (C → D)
@@ -818,7 +774,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     // Resolution to another dissonance
     // Short note + off-beat: halve the penalty (two quick consecutive dissonances on off-beats not a big deal)
     const shortNoteInfo = getShortNoteInfo(currSim, ctx);
-    const isOffBeat = currSim.metricWeight < 0.75;
+    const isOffBeat = currSim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG;
     if (shortNoteInfo.isShort && isOffBeat) {
       score = -0.375; // Halved penalty
       baseExitComponent = -0.375;
@@ -843,8 +799,8 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   if (restContext) {
     const v1RestDur = restContext.exitToRest?.v1RestDuration || 0;
     const v2RestDur = restContext.exitToRest?.v2RestDuration || 0;
-    const v1PhantomLimit = currSim.voice1Note.duration / 2;
-    const v2PhantomLimit = currSim.voice2Note.duration / 2;
+    const v1PhantomLimit = currSim.voice1Note.duration * PENALTY_MULTIPLIERS.HALF;
+    const v2PhantomLimit = currSim.voice2Note.duration * PENALTY_MULTIPLIERS.HALF;
 
     // Check if this is a "both moved after rest" situation (invalid resolution)
     const v1HadLongRest = v1RestDur > v1PhantomLimit;
@@ -926,7 +882,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       }
       // Apply sequence mitigation
       if (v1InSequence) {
-        penalty *= 0.25;
+        penalty *= PENALTY_MULTIPLIERS.QUARTER;
         reason += ' (mitigated: in sequence)';
       }
       score += penalty;
@@ -985,7 +941,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
       }
       // Apply sequence mitigation
       if (v2InSequence) {
-        penalty *= 0.25;
+        penalty *= PENALTY_MULTIPLIERS.QUARTER;
         reason += ' (mitigated: in sequence)';
       }
       score += penalty;
@@ -1065,7 +1021,6 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
   if (entryInfo.motion.type === 'oblique' && !isStrongBeat(currSim.onset, ctx)) {
     const movingVoice = entryInfo.motion.v1Moved ? 1 : (entryInfo.motion.v2Moved ? 2 : null);
     if (movingVoice) {
-      const resolution = movingVoice === 1 ? exitInfo.v1Resolution : exitInfo.v2Resolution;
       // Anticipation typically "resolves" by the other voice moving (oblique exit) or both moving
       if (exitInfo.motion && exitInfo.motion.type !== 'parallel') {
         const anticipationBonus = 0.5; // Moderate bonus for recognized pattern
@@ -1570,9 +1525,9 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
   let label = '!';
   let category = 'dissonant_bad';
 
-  if (totalScore >= 1.0) {
+  if (totalScore >= SCORE_BAND_BOUNDARIES.DISSONANT_GOOD_MIN) {
     category = 'dissonant_good';
-  } else if (totalScore >= -0.5) {
+  } else if (totalScore >= SCORE_BAND_BOUNDARIES.DISSONANT_MARGINAL_MIN) {
     category = 'dissonant_marginal';
   }
 
@@ -1719,8 +1674,6 @@ export function analyzeAllDissonances(sims, options = {}) {
   // Calculate summary statistics
   const consonances = results.filter(r => r.isConsonant);
   const dissonances = results.filter(r => !r.isConsonant);
-  const goodDissonances = dissonances.filter(r => r.score >= 0);
-  const badDissonances = dissonances.filter(r => r.score < 0);
   const repetitiveConsonances = consonances.filter(r => r.category === 'consonant_repetitive');
 
   // Track pattern types
