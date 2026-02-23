@@ -9,6 +9,16 @@ M: 4/4
 z2 c =B c2 G2 A2 c =B c2 d2 | G2 c =B z12 |]`;
 
 describe('App analyze flow', () => {
+
+
+  it('boots with the updated C# minor defaults including second countersubject', () => {
+    render(<App />);
+
+    expect(screen.getByLabelText('Subject in ABC notation').value).toContain('C8 | ^B,4 E4 | D8 |');
+    expect(screen.getByLabelText('Countersubject in ABC notation (optional)').value).toContain('e2 d2 e2 f2');
+    expect(screen.getByLabelText('Second countersubject in ABC notation (optional)').value).toContain('c2 B2 c2 d2');
+    expect(screen.getByLabelText('Answer in ABC notation (optional, auto-generated if empty)').value).toContain('G8 | =G4 B4 | ^A8 |');
+  });
   it('runs analysis for the provided subject without a toFixed runtime crash', () => {
     render(<App />);
 

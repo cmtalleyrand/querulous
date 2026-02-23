@@ -51,11 +51,12 @@ import { VIZ_COLORS } from './utils/vizConstants';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
- * Default example subject and countersubject (D minor, 4/4 time, L:1/8)
- * Each measure = 8 eighth notes = 4 beats
+ * Default example set in C# minor (2/2 time, L:1/8)
  */
-const DEFAULT_SUBJECT = `D4 A4 | F2 E2 D2 C2 | _B,2 A,2 G,2 A,2 | _B,2 C2 D4 |]`;
-const DEFAULT_CS = `F4 E4 | D2 C2 D2 E2 | F2 G2 F2 E2 | D2 C2 D4 |]`;
+const DEFAULT_SUBJECT = `C8 | ^B,4 E4 | D8 |`;
+const DEFAULT_CS = `e2 d2 e2 f2 | g2 f2 g2 a2 | g2 f2 e2 g2 | f2 e2 f2 g2 |`;
+const DEFAULT_CS2 = `c2 B2 c2 d2 | e2 d2 e2 f2 | e2 d2 c2 e2 | d2 c2 d2 e2 |`;
+const DEFAULT_ANSWER = `G8 | =G4 B4 | ^A8 |`;
 
 /**
  * Main Fugue Analyzer Application
@@ -69,17 +70,17 @@ export default function App() {
   // Input state
   const [subjectInput, setSubjectInput] = useState(DEFAULT_SUBJECT);
   const [csInput, setCsInput] = useState(DEFAULT_CS);
-  const [cs2Input, setCs2Input] = useState('');
-  const [answerInput, setAnswerInput] = useState('');
+  const [cs2Input, setCs2Input] = useState(DEFAULT_CS2);
+  const [answerInput, setAnswerInput] = useState(DEFAULT_ANSWER);
 
   // Settings state
-  const [selKey, setSelKey] = useState('D');
+  const [selKey, setSelKey] = useState('C#');
   const [selMode, setSelMode] = useState('natural_minor');
   const [spellingKey, setSpellingKey] = useState('C');
   const [spellingMode, setSpellingMode] = useState('major');
   const [useSpellingKey, setUseSpellingKey] = useState(false);
   const [selNoteLen, setSelNoteLen] = useState('1/8');
-  const [selTimeSig, setSelTimeSig] = useState('4/4');
+  const [selTimeSig, setSelTimeSig] = useState('2/2');
   const [strettoStep, setStrettoStep] = useState('1');
   const [strettoOctave, setStrettoOctave] = useState('12');
   const [selectedStretto, setSelectedStretto] = useState(null);
