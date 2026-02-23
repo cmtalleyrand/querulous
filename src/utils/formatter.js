@@ -280,11 +280,11 @@ export function metricWeight(onset, meter) {
  */
 export function metricPosition(onset, meter = [4, 4]) {
   const weight = metricWeight(onset, meter);
-  if (weight >= 0.95) return { weight, label: 'downbeat', severity: 'strong' };
-  if (weight >= 0.7) return { weight, label: 'secondary accent', severity: 'moderate' };
+  if (weight >= 0.95) return { weight, label: 'strong beat', severity: 'strong' };
+  if (weight >= 0.75) return { weight, label: 'medium beat', severity: 'moderate' };
   if (weight >= 0.45) return { weight, label: 'weak beat', severity: 'mild' };
-  if (weight >= 0.3) return { weight, label: 'subdivision', severity: 'light' };
-  return { weight, label: 'off-beat', severity: 'negligible' };
+  if (weight >= 0.3) return { weight, label: 'off beat', severity: 'light' };
+  return { weight, label: 'off primary subdivision of the beat', severity: 'negligible' };
 }
 
 /**
