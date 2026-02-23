@@ -41,7 +41,7 @@ export function toInternalScore(displayScore) {
 export const SCORE_CATEGORIES = {
   // === MELODIC GROUP: Subject line quality ===
   rhythmicCharacter: {
-    name: 'Rhythmic Character',
+    name: 'Subject Rhythmic Character',
     description: 'Distinctiveness and variety of rhythmic profile',
     group: 'melodic',
     weight: 0.8,

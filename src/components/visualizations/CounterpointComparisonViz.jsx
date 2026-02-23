@@ -8,7 +8,9 @@ const COMPARISON_TABS = [
   { key: 'answer_cs', label: 'A + CS1', v1: 'answer', v2: 'cs1' },
   { key: 'answer_subject', label: 'A + S', v1: 'answer', v2: 'subject' },
   { key: 'subject_cs2', label: 'S + CS2', v1: 'subject', v2: 'cs2' },
+  { key: 'answer_cs2', label: 'A + CS2', v1: 'answer', v2: 'cs2' },
   { key: 'cs1_cs2', label: 'CS1 + CS2', v1: 'cs1', v2: 'cs2' },
+  { key: 'subject2_subject', label: 'S2 + S', v1: 'secondSubject', v2: 'subject' },
 ];
 
 const getVoiceColor = (key) => {
@@ -17,6 +19,7 @@ const getVoiceColor = (key) => {
     case 'answer': return VIZ_COLORS.voiceAnswer;
     case 'cs1': return VIZ_COLORS.voiceCS;
     case 'cs2': return '#f59e0b';
+    case 'secondSubject': return '#7c3aed';
     default: return '#6b7280';
   }
 };
@@ -27,6 +30,7 @@ const getVoiceLabel = (key) => {
     case 'answer': return 'Answer';
     case 'cs1': return 'CS1';
     case 'cs2': return 'CS2';
+    case 'secondSubject': return 'S2';
     default: return key;
   }
 };
@@ -35,6 +39,7 @@ const getVoiceLabel = (key) => {
 const voiceToSeqKey = (key) => {
   if (key === 'cs1') return 'countersubject';
   if (key === 'cs2') return 'countersubject2';
+  if (key === 'secondSubject') return 'secondSubject';
   return key;
 };
 
