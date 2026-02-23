@@ -5,7 +5,6 @@ import { useState } from 'react';
  * Shows problems prominently at the top of the results
  *
  * @param {Object} results - Analysis results
- * @param {Object} scoreResult - Score data
  * @param {Function} onHighlight - Callback when an issue is clicked: onHighlight({ onset, type, voice })
  * @param {Object} highlightedItem - Currently highlighted item for visual feedback
  */
