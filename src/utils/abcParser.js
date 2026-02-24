@@ -486,7 +486,7 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
       else if (d.degree === 5 && d.alteration === 0) newPitch = n.pitch + 5;
     }
 
-    const durMatch = n.abcNote.match(/[\d\/]+$/);
+    const durMatch = n.abcNote.match(/[\d/]+$/);
     const noteMeas = Math.floor(n.onset / measDur);
 
     if (noteMeas > measCount && tokens.length > 0) {
@@ -591,7 +591,7 @@ export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNo
       }
     }
 
-    const durMatch = n.abcNote.match(/[\d\/]+$/);
+    const durMatch = n.abcNote.match(/[\d/]+$/);
     const noteMeas = Math.floor(n.onset / measDur);
 
     if (noteMeas > measCount && tokens.length > 0) {
