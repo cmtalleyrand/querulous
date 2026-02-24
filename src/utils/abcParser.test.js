@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateAnswerABC, generateAnswerABCSameKey, parseABC } from './abcParser';
+import { extractABCHeaders, generateAnswerABC, generateAnswerABCSameKey, parseABC } from './abcParser';
 
 describe('parseABC ties', () => {
   it('merges tied notes into a single NoteEvent duration', () => {
@@ -70,5 +70,28 @@ C-C D`;
 
     expect(out).toContain('\nG2 A');
     expect(out).not.toContain(' G A');
+  });
+});
+
+
+describe('ABC key signature modifiers', () => {
+  it('parses K: modifiers and applies them to key signature map', () => {
+    const headers = extractABCHeaders('K:D Phr ^f');
+    expect(headers.key).toBe('D');
+    expect(headers.mode).toBe('phrygian');
+    expect(headers.keySignatureMap.B).toBe(-1);
+    expect(headers.keySignatureMap.E).toBe(-1);
+    expect(headers.keySignatureMap.F).toBe(1);
+  });
+
+  it('supports naturals and double accidentals in K: modifiers', () => {
+    const abc = `K:D =c ^^f __b
+L:1/4
+C F B`;
+    const { notes } = parseABC(abc, 62, 'major');
+
+    expect(notes[0].pitch).toBe(60); // C natural instead of C#
+    expect(notes[1].pitch).toBe(67); // F double sharp -> G
+    expect(notes[2].pitch).toBe(69); // B double flat -> A
   });
 });
