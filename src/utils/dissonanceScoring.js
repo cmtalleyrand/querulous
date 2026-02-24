@@ -19,6 +19,7 @@
 
 import { pitchName, metricWeight } from './formatter';
 import { classifyMotion, getIntervalMagnitude } from './motionClassification';
+import { ANALYSIS_THRESHOLDS } from './constants';
 
 // ===========================================================================
 // Global state for backward compatibility
@@ -999,15 +1000,21 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
 
   // APPOGGIATURA: Entry=Leap/Skip+Strong, Exit=Step Opposite by the voice that leaped
   // Allocate more to entry to offset leap penalty: +2.0 entry, +0.5 exit
+  // Stagger discount: when voice onsets differ, the dramatic impact is diluted
   if (isStrongBeat(currSim.onset, ctx)) {
+    const stagger = Math.abs(currSim.voice1Note.onset - currSim.voice2Note.onset);
+    const asyncWindow = ANALYSIS_THRESHOLDS.MOTION_SIMILARITY_WINDOW;
+    const appoggiaturaMultiplier = stagger === 0 ? 1.0
+      : Math.max(ANALYSIS_THRESHOLDS.ASYNC_MOTION_PENALTY_MULT, 1 - stagger / asyncWindow);
+
     // Check if V1 leaped in and steps out opposite
     if (entryInfo.v1MelodicInterval !== 0) {
       const entryMag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
       if ((entryMag.type === 'skip' || entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap') && exitInfo.v1Resolution) {
         const entryDir = Math.sign(entryInfo.v1MelodicInterval);
         if (exitInfo.v1Resolution.magnitude.type === 'step' && exitInfo.v1Resolution.direction === -entryDir) {
-          const entryBonus = 2.0; // Offset leap penalty
-          const exitBonus = 0.5;  // Acknowledge good resolution
+          const entryBonus = 2.0 * appoggiaturaMultiplier;
+          const exitBonus = 0.5 * appoggiaturaMultiplier;
           const totalBonus = entryBonus + exitBonus;
           bonus += totalBonus;
           entryBonuses.push({ amount: entryBonus, reason: 'appoggiatura leap entry' });
@@ -1029,8 +1036,8 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
       if ((entryMag.type === 'skip' || entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap') && exitInfo.v2Resolution) {
         const entryDir = Math.sign(entryInfo.v2MelodicInterval);
         if (exitInfo.v2Resolution.magnitude.type === 'step' && exitInfo.v2Resolution.direction === -entryDir) {
-          const entryBonus = 2.0;
-          const exitBonus = 0.5;
+          const entryBonus = 2.0 * appoggiaturaMultiplier;
+          const exitBonus = 0.5 * appoggiaturaMultiplier;
           const totalBonus = entryBonus + exitBonus;
           bonus += totalBonus;
           entryBonuses.push({ amount: entryBonus, reason: 'appoggiatura leap entry' });

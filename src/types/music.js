@@ -66,16 +66,6 @@ export class Interval {
   }
 }
 
-/**
- * Represents melodic motion between consecutive notes
- */
-export class MelodicMotion {
-  constructor(time, fromPitch, toPitch) {
-    this.time = time;
-    this.semitones = Math.abs(toPitch - fromPitch);
-    this.direction = Math.sign(toPitch - fromPitch);
-  }
-}
 
 /**
  * Represents two simultaneous notes from different voices
