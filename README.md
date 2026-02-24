@@ -29,7 +29,7 @@ The application features a comprehensive scoring dashboard that provides:
 
 - **Piano Roll Display**: Interactive pitch/time visualization of notes
 - **Interval Timeline**: Color-coded consonance/dissonance visualization
-- **Stretto Visualization**: Side-by-side display of overlapping subject entries with conflict markers
+- **Two-Voice + Counterpoint Visualizations**: Interval, invertibility, and comparison views for subject/countersubject analysis
 
 ### Input Format
 
@@ -83,9 +83,13 @@ src/
 │   │   ├── ScoreBar.jsx
 │   │   └── ScoreSummaryCard.jsx
 │   ├── visualizations/    # Music visualization components
+│   │   ├── TwoVoiceViz.jsx
+│   │   ├── UnifiedCounterpointViz.jsx
+│   │   ├── CounterpointComparisonViz.jsx
+│   │   ├── IntervalAnalysisViz.jsx
+│   │   ├── InvertibilityViz.jsx
 │   │   ├── PianoRoll.jsx
-│   │   ├── IntervalTimeline.jsx
-│   │   └── StrettoViz.jsx
+│   │   └── IntervalTimeline.jsx
 │   └── ui/                # Reusable UI components
 │       ├── Section.jsx
 │       ├── Observation.jsx

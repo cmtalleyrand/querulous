@@ -107,7 +107,6 @@ if (categories.strettoPotential.score < -10) {
 
 ## Priority 4: Visualization Improvements
 
-From `IMPLEMENTATION_PLAN.md`:
 
 ### 4.1 Fix Voice Crossing Visualization
 
@@ -117,7 +116,6 @@ From `IMPLEMENTATION_PLAN.md`:
 
 **Files to modify**:
 - `IntervalAnalysisViz.jsx`
-- `StrettoViz.jsx`
 - `InvertibilityViz.jsx`
 
 ### 4.2 Unify Color Semantics
@@ -201,4 +199,3 @@ Before any release, verify:
 - **Critical analysis**: `docs/SCORING_CRITICAL_APPRAISAL.md`
 - **Harmonic algorithm**: `docs/HARMONIC_IMPLICATION_ALGORITHM.md`
 - **Technical overview**: `docs/CODEBASE_OVERVIEW.md`
-- **Previous tasks**: `IMPLEMENTATION_PLAN.md`
