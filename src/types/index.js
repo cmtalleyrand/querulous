@@ -1,1 +1,1 @@
-export { ScaleDegree, NoteEvent, Interval, MelodicMotion, Simultaneity } from './music';
+export { ScaleDegree, NoteEvent, Interval, Simultaneity } from './music';

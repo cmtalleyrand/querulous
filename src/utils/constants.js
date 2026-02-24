@@ -210,7 +210,8 @@ export const ANALYSIS_THRESHOLDS = {
   SEQUENCE_OVERLAP_THRESHOLD: 0.5, // overlap ratio to filter duplicates
 
   // Contour independence
-  MOTION_SIMILARITY_WINDOW: 0.25, // beats - time window for concurrent motion detection
+  MOTION_SIMILARITY_WINDOW: 0.75, // beats - max offset at which the other voice's move
+                                    // influences an oblique transition's classification
 
   // Parallel detection
   PARALLEL_INTERVAL_CLASSES: [5, 8], // interval classes for parallel 5ths/8ves
@@ -262,7 +263,7 @@ export function getAdjustedThresholds(noteCount) {
 
   // Widen motion similarity window for short subjects
   if (noteCount <= 8) {
-    base.MOTION_SIMILARITY_WINDOW = 0.5; // More tolerant
+    base.MOTION_SIMILARITY_WINDOW = 1.0; // More tolerant for short subjects
   }
 
   return base;

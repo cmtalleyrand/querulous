@@ -346,15 +346,82 @@ export function checkParallelPerfects(sims, formatter) {
 }
 
 /**
+ * Assess each oblique transition against the other voice's nearest move.
+ *
+ * For each oblique transition, finds the closest transition where the other
+ * voice moved. If within window, splits the oblique count fractionally:
+ * the non-oblique fraction goes to the classified direction type
+ * (contrary/similar/parallel) and the remainder stays oblique.
+ *
+ * No merging, no pairing, no change to the total transition count.
+ */
+function assessAsyncObliques(transitions, window) {
+  // Build indices: transitions where each voice moved
+  const v1Moves = [];
+  const v2Moves = [];
+  for (const t of transitions) {
+    if (t.motion.v1Moved) v1Moves.push(t);
+    if (t.motion.v2Moved) v2Moves.push(t);
+  }
+
+  const adjustments = { contrary: 0, similar: 0, parallel: 0, obliqueReduction: 0 };
+
+  for (const t of transitions) {
+    if (t.motion.type !== 'oblique') continue;
+
+    // Which voice moved, which held?
+    const movedV1 = t.motion.v1Moved;
+    const otherMoves = movedV1 ? v2Moves : v1Moves;
+
+    // Direction of the voice that moved in this transition
+    const movedDir = movedV1
+      ? Math.sign(t.currSim.voice1Note.pitch - t.prevSim.voice1Note.pitch)
+      : Math.sign(t.currSim.voice2Note.pitch - t.prevSim.voice2Note.pitch);
+
+    // Find the nearest transition where the OTHER voice moved
+    let nearest = null;
+    let minOffset = Infinity;
+    for (const candidate of otherMoves) {
+      const offset = Math.abs(candidate.onset - t.onset);
+      if (offset < minOffset) {
+        minOffset = offset;
+        nearest = candidate;
+      }
+    }
+
+    if (nearest === null || minOffset > window) continue;
+
+    // Direction and interval of the other voice in its nearest transition
+    const otherDir = movedV1
+      ? Math.sign(nearest.currSim.voice2Note.pitch - nearest.prevSim.voice2Note.pitch)
+      : Math.sign(nearest.currSim.voice1Note.pitch - nearest.prevSim.voice1Note.pitch);
+    const movedInterval = movedV1 ? t.motion.v1Interval : t.motion.v2Interval;
+    const otherInterval = movedV1 ? nearest.motion.v2Interval : nearest.motion.v1Interval;
+
+    const nonObliqueFraction = 1 - minOffset / window;
+
+    // Classify the directional relationship
+    if (movedDir === -otherDir) {
+      adjustments.contrary += nonObliqueFraction;
+    } else if (movedDir === otherDir && movedInterval === otherInterval) {
+      adjustments.parallel += nonObliqueFraction;
+    } else {
+      adjustments.similar += nonObliqueFraction;
+    }
+    adjustments.obliqueReduction += nonObliqueFraction;
+  }
+
+  return adjustments;
+}
+
+/**
  * Analyze contour independence between two voices
  * Thresholds adjusted for small note counts (<=8 notes)
  */
 export function testContourIndependence(subject, cs, formatter) {
-  // Get adjusted thresholds based on note count
   const noteCount = Math.min(subject.length, cs.length);
+  const thresholds = getAdjustedThresholds(noteCount);
 
-  // Adjust ratio thresholds for small note counts
-  // With few motions, ratios are less meaningful
   const parallelWarningThreshold = noteCount <= 8 ? 0.7 : 0.6;
   const contraryGoodThreshold = noteCount <= 8 ? 0.25 : 0.35;
 
@@ -377,20 +444,17 @@ export function testContourIndependence(subject, cs, formatter) {
     contrary = 0,
     oblique = 0;
   const details = [];
+  const transitions = [];
 
-  // Example of this transition-based method:
-  // t0: v1=C4, v2=G4
-  // t1: v1=C4, v2=F4  -> oblique (v1 holds, v2 moves)
-  // t2: v1=D4, v2=F4  -> oblique (v1 moves, v2 holds)
-  // By comparing adjacent simultaneities, both directions of oblique are counted.
   for (let i = 1; i < uniqueSims.length; i++) {
     const prev = uniqueSims[i - 1];
     const curr = uniqueSims[i];
 
     const motion = classifyMotion(prev, curr);
 
-    // No motion at all for this transition (same note pair repeated)
     if (motion.type === 'static' || motion.type === 'unknown') continue;
+
+    transitions.push({ motion, prevSim: prev, currSim: curr, onset: curr.onset });
 
     if (motion.type === 'oblique') {
       oblique++;
@@ -402,36 +466,42 @@ export function testContourIndependence(subject, cs, formatter) {
         details.push({ description: `Parallel leaps at ${formatter.formatBeat(curr.onset)}` });
       }
     } else {
-      // similar / similar_step / similar_same_type
       similar++;
     }
   }
 
-  const total = parallel + similar + contrary + oblique;
-  const parallelRatio = total > 0 ? parallel / total : 0;
-  const similarRatio = total > 0 ? similar / total : 0;
-  const contraryRatio = total > 0 ? contrary / total : 0;
-  const obliqueRatio = total > 0 ? oblique / total : 0;
+  // Per-transition async assessment: redistribute oblique fractions
+  const adj = assessAsyncObliques(transitions, thresholds.MOTION_SIMILARITY_WINDOW);
+  const adjParallel = parallel + adj.parallel;
+  const adjSimilar = similar + adj.similar;
+  const adjContrary = contrary + adj.contrary;
+  const adjOblique = oblique - adj.obliqueReduction;
+
+  const total = adjParallel + adjSimilar + adjContrary + adjOblique;
+  const parallelRatio = total > 0 ? adjParallel / total : 0;
+  const similarRatio = total > 0 ? adjSimilar / total : 0;
+  const contraryRatio = total > 0 ? adjContrary / total : 0;
+  const obliqueRatio = total > 0 ? adjOblique / total : 0;
 
   let assessment = 'Independent contours';
-  if (total > 0 && (parallel + similar) / total > parallelWarningThreshold) {
+  if (total > 0 && (adjParallel + adjSimilar) / total > parallelWarningThreshold) {
     assessment = 'Voices move together frequently—consider more contrary motion';
   } else if (contraryRatio > contraryGoodThreshold) {
     assessment = 'Good balance of motion types';
   }
 
   return {
-    parallelMotions: parallel,
-    similarMotions: similar,
-    contraryMotions: contrary,
-    obliqueMotions: oblique,
+    parallelMotions: adjParallel,
+    similarMotions: adjSimilar,
+    contraryMotions: adjContrary,
+    obliqueMotions: adjOblique,
     parallelRatio,
     similarRatio,
     contraryRatio,
     obliqueRatio,
     details,
     assessment,
-    noteCount, // Include for transparency
+    noteCount,
   };
 }
 

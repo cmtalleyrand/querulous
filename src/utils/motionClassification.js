@@ -10,7 +10,7 @@ export function getIntervalMagnitude(semitones) {
   if (abs === 0) return { type: 'unison', size: abs };
   if (abs <= 2) return { type: 'step', size: abs };
   if (abs <= 4) return { type: 'skip', size: abs };
-  if (abs <= 7) return { type: 'perfect_leap', size: abs };
+  if (abs === 5 || abs === 7) return { type: 'perfect_leap', size: abs };
   if (abs === 12) return { type: 'octave', size: abs };
   return { type: 'large_leap', size: abs };
 }
