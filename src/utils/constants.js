@@ -1,3 +1,5 @@
+import { MODE_INTERVALS, AVAILABLE_MODES } from './modes';
+
 /**
  * MIDI note numbers for note names
  */
@@ -53,19 +55,7 @@ export const KEY_SIGNATURES = {
   Abm: ['Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb', 'Fb'],
 };
 
-/**
- * Mode intervals mapping (semitones to scale degrees)
- */
-export const MODE_INTERVALS = {
-  major: { 0: 1, 2: 2, 4: 3, 5: 4, 7: 5, 9: 6, 11: 7 },
-  natural_minor: { 0: 1, 2: 2, 3: 3, 5: 4, 7: 5, 8: 6, 10: 7 },
-  harmonic_minor: { 0: 1, 2: 2, 3: 3, 5: 4, 7: 5, 8: 6, 11: 7 },
-  dorian: { 0: 1, 2: 2, 3: 3, 5: 4, 7: 5, 9: 6, 10: 7 },
-  phrygian: { 0: 1, 1: 2, 3: 3, 5: 4, 7: 5, 8: 6, 10: 7 },
-  lydian: { 0: 1, 2: 2, 4: 3, 6: 4, 7: 5, 9: 6, 11: 7 },
-  mixolydian: { 0: 1, 2: 2, 4: 3, 5: 4, 7: 5, 9: 6, 10: 7 },
-  locrian: { 0: 1, 1: 2, 3: 3, 5: 4, 6: 5, 8: 6, 10: 7 },
-};
+export { MODE_INTERVALS };
 
 /**
  * Available keys for selection
@@ -90,18 +80,7 @@ export const AVAILABLE_KEYS = [
   { value: 'B', label: 'B' },
 ];
 
-/**
- * Available modes for selection
- */
-export const AVAILABLE_MODES = [
-  { value: 'major', label: 'Major' },
-  { value: 'natural_minor', label: 'Minor' },
-  { value: 'harmonic_minor', label: 'Harmonic Minor' },
-  { value: 'dorian', label: 'Dorian' },
-  { value: 'phrygian', label: 'Phrygian' },
-  { value: 'lydian', label: 'Lydian' },
-  { value: 'mixolydian', label: 'Mixolydian' },
-];
+export { AVAILABLE_MODES };
 
 /**
  * Note length options (including compound meter values)
@@ -262,4 +241,3 @@ export function getAdjustedThresholds(noteCount) {
 
   return base;
 }
-

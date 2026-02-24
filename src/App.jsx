@@ -14,7 +14,6 @@ import {
 } from './components';
 import {
   NOTE_TO_MIDI,
-  KEY_SIGNATURES,
   AVAILABLE_KEYS,
   AVAILABLE_MODES,
   NOTE_LENGTH_OPTIONS,
@@ -48,6 +47,14 @@ import {
   setSequenceBeatRanges,
 } from './utils';
 import { VIZ_COLORS } from './utils/vizConstants';
+import { MODE_HEADER_SUFFIX, MODE_DEFINITIONS } from './utils/modes';
+import {
+  ACCIDENTAL_OPTIONS,
+  NOTE_LETTER_OPTIONS,
+  getKeySignatureMap,
+  keySignatureMapToLegacyArray,
+  serializeKeySignatureModifiers,
+} from './utils/keySignature';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
@@ -79,6 +86,7 @@ export default function App() {
   const [selMode, setSelMode] = useState('natural_minor');
   const [spellingKey, setSpellingKey] = useState('C');
   const [spellingMode, setSpellingMode] = useState('major');
+  const [keySignatureModifiers, setKeySignatureModifiers] = useState([]);
   const [useSpellingKey, setUseSpellingKey] = useState(false);
   const [selNoteLen, setSelNoteLen] = useState('1/8');
   const [selTimeSig, setSelTimeSig] = useState('2/2');
@@ -134,7 +142,7 @@ export default function App() {
   }, [csPos, csShift]);
 
   // Helper: prepend ABC headers if not already present
-  const prependABCHeaders = (abc, key, mode, noteLength, timeSig) => {
+  const prependABCHeaders = (abc, key, mode, noteLength, timeSig, modifiers = []) => {
     if (!abc.trim()) return abc;
 
     const headers = [];
@@ -142,19 +150,10 @@ export default function App() {
     const hasL = /^\s*L:/m.test(abc);
     const hasM = /^\s*M:/m.test(abc);
 
-    // Build mode suffix for key
-    const modeMap = {
-      major: '',
-      natural_minor: 'm',
-      harmonic_minor: 'm',
-      dorian: 'dor',
-      phrygian: 'phr',
-      lydian: 'lyd',
-      mixolydian: 'mix',
-    };
-    const modeStr = modeMap[mode] || '';
+    const modeStr = MODE_HEADER_SUFFIX[mode] || '';
+    const modifierStr = serializeKeySignatureModifiers(modifiers);
 
-    if (!hasK) headers.push(`K:${key}${modeStr}`);
+    if (!hasK) headers.push(`K:${key}${modeStr}${modifierStr ? ` ${modifierStr}` : ''}`);
     if (!hasL) headers.push(`L:${noteLength}`);
     if (!hasM) headers.push(`M:${timeSig}`);
 
@@ -167,11 +166,11 @@ export default function App() {
     if (!saveName.trim()) return;
 
     // Include ABC headers (K, L, M) in the saved text
-    const subjectWithHeaders = prependABCHeaders(subjectInput, selKey, selMode, selNoteLen, selTimeSig);
-    const subject2WithHeaders = subject2Input.trim() ? prependABCHeaders(subject2Input, selKey, selMode, selNoteLen, selTimeSig) : '';
-    const csWithHeaders = csInput.trim() ? prependABCHeaders(csInput, selKey, selMode, selNoteLen, selTimeSig) : '';
-    const cs2WithHeaders = cs2Input.trim() ? prependABCHeaders(cs2Input, selKey, selMode, selNoteLen, selTimeSig) : '';
-    const answerWithHeaders = answerInput.trim() ? prependABCHeaders(answerInput, selKey, selMode, selNoteLen, selTimeSig) : '';
+    const subjectWithHeaders = prependABCHeaders(subjectInput, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers);
+    const subject2WithHeaders = subject2Input.trim() ? prependABCHeaders(subject2Input, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers) : '';
+    const csWithHeaders = csInput.trim() ? prependABCHeaders(csInput, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers) : '';
+    const cs2WithHeaders = cs2Input.trim() ? prependABCHeaders(cs2Input, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers) : '';
+    const answerWithHeaders = answerInput.trim() ? prependABCHeaders(answerInput, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers) : '';
 
     const preset = {
       name: saveName.trim(),
@@ -185,6 +184,7 @@ export default function App() {
         mode: selMode,
         noteLength: selNoteLen,
         timeSig: selTimeSig,
+        keySignatureModifiers,
       },
       savedAt: new Date().toISOString(),
     };
@@ -208,6 +208,7 @@ export default function App() {
       if (preset.settings.mode) setSelMode(preset.settings.mode);
       if (preset.settings.noteLength) setSelNoteLen(preset.settings.noteLength);
       if (preset.settings.timeSig) setSelTimeSig(preset.settings.timeSig);
+      if (Array.isArray(preset.settings.keySignatureModifiers)) setKeySignatureModifiers(preset.settings.keySignatureModifiers);
     }
   };
 
@@ -234,6 +235,7 @@ export default function App() {
       // Analysis key - what key we're analyzing scale degrees in
       const analysisKey = h.key || selKey;
       const analysisMode = h.mode || selMode;
+      const activeModifiers = h.key ? (h.keySignatureModifiers || []) : keySignatureModifiers;
 
       // Spelling key - what key signature to use for parsing ABC accidentals
       // If useSpellingKey is true and no K: header, use separate spelling key
@@ -250,17 +252,9 @@ export default function App() {
       if (analysisKey.includes('#')) tonic += 1;
       if (analysisKey.includes('b')) tonic -= 1;
 
-      // Get key signature for spelling (parsing ABC)
-      // For minor keys, append 'm' to the FULL key (e.g., 'Ebm' not 'Em')
-      let spellingKeyForSig = effSpellingKey;
-      if (['natural_minor', 'harmonic_minor'].includes(effSpellingMode)) spellingKeyForSig = effSpellingKey + 'm';
-      const spellingKeySig = KEY_SIGNATURES[spellingKeyForSig] || KEY_SIGNATURES[effSpellingKey] || [];
-
-      // Get key signature for answer generation (based on analysis key)
-      // Same fix: use full key with accidental when appending 'm'
-      let analysisKeyForSig = analysisKey;
-      if (['natural_minor', 'harmonic_minor'].includes(analysisMode)) analysisKeyForSig = analysisKey + 'm';
-      const analysisKeySig = KEY_SIGNATURES[analysisKeyForSig] || KEY_SIGNATURES[analysisKey] || [];
+      // Get key signatures for spelling and answer generation
+      const spellingKeySig = keySignatureMapToLegacyArray(getKeySignatureMap(effSpellingKey, effSpellingMode, activeModifiers));
+      const analysisKeySig = keySignatureMapToLegacyArray(getKeySignatureMap(analysisKey, analysisMode, activeModifiers));
 
       const keyInfo = { key: analysisKey, tonic, mode: analysisMode, keySignature: analysisKeySig };
 
@@ -335,6 +329,7 @@ export default function App() {
           mode: analysisMode,
           spellingKey: useSpellingKey ? effSpellingKey : null,
           spellingMode: useSpellingKey ? effSpellingMode : null,
+          keySignatureModifiers: activeModifiers,
           defaultNoteLength: effNL,
           subjectNotes: subject.length,
           secondSubjectNotes: secondSubject?.length || 0,
@@ -581,7 +576,7 @@ export default function App() {
             marginBottom: '16px',
           }}
         >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '14px' }}>
             <Select
               label="Analysis Key"
               value={selKey}
@@ -594,6 +589,27 @@ export default function App() {
               onChange={setSelMode}
               options={AVAILABLE_MODES}
             />
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#546e7a', marginBottom: '5px' }}>
+                Key Signature Modifiers
+              </label>
+              {keySignatureModifiers.map((modifier, index) => (
+                <div key={`${index}-${modifier.note}-${modifier.accidental}`} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                  <select value={modifier.accidental} onChange={(e) => setKeySignatureModifiers((prev) => prev.map((m, i) => i === index ? { ...m, accidental: e.target.value } : m))} style={{ flex: 1, padding: '7px 6px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}>
+                    {ACCIDENTAL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <select value={modifier.note} onChange={(e) => setKeySignatureModifiers((prev) => prev.map((m, i) => i === index ? { ...m, note: e.target.value } : m))} style={{ width: '64px', padding: '7px 6px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}>
+                    {NOTE_LETTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <button type="button" onClick={() => setKeySignatureModifiers((prev) => prev.filter((_, i) => i !== index))} style={{ border: '1px solid #d0d0d0', borderRadius: '4px', background: '#fff', fontSize: '11px', padding: '0 8px' }}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setKeySignatureModifiers((prev) => [...prev, { accidental: '^', note: 'F' }])} style={{ width: '100%', padding: '7px 8px', border: '1px solid #c9a227', borderRadius: '4px', background: '#fffdf5', fontSize: '12px', color: '#7a6220' }}>
+                Add modifier
+              </button>
+            </div>
             <Select
               label="Time Sig (M:)"
               value={selTimeSig}
@@ -655,7 +671,7 @@ export default function App() {
                   options={AVAILABLE_MODES}
                 />
                 <p style={{ fontSize: '11px', color: '#78909c', marginTop: '18px', flex: 1 }}>
-                  ABC accidentals use {spellingKey} {spellingMode.replace('_', ' ')}, but scale degrees analyzed in {selKey} {selMode.replace('_', ' ')}
+                  ABC accidentals use {spellingKey} {MODE_DEFINITIONS[spellingMode]?.label || spellingMode}, but scale degrees analyzed in {selKey} {MODE_DEFINITIONS[selMode]?.label || selMode}
                 </p>
               </div>
             )}
@@ -1039,9 +1055,9 @@ export default function App() {
                 color: '#546e7a',
               }}
             >
-              Analysis: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.key} {results.parsedInfo.mode.replace('_', ' ')}</strong>
+              Analysis: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.key} {MODE_DEFINITIONS[results.parsedInfo.mode]?.label || results.parsedInfo.mode}</strong>
               {results.parsedInfo.spellingKey && (
-                <> · Spelling: <strong style={{ color: '#78909c' }}>{results.parsedInfo.spellingKey} {results.parsedInfo.spellingMode.replace('_', ' ')}</strong></>
+                <> · Spelling: <strong style={{ color: '#78909c' }}>{results.parsedInfo.spellingKey} {MODE_DEFINITIONS[results.parsedInfo.spellingMode]?.label || results.parsedInfo.spellingMode}</strong></>
               )}
               {' · '}Subject: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.subjectNotes} notes</strong>
               {' · '}L: <strong style={{ color: '#2c3e50' }}>1/{Math.round(1 / results.parsedInfo.defaultNoteLength)}</strong>
