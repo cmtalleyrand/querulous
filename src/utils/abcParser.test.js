@@ -71,4 +71,41 @@ C-C D`;
     expect(out).toContain('\nG2 A');
     expect(out).not.toContain(' G A');
   });
+
+  it('preserves slash duration tokens in generateAnswerABC', () => {
+    const abc = `K:C
+L:1/8
+C/ D3/2`;
+    const { notes } = parseABC(abc, 60, 'major');
+
+    const out = generateAnswerABC(
+      notes,
+      { tonic: 0, keySignature: [], mode: 'major' },
+      answerData,
+      1 / 8,
+      [4, 4],
+      [1, 8]
+    );
+
+    expect(out).toContain('\nG/ A3/2');
+  });
+
+  it('preserves slash duration tokens in generateAnswerABCSameKey', () => {
+    const abc = `K:C
+L:1/8
+C/ D3/2`;
+    const { notes } = parseABC(abc, 60, 'major');
+
+    const out = generateAnswerABCSameKey(
+      notes,
+      { key: 'C', keySignature: [], mode: 'major' },
+      answerData,
+      1 / 8,
+      [4, 4],
+      false,
+      [1, 8]
+    );
+
+    expect(out).toContain('\nG/ A3/2');
+  });
 });
