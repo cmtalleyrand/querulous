@@ -61,6 +61,11 @@ npm install
 npm run dev
 ```
 
+## Linting Setup Requirements
+
+- This repository is pinned to **ESLint 8.x** (legacy `.eslintrc.cjs` format), so run lint via `npm run lint` to ensure the project-local binary is used.
+- Use `npm ci` for consistent installs in CI and local verification; it will honor `package-lock.json` and install the locked ESLint 8.x toolchain instead of any globally installed ESLint 9.
+
 ## Available Scripts
 
 | Command | Description |
