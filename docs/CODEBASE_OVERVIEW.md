@@ -26,11 +26,13 @@ querulous/
 │   │   │   ├── Section.jsx          # Collapsible sections
 │   │   │   └── Select.jsx           # Styled select
 │   │   └── visualizations/    # Core visualizations
-│   │       ├── IntervalAnalysisViz.jsx  # Main interval viz (898 lines)
-│   │       ├── StrettoViz.jsx           # Stretto analysis (518 lines)
-│   │       ├── InvertibilityViz.jsx     # Double counterpoint (478 lines)
-│   │       ├── PianoRoll.jsx            # Piano roll renderer (369 lines)
-│   │       └── IntervalTimeline.jsx     # Compact timeline (103 lines)
+│   │       ├── TwoVoiceViz.jsx              # Two-voice interval visualization
+│   │       ├── UnifiedCounterpointViz.jsx   # Unified counterpoint analysis view
+│   │       ├── CounterpointComparisonViz.jsx # Comparison between configurations
+│   │       ├── IntervalAnalysisViz.jsx       # Main interval visualization
+│   │       ├── InvertibilityViz.jsx          # Double counterpoint view
+│   │       ├── PianoRoll.jsx                 # Piano roll renderer
+│   │       └── IntervalTimeline.jsx          # Compact interval timeline
 │   ├── utils/
 │   │   ├── analysis.js        # Core analysis functions (1412 lines)
 │   │   ├── dissonanceScoring.js # Dissonance evaluation (1208 lines)
@@ -51,8 +53,6 @@ querulous/
 │   ├── CODEBASE_OVERVIEW.md   # Technical orientation (this file)
 │   └── WORKING_WITH_USER.md   # Communication guidance
 ├── PROJECT_INTENT.md          # Design principles
-├── PENDING_FEEDBACK.md        # Feedback tracking / changelog
-└── IMPLEMENTATION_PLAN.md     # Task tracking
 ```
 
 ---
@@ -213,10 +213,6 @@ The main analysis view. Shows:
 
 **Complex because**: Handles voice crossing, interval display, highlighting
 
-### StrettoViz
-
-Shows subject overlapping with itself (comes) at various distances.
-
 ### InvertibilityViz
 
 Shows original and inverted configurations side-by-side.
@@ -289,7 +285,7 @@ VIZ_COLORS = {
 
 No comprehensive test suite currently. Testing is manual via UI.
 
-**Recommended test cases** (from IMPLEMENTATION_PLAN.md):
+**Recommended test cases**:
 - Various time signatures (4/4, 6/8, 9/8)
 - Voice crossing scenarios
 - Subjects with rests
@@ -321,6 +317,4 @@ No comprehensive test suite currently. Testing is manual via UI.
 | Project plan | `docs/PROJECT_PLAN.md` | Planned improvements and next steps |
 | Working with user | `docs/WORKING_WITH_USER.md` | Communication style, preferences, domain context |
 | Codebase overview | `docs/CODEBASE_OVERVIEW.md` | This file — technical orientation |
-| Pending feedback | `PENDING_FEEDBACK.md` | User confirmation tracking and changelog |
-| Implementation tasks | `IMPLEMENTATION_PLAN.md` | Original task list (partially complete) |
 | README | `README.md` | Public-facing project description |
