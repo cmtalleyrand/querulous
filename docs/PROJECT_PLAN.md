@@ -1,6 +1,10 @@
 # Project Plan - Next Steps
 
+**Last validated against codebase:** 2026-02-24 (validated against `src/utils/*.js` and `src/components/visualizations/*.jsx`)
+
 This document captures planned improvements based on user feedback and critical analysis. It serves as a handover document for future development sessions.
+
+> Validation note: the roadmap below is the original plan, now annotated with concrete code mappings or archived tags where artifacts no longer exist.
 
 ---
 
@@ -12,54 +16,41 @@ Based on `docs/SCORING_CRITICAL_APPRAISAL.md`, these are the most impactful chan
 
 **Problem**: The system doesn't evaluate overall melodic shape.
 
-**What to implement**:
-- Leap recovery detection: After a leap, does the melody step back?
-- Focal point analysis: Is there a clear melodic climax?
-- Balance metric: What percentage of motion is by leap vs step?
+**Current code mapping**:
+- `src/utils/analysis.js:testMelodicContour()`
+- `src/utils/scoring.js:calculateMelodicContourScore()`
 
-**Suggested scoring**:
-```javascript
-// In a new function: calculateMelodicContourScore()
-// +0.5 if leaps are followed by step in opposite direction
-// +1.0 if there's a clear melodic climax
-// -penalty if >50% of motion is by leap
-```
-
-**Files to modify**: `scoring.js`, `analysis.js`
+**Implementation status**: **Mapped (partially implemented; tuning opportunity remains)**
 
 ### 1.2 Recalibrate Voice Independence Thresholds
 
-**Problem**: Current thresholds are too strict. Good Bach counterpoint often has 30-35% contrary motion.
+**Problem**: Current thresholds may be too strict for stylistic norms.
 
-**Current thresholds** (in `scoring.js`):
-- ≥50% contrary: Strong (+12)
-- ≥35% contrary: Good (+8)
+**Current code mapping**:
+- `src/utils/scoring.js:calculateVoiceIndependenceScore()`
+- `src/utils/analysis.js:testContourIndependence()`
 
-**Proposed thresholds** (calibrated against historical examples):
-- ≥40% contrary: Strong
-- ≥25% contrary: Good
-- ≥15% contrary: Moderate
-
-**Files to modify**: `scoring.js:calculateVoiceIndependenceScore()`
+**Implementation status**: **Mapped**
 
 ### 1.3 Contextualize Strong-Beat Dissonance Penalty
 
-**Problem**: Every strong-beat dissonance gets -1.0 penalty, even well-prepared suspensions.
+**Problem**: Strong-beat dissonance can be over-penalized if context is ornamental/prepared.
 
-**Proposed change**: Reduce or eliminate the -1.0 penalty when a recognized ornamental pattern (suspension, appoggiatura) is detected.
+**Current code mapping**:
+- `src/utils/dissonanceScoring.js:scoreDissonance()` / `_scoreDissonance()`
+- `src/utils/dissonanceScoring.js:analyzeAllDissonances()`
 
-**Files to modify**: `dissonanceScoring.js:scoreDissonance()`
+**Implementation status**: **Mapped (partially implemented; policy tuning remains)**
 
 ### 1.4 Add Length/Proportion Consideration
 
-**Problem**: A 4-note subject is evaluated identically to a 20-note subject.
+**Problem**: Very short and very long subjects can be scored without enough proportional context.
 
-**Proposed scoring**:
-- 6-12 notes: Ideal range (+5)
-- 4-5 notes or 13-16 notes: Acceptable (0)
-- <4 notes or >16 notes: Potential issues (-5)
+**Current code mapping**:
+- `src/utils/scoring.js:calculateOverallScore(results, hasCountersubject, subjectInfo)`
+- `src/utils/scoring.js:calculateStrettoPotentialScore(result, subjectLength)`
 
-**Files to modify**: `scoring.js`, add new category or factor
+**Implementation status**: **Mapped**
 
 ---
 
@@ -69,24 +60,20 @@ Based on `docs/SCORING_CRITICAL_APPRAISAL.md`, these are the most impactful chan
 
 **Problem**: Weighted average can mask severe problems in one category.
 
-**Proposed solution**: Add caps that limit overall score when critical issues exist.
+**Current code mapping**:
+- `src/utils/scoring.js:calculateOverallScore()`
 
-```javascript
-// Example: If stretto potential < -10, overall score cannot exceed 0
-if (categories.strettoPotential.score < -10) {
-  overallScore = Math.min(overallScore, 0);
-}
-```
-
-**Files to modify**: `scoring.js:calculateOverallScore()`
+**Implementation status**: **Mapped (not explicit as standalone red-flag caps yet)**
 
 ### 2.2 Add "Worst Moment" Factor
 
-**Problem**: Average dissonance score may not reflect the listening experience. One terrible dissonance at a critical moment can be more damaging than several minor issues.
+**Problem**: Average dissonance score may not reflect one severe outlier.
 
-**Proposed**: Track the single worst dissonance score and give it independent influence.
+**Current code mapping**:
+- `src/utils/dissonanceScoring.js:analyzeAllDissonances()`
+- `src/utils/scoring.js` overall/category aggregation functions
 
-**Files to modify**: `dissonanceScoring.js`, `scoring.js`
+**Implementation status**: **Mapped**
 
 ---
 
@@ -94,39 +81,39 @@ if (categories.strettoPotential.score < -10) {
 
 ### 3.1 Improve Rhythmic Character Evaluation
 
-**Problem**: Currently measures variety but not coherence.
+**Problem**: Current analysis captures variety better than coherence.
 
-**What to add**:
-- Rhythmic cell recurrence (repeated patterns = identity)
-- Relationship between rhythm and meter
-- Rhythmic arc (build/release of tension)
+**Current code mapping**:
+- `src/utils/analysis.js:testRhythmicVariety()`
+- `src/utils/scoring.js:calculateRhythmicCharacterScore()`
 
-**Files to modify**: `analysis.js:testRhythmicVariety()`, `scoring.js`
+**Implementation status**: **Mapped**
 
 ---
 
 ## Priority 4: Visualization Improvements
 
-
 ### 4.1 Fix Voice Crossing Visualization
 
-**Current state**: When voices cross, interval connectors create visual chaos.
+**Current state**: When voices cross, interval connectors can become visually dense.
 
-**Proposed solution**: Replace connector lines with filled regions between voices.
+**Current code mapping**:
+- `src/components/visualizations/IntervalAnalysisViz.jsx`
+- `src/components/visualizations/InvertibilityViz.jsx`
+- `src/components/visualizations/UnifiedCounterpointViz.jsx`
 
-**Files to modify**:
-- `IntervalAnalysisViz.jsx`
-- `InvertibilityViz.jsx`
+**Archived reference**:
+- `StrettoViz.jsx` (archived target; file not present in current repo)
 
 ### 4.2 Unify Color Semantics
 
-Ensure all visualizations use the same semantic colors:
-- Green spectrum: Consonant, good
-- Purple spectrum: Dissonant but well-handled
-- Yellow/Orange: Warnings, marginal
-- Red: Problems, errors
+Ensure all visualizations use the same semantic colors.
 
-**Files to modify**: `vizConstants.js`, all visualization components
+**Current code mapping**:
+- `src/utils/vizConstants.js`
+- `src/components/visualizations/*.jsx`
+
+**Implementation status**: **Mapped**
 
 ---
 
@@ -134,45 +121,54 @@ Ensure all visualizations use the same semantic colors:
 
 ### 5.1 Subject Type Differentiation
 
-Detect whether subject is:
-- Lyrical/slow-moving
-- Energetic/motoric
-- Chromatic/expressive
-- Simple/diatonic
+Detect whether subject is lyrical, energetic, chromatic, or simple.
 
-Adjust expectations accordingly.
+**Current code mapping**:
+- `src/utils/analysis.js` (contour/rhythm/harmonic features)
+- `src/utils/scoring.js` (category weighting/interpretation)
+
+**Implementation status**: **Mapped**
 
 ### 5.2 Harmonic Implication Analysis
 
-Analyze which harmonies the subject implies, rate of harmonic change, variety vs stability.
+Analyze implied harmonies, harmonic rhythm, and stability/variety.
+
+**Current code mapping**:
+- `src/utils/analysis.js:testHarmonicImplication()`
+- `src/utils/harmonicAnalysis.js`
+
+**Implementation status**: **Mapped (already present; extendable)**
 
 ### 5.3 Transposition Flexibility
 
-Test countersubject at multiple transposition levels, not just I and V.
+Test countersubject behavior at multiple transpositions.
+
+**Current code mapping**:
+- `src/utils/analysis.js:testModulatoryRobustness()`
+- `src/utils/scoring.js:calculateTranspositionStabilityScore()`
+
+**Implementation status**: **Mapped (already present; extendable)**
 
 ---
 
-## Bug Fixes Completed (This Session)
+## Bug Fixes Completed
 
 ### Sequence Detection (Jan 2025)
 
 **Issue**: Sequences were being detected across non-consecutive notes.
-Example: Notes 1-3 and 13-15 matching was reported as "Notes 1-19 (sequence)"
 
 **Fix**: Changed detection to require consecutive repetitions only.
 
-**File modified**: `analysis.js:detectSequences()`
+**File modified**: `src/utils/analysis.js:detectSequences()`
 
 ---
 
 ## Technical Debt
 
-From `CODEBASE_OVERVIEW.md`:
-
-1. **Module-level state** in `dissonanceScoring.js` - Consider refactoring to pass state explicitly
-2. **Large components** - `App.jsx` (1528 lines) and `IntervalAnalysisViz.jsx` (898 lines) could be split
-3. **No TypeScript** - Consider migration for better type safety
-4. **No test suite** - Add automated tests for analysis functions
+1. **Module-level state** in `src/utils/dissonanceScoring.js` - Consider refactoring to pass state explicitly.
+2. **Large components** - `src/App.jsx` and `src/components/visualizations/IntervalAnalysisViz.jsx` could be split.
+3. **No TypeScript** - Consider migration for better type safety.
+4. **Test coverage still limited** - Continue expanding automated tests for analysis functions.
 
 ---
 
@@ -193,9 +189,10 @@ Before any release, verify:
 
 ## Reference Documents
 
-- **Definitions**: `docs/DEFINITIONS.md` — all terms, data structures, scoring rules with code cross-references
+- **Definitions**: `docs/DEFINITIONS.md`
 - **Design principles**: `PROJECT_INTENT.md`
 - **Scoring details**: `docs/SCORING_SYSTEM.md`
 - **Critical analysis**: `docs/SCORING_CRITICAL_APPRAISAL.md`
 - **Harmonic algorithm**: `docs/HARMONIC_IMPLICATION_ALGORITHM.md`
 - **Technical overview**: `docs/CODEBASE_OVERVIEW.md`
+- **Previous tasks**: `IMPLEMENTATION_PLAN.md` (**archived reference; file currently absent**)
