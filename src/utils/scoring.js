@@ -826,7 +826,6 @@ export function calculateTranspositionStabilityScore(result) {
  */
 export function calculateOverallScore(results, hasCountersubject, subjectInfo = null) {
   // Extract subject metrics if available
-  const subjectLength = subjectInfo?.length || results.subject?.length;
   const subjectDuration = subjectInfo?.duration || results.subjectDuration;
   const noteCount = subjectInfo?.noteCount || results.noteCount;
 
@@ -958,7 +957,7 @@ export function getScoreSummary(scoreResult) {
 /**
  * Get improvement suggestions for a category
  */
-function getSuggestion(category, data) {
+function getSuggestion(category) {
   const suggestions = {
     // Active keys
     rhythmicCharacter: 'Try incorporating more diverse note values and rhythmic contrasts.',

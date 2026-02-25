@@ -618,7 +618,6 @@ export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNo
 
   if (line.trim()) body += line;
 
-  const answerLabel = forceReal ? 'Real' : 'Tonal';
   return `K:${key}${modeSuffix}\nL:${lNumDisplay}/${lDenomDisplay}\n${body.trim()}`;
 }
 
