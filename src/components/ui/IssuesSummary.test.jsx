@@ -35,4 +35,34 @@ describe('IssuesSummary anchors', () => {
 
     expect(onHighlight).toHaveBeenCalledWith(expect.objectContaining({ onset: 2 }));
   });
+
+  it('uses category defaults for rhythmic and invertibility observations without onsets', () => {
+    const onHighlight = vi.fn();
+    const results = {
+      rhythmicComplementarity: {
+        observations: [{ type: 'consideration', description: 'Rhythms lock too often' }],
+      },
+      doubleCounterpoint: {
+        observations: [{ type: 'consideration', description: 'Intervals are dense' }],
+      },
+    };
+
+    render(<IssuesSummary results={results} onHighlight={onHighlight} highlightedItem={null} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Rhythmic Complementarity/i }));
+    fireEvent.click(screen.getByText(/Rhythms lock too often/i));
+
+    fireEvent.click(screen.getByRole('button', { name: /Invertible Counterpoint/i }));
+    fireEvent.click(screen.getByText(/Intervals are dense/i));
+
+    expect(onHighlight).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      scoreCategory: 'rhythmicInterplay',
+      id: expect.stringMatching(/^rhythmicInterplay-/),
+    }));
+
+    expect(onHighlight).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      scoreCategory: 'invertibility',
+      id: expect.stringMatching(/^invertibility-/),
+    }));
+  });
 });

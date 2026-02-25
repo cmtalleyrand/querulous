@@ -44,7 +44,9 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
     items.map((item, index) => ({
       ...item,
       ...(item.scoreCategory ? {} : { scoreCategory }),
-      ...(item.id || item.onset !== undefined ? {} : { id: `${scoreCategory}-${index}` }),
+      ...(item.id || item.onset !== undefined ? {} : {
+        id: `${scoreCategory}-${(item.description || 'item').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || index}`,
+      }),
     }));
 
   // Collect all issues from various analyses
