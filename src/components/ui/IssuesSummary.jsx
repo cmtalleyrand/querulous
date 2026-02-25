@@ -1,36 +1,51 @@
 import { useState } from 'react';
-import { SCORE_THRESHOLDS, getScoreRating, getScoreColor, getScoreBgColor } from '../../utils/scoring';
 
 /**
  * IssuesSummary - Aggregates and displays all issues from various analyses
  * Shows problems prominently at the top of the results
  *
  * @param {Object} results - Analysis results
- * @param {Object} scoreResult - Score data
  * @param {Function} onHighlight - Callback when an issue is clicked: onHighlight({ onset, type, voice })
  * @param {Object} highlightedItem - Currently highlighted item for visual feedback
  */
-export function IssuesSummary({ results, scoreResult, onHighlight, highlightedItem }) {
+export function IssuesSummary({ results, onHighlight, highlightedItem }) {
   const [expandedCategory, setExpandedCategory] = useState(null);
 
   if (!results) return null;
 
   // Helper to handle item clicks
   const handleItemClick = (item, categoryName) => {
-    if (onHighlight && item.onset !== undefined) {
-      onHighlight({
-        onset: item.onset,
-        type: categoryName,
-        description: item.description,
-      });
-    }
+    if (!onHighlight) return;
+
+    const hasAnchor = item.onset !== undefined || item.voice !== undefined || item.index !== undefined || item.id !== undefined || item.scoreCategory;
+    if (!hasAnchor) return;
+
+    onHighlight({
+      type: categoryName,
+      description: item.description,
+      ...(item.onset !== undefined ? { onset: item.onset } : {}),
+      ...(item.voice !== undefined ? { voice: item.voice } : {}),
+      ...(item.index !== undefined ? { index: item.index } : {}),
+      ...(item.id !== undefined ? { id: item.id } : {}),
+      ...(item.scoreCategory ? { scoreCategory: item.scoreCategory } : {}),
+    });
   };
 
   // Check if an item is currently highlighted
   const isHighlighted = (item) => {
-    if (!highlightedItem || item.onset === undefined) return false;
+    if (!highlightedItem) return false;
+    if (item.id && highlightedItem.id) return item.id === highlightedItem.id;
+    if (item.onset === undefined || highlightedItem.onset === undefined) return false;
     return Math.abs(highlightedItem.onset - item.onset) < 0.01;
   };
+
+
+  const withCategoryAnchor = (items, scoreCategory) =>
+    items.map((item, index) => ({
+      ...item,
+      ...(item.scoreCategory ? {} : { scoreCategory }),
+      ...(item.id || item.onset !== undefined ? {} : { id: `${scoreCategory}-${index}` }),
+    }));
 
   // Collect all issues from various analyses
   const categories = [];
@@ -42,8 +57,8 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Harmonic Implication',
-        issues,
-        warnings,
+        issues: withCategoryAnchor(issues, 'transpositionStability'),
+        warnings: withCategoryAnchor(warnings, 'transpositionStability'),
         icon: '🎹',
       });
     }
@@ -56,8 +71,8 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Tonal Answer',
-        issues,
-        warnings,
+        issues: withCategoryAnchor(issues, 'transpositionStability'),
+        warnings: withCategoryAnchor(warnings, 'transpositionStability'),
         icon: '↗️',
       });
     }
@@ -71,7 +86,11 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
       categories.push({
         name: 'Stretto Viability',
         issues: [],
-        warnings: [{ description: 'No viable stretto found at any transposition or distance' }],
+        warnings: [{
+          description: 'No viable stretto found at any transposition or distance',
+          scoreCategory: 'strettoPotential',
+          id: 'stretto-no-viable',
+        }],
         icon: '🎼',
       });
     }
@@ -87,7 +106,11 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
       for (const issue of results.doubleCounterpoint.inverted.issues) {
         issues.push({
           description: `Inverted: ${issue.description || issue}`,
-          onset: issue.onset,
+          ...(issue.onset !== undefined ? { onset: issue.onset } : {}),
+          ...(issue.voice !== undefined ? { voice: issue.voice } : {}),
+          ...(issue.index !== undefined ? { index: issue.index } : {}),
+          ...(issue.id !== undefined ? { id: issue.id } : {}),
+          scoreCategory: issue.scoreCategory || 'invertibility',
         });
       }
     }
@@ -95,15 +118,15 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
     if (results.doubleCounterpoint.observations) {
       const obsIssues = results.doubleCounterpoint.observations.filter(o => o.type === 'issue');
       const obsWarnings = results.doubleCounterpoint.observations.filter(o => o.type === 'consideration');
-      issues.push(...obsIssues);
-      warnings.push(...obsWarnings);
+      issues.push(...withCategoryAnchor(obsIssues, 'invertibility'));
+      warnings.push(...withCategoryAnchor(obsWarnings, 'invertibility'));
     }
 
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Invertible Counterpoint',
-        issues,
-        warnings,
+        issues: withCategoryAnchor(issues, 'invertibility'),
+        warnings: withCategoryAnchor(warnings, 'invertibility'),
         icon: '🔄',
       });
     }
@@ -119,7 +142,7 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
       categories.push({
         name: 'Contour Independence',
         issues: [],
-        warnings: warnings.map(w => ({ description: w.description })),
+        warnings: withCategoryAnchor(warnings, 'voiceIndependence'),
         icon: '📈',
       });
     }
@@ -132,8 +155,8 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Rhythmic Complementarity',
-        issues,
-        warnings,
+        issues: withCategoryAnchor(issues, 'rhythmicInterplay'),
+        warnings: withCategoryAnchor(warnings, 'rhythmicInterplay'),
         icon: '🥁',
       });
     }
@@ -269,12 +292,12 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
                   </div>
                 )}
                 {cat.issues.map((issue, i) => {
-                  const hasOnset = issue.onset !== undefined;
+                  const canDrillDown = issue.onset !== undefined || issue.voice !== undefined || issue.index !== undefined || issue.id !== undefined || issue.scoreCategory;
                   const highlighted = isHighlighted(issue);
                   return (
                     <div
                       key={`issue-${i}`}
-                      onClick={hasOnset ? () => handleItemClick(issue, cat.name) : undefined}
+                      onClick={canDrillDown ? () => handleItemClick(issue, cat.name) : undefined}
                       style={{
                         fontSize: '12px',
                         color: '#dc2626',
@@ -282,14 +305,14 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
                         borderLeft: highlighted ? '4px solid #dc2626' : '2px solid #fca5a5',
                         marginBottom: '4px',
                         borderRadius: '0 4px 4px 0',
-                        backgroundColor: highlighted ? '#fef2f2' : hasOnset ? '#fff' : 'transparent',
-                        cursor: hasOnset ? 'pointer' : 'default',
+                        backgroundColor: highlighted ? '#fef2f2' : canDrillDown ? '#fff' : 'transparent',
+                        cursor: canDrillDown ? 'pointer' : 'default',
                         transition: 'all 0.15s',
                       }}
-                      onMouseEnter={hasOnset ? (e) => e.currentTarget.style.backgroundColor = '#fef2f2' : undefined}
-                      onMouseLeave={hasOnset && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
+                      onMouseEnter={canDrillDown ? (e) => e.currentTarget.style.backgroundColor = '#fef2f2' : undefined}
+                      onMouseLeave={canDrillDown && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
                     >
-                      {hasOnset && (
+                      {canDrillDown && (
                         <span style={{ marginRight: '6px', opacity: 0.6 }}>
                           ▸
                         </span>
@@ -299,12 +322,12 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
                   );
                 })}
                 {cat.warnings.map((warning, i) => {
-                  const hasOnset = warning.onset !== undefined;
+                  const canDrillDown = warning.onset !== undefined || warning.voice !== undefined || warning.index !== undefined || warning.id !== undefined || warning.scoreCategory;
                   const highlighted = isHighlighted(warning);
                   return (
                     <div
                       key={`warn-${i}`}
-                      onClick={hasOnset ? () => handleItemClick(warning, cat.name) : undefined}
+                      onClick={canDrillDown ? () => handleItemClick(warning, cat.name) : undefined}
                       style={{
                         fontSize: '12px',
                         color: '#92400e',
@@ -312,14 +335,14 @@ export function IssuesSummary({ results, scoreResult, onHighlight, highlightedIt
                         borderLeft: highlighted ? '4px solid #f59e0b' : '2px solid #fcd34d',
                         marginBottom: '4px',
                         borderRadius: '0 4px 4px 0',
-                        backgroundColor: highlighted ? '#fffbeb' : hasOnset ? '#fff' : 'transparent',
-                        cursor: hasOnset ? 'pointer' : 'default',
+                        backgroundColor: highlighted ? '#fffbeb' : canDrillDown ? '#fff' : 'transparent',
+                        cursor: canDrillDown ? 'pointer' : 'default',
                         transition: 'all 0.15s',
                       }}
-                      onMouseEnter={hasOnset ? (e) => e.currentTarget.style.backgroundColor = '#fffbeb' : undefined}
-                      onMouseLeave={hasOnset && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
+                      onMouseEnter={canDrillDown ? (e) => e.currentTarget.style.backgroundColor = '#fffbeb' : undefined}
+                      onMouseLeave={canDrillDown && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
                     >
-                      {hasOnset && (
+                      {canDrillDown && (
                         <span style={{ marginRight: '6px', opacity: 0.6 }}>
                           ▸
                         </span>

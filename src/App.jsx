@@ -102,6 +102,7 @@ export default function App() {
 
   // Global highlight state - used for clicking issues/items to highlight in visualizations
   const [highlightedItem, setHighlightedItem] = useState(null);
+  const [selectedScoreCategory, setSelectedScoreCategory] = useState(null);
 
   // Sequence highlight state - for highlighting sequence ranges in piano roll
   const [activeSequenceVoice, setActiveSequenceVoice] = useState(null);
@@ -128,6 +129,12 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [csPos, csShift]);
+
+
+  const handleIssueHighlight = (item) => {
+    setHighlightedItem(item?.onset !== undefined ? item : null);
+    setSelectedScoreCategory(item?.scoreCategory || null);
+  };
 
   // Helper: prepend ABC headers if not already present
   const prependABCHeaders = (abc, key, mode, noteLength, timeSig) => {
@@ -887,13 +894,16 @@ export default function App() {
             </div>
 
             {/* Score Dashboard */}
-            <ScoreDashboard scoreResult={scoreResult} hasCountersubject={!!results.countersubject} />
+            <ScoreDashboard
+              scoreResult={scoreResult}
+              hasCountersubject={!!results.countersubject}
+              selectedCategory={selectedScoreCategory}
+            />
 
             {/* Issues Summary - Show problems first */}
             <IssuesSummary
               results={results}
-              scoreResult={scoreResult}
-              onHighlight={setHighlightedItem}
+              onHighlight={handleIssueHighlight}
               highlightedItem={highlightedItem}
             />
 
@@ -1023,6 +1033,7 @@ export default function App() {
                   const endNote = notes[seq.endNote - 1];
                   const endBeat = endNote ? endNote.onset + endNote.duration : startBeat;
                   setHighlightedItem({ onset: startBeat, endOnset: endBeat, type: 'sequence', voice: voiceKey });
+                  setSelectedScoreCategory(null);
                 }
               };
 

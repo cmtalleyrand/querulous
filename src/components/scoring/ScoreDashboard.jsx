@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScoreGauge } from './ScoreGauge';
 import { ScoreBar } from './ScoreBar';
-import { SCORE_CATEGORIES, getScoreSummary } from '../../utils/scoring';
+import { getScoreSummary } from '../../utils/scoring';
 
 /**
  * Main scoring dashboard component
@@ -12,9 +12,16 @@ import { SCORE_CATEGORIES, getScoreSummary } from '../../utils/scoring';
  * - FUGAL: How well it works as fugue material
  * - COMBINATION: How voices work together (with CS)
  */
-export function ScoreDashboard({ scoreResult, hasCountersubject }) {
+export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategory = null }) {
   const [showDetails, setShowDetails] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
+
+
+  useEffect(() => {
+    if (!selectedCategory) return;
+    setShowDetails(true);
+    setExpandedCategory(selectedCategory);
+  }, [selectedCategory]);
 
   if (!scoreResult) return null;
 

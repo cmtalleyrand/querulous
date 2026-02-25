@@ -5,6 +5,23 @@ import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis'
 import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants';
 
 /**
+ * Build a stable observation/issue schema with optional anchor metadata.
+ * Anchor fields are intentionally optional for non-time-based findings.
+ */
+function createObservation(type, description, anchor = {}) {
+  const { onset, voice, index, id, scoreCategory } = anchor;
+  return {
+    type,
+    description,
+    ...(onset !== undefined ? { onset } : {}),
+    ...(voice !== undefined ? { voice } : {}),
+    ...(index !== undefined ? { index } : {}),
+    ...(id !== undefined ? { id } : {}),
+    ...(scoreCategory !== undefined ? { scoreCategory } : {}),
+  };
+}
+
+/**
  * Classify a dissonance according to species counterpoint practice
  * Returns: 'suspension', 'passing', 'neighbor', 'anticipation', 'appoggiatura', or 'unprepared'
  */
@@ -383,7 +400,10 @@ export function testContourIndependence(subject, cs, formatter) {
           if (sm.semitones === cm.semitones) {
             parallel++;
             if (sm.semitones > ANALYSIS_THRESHOLDS.LEAP_THRESHOLD) {
-              details.push({ description: `Parallel leaps at ${formatter.formatBeat(sm.time)}` });
+              details.push(createObservation('consideration', `Parallel leaps at ${formatter.formatBeat(sm.time)}`, {
+                onset: sm.time,
+                scoreCategory: 'voiceIndependence',
+              }));
             }
           } else {
             similar++;
@@ -581,6 +601,7 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
         location: formatter.formatBeat(subject[i].onset),
         ratio: subject[i].onset / subLen,
         degree: d.toString(),
+        onset: subject[i].onset,
       };
       break;
     }
@@ -588,10 +609,10 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
 
   if (domArr) {
     const timing = domArr.ratio < 0.3 ? 'Early' : domArr.ratio > 0.6 ? 'Late' : 'Mid-subject';
-    observations.push({
-      type: 'info',
-      description: `${timing} dominant arrival on ${domArr.degree} at ${domArr.location}`,
-    });
+    observations.push(createObservation('info', `${timing} dominant arrival on ${domArr.degree} at ${domArr.location}`, {
+      onset: domArr.onset,
+      scoreCategory: 'transpositionStability',
+    }));
   }
 
   // Chord/Harmony analysis
@@ -611,34 +632,29 @@ export function testHarmonicImplication(subject, tonic, mode, formatter) {
 
       if (startsOnTonic && endsOnTonic) {
         harmonicClarityScore += 0.5;
-        observations.push({
-          type: 'strength',
-          description: 'Strong tonal framing: starts and ends on tonic harmony',
-        });
+        observations.push(createObservation('strength', 'Strong tonal framing: starts and ends on tonic harmony', {
+          scoreCategory: 'transpositionStability',
+        }));
       } else if (startsOnTonic || endsOnTonic) {
-        observations.push({
-          type: 'info',
-          description: `${startsOnTonic ? 'Starts' : 'Ends'} on tonic harmony`,
-        });
+        observations.push(createObservation('info', `${startsOnTonic ? 'Starts' : 'Ends'} on tonic harmony`, {
+          scoreCategory: 'transpositionStability',
+        }));
       }
 
       if (impliesDominant) {
-        observations.push({
-          type: 'info',
-          description: 'Melody implies dominant function',
-        });
+        observations.push(createObservation('info', 'Melody implies dominant function', {
+          scoreCategory: 'transpositionStability',
+        }));
       }
 
       if (harmonicClarity >= 0.7) {
-        observations.push({
-          type: 'strength',
-          description: `Clear harmonic implications (${uniqueHarmonies} chord${uniqueHarmonies !== 1 ? 's' : ''} suggested)`,
-        });
+        observations.push(createObservation('strength', `Clear harmonic implications (${uniqueHarmonies} chord${uniqueHarmonies !== 1 ? 's' : ''} suggested)`, {
+          scoreCategory: 'transpositionStability',
+        }));
       } else if (harmonicClarity < 0.4) {
-        observations.push({
-          type: 'consideration',
-          description: 'Ambiguous harmonic implications',
-        });
+        observations.push(createObservation('consideration', 'Ambiguous harmonic implications', {
+          scoreCategory: 'transpositionStability',
+        }));
       }
     }
   } catch (e) {
@@ -890,38 +906,32 @@ export function testRhythmicComplementarity(subject, cs, meter) {
   // Main metric assessment: solo onset ratio
   // Desirable: 33-66%, penalize <20% or >80%
   if (soloOnsetRatio < 0.20) {
-    observations.push({
-      type: 'consideration',
-      description: `Only ${Math.round(soloOnsetRatio * 100)}% solo attacks—voices shadow each other`,
-    });
+    observations.push(createObservation('consideration', `Only ${Math.round(soloOnsetRatio * 100)}% solo attacks—voices shadow each other`, {
+      scoreCategory: 'rhythmicInterplay',
+    }));
   } else if (soloOnsetRatio > 0.80) {
-    observations.push({
-      type: 'consideration',
-      description: `${Math.round(soloOnsetRatio * 100)}% solo attacks—voices rarely coincide`,
-    });
+    observations.push(createObservation('consideration', `${Math.round(soloOnsetRatio * 100)}% solo attacks—voices rarely coincide`, {
+      scoreCategory: 'rhythmicInterplay',
+    }));
   } else if (soloOnsetRatio >= 0.33 && soloOnsetRatio <= 0.66) {
-    observations.push({
-      type: 'strength',
-      description: `${Math.round(soloOnsetRatio * 100)}% solo attacks—good interlocking`,
-    });
+    observations.push(createObservation('strength', `${Math.round(soloOnsetRatio * 100)}% solo attacks—good interlocking`, {
+      scoreCategory: 'rhythmicInterplay',
+    }));
   } else {
-    observations.push({
-      type: 'info',
-      description: `${Math.round(soloOnsetRatio * 100)}% solo attacks`,
-    });
+    observations.push(createObservation('info', `${Math.round(soloOnsetRatio * 100)}% solo attacks`, {
+      scoreCategory: 'rhythmicInterplay',
+    }));
   }
 
   // Secondary metric: strong beat simultaneity
   if (strongBeatSimultaneity > 0.90) {
-    observations.push({
-      type: 'consideration',
-      description: `${Math.round(strongBeatSimultaneity * 100)}% strong beats have simultaneous attacks`,
-    });
+    observations.push(createObservation('consideration', `${Math.round(strongBeatSimultaneity * 100)}% strong beats have simultaneous attacks`, {
+      scoreCategory: 'rhythmicInterplay',
+    }));
   } else if (strongBeatSimultaneity < 0.80) {
-    observations.push({
-      type: 'strength',
-      description: `${Math.round(strongBeatSimultaneity * 100)}% strong beat simultaneity—rhythmic independence`,
-    });
+    observations.push(createObservation('strength', `${Math.round(strongBeatSimultaneity * 100)}% strong beat simultaneity—rhythmic independence`, {
+      scoreCategory: 'rhythmicInterplay',
+    }));
   }
 
   return {
@@ -1357,15 +1367,23 @@ export function testTonalAnswer(subject, mode, keyInfo, formatter) {
   const answerType = tonalMotions.length > 0 ? 'tonal' : 'real';
 
   if (answerType === 'real') {
-    observations.push({ type: 'info', description: 'No ^1-^5 motion—real transposition (up 5th)' });
+    observations.push(createObservation('info', 'No ^1-^5 motion—real transposition (up 5th)', {
+      scoreCategory: 'transpositionStability',
+    }));
   } else {
     for (const m of tonalMotions) {
-      observations.push({ type: 'info', description: m.description });
+      observations.push(createObservation('info', m.description, {
+        scoreCategory: 'transpositionStability',
+      }));
     }
     if (mutationPoint !== null) {
       const mutationNote = subject[mutationPoint];
       const beatPos = mutationNote && formatter ? formatter.formatBeat(mutationNote.onset) : `note ${mutationPoint + 1}`;
-      observations.push({ type: 'info', description: `Real transposition resumes at ${beatPos}` });
+      observations.push(createObservation('info', `Real transposition resumes at ${beatPos}`, {
+        onset: mutationNote?.onset,
+        index: mutationPoint,
+        scoreCategory: 'transpositionStability',
+      }));
     }
   }
 
@@ -1380,10 +1398,11 @@ export function testTonalAnswer(subject, mode, keyInfo, formatter) {
       '3-0': { p: 'I→V', q: 'good' },
     }[`${terminal.degree}-${terminal.alteration}`] || { p: '?→V', q: 'unusual' };
 
-  observations.push({
-    type: junc.q === 'static' ? 'consideration' : 'info',
-    description: `Junction: ${junc.p} (${junc.q})`,
-  });
+  observations.push(createObservation(junc.q === 'static' ? 'consideration' : 'info', `Junction: ${junc.p} (${junc.q})`, {
+    onset: subject[subject.length - 1]?.onset,
+    index: subject.length - 1,
+    scoreCategory: 'transpositionStability',
+  }));
 
   return { answerType, tonalMotions, mutationPoint, junction: junc, observations };
 }
@@ -1412,7 +1431,7 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
 
     const issues = [];
     for (const v of checkParallelPerfects(sims, formatter)) {
-      issues.push({ ...v, config: name });
+      issues.push({ ...v, config: name, scoreCategory: 'invertibility' });
     }
 
     // P4s against bass are handled by the standard dissonance scoring system
@@ -1430,6 +1449,9 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
         issues.push({
           config: name,
           description: `Unprepared ${d.interval} on strong beat at ${formatter.formatBeat(d.onset)}`,
+          onset: d.onset,
+          voice: d.voice,
+          scoreCategory: 'invertibility',
         });
       }
     }
@@ -1456,14 +1478,8 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
 
   const observations = [];
 
-  observations.push({
-    type: 'info',
-    description: `Original (CS above): ${orig.thirds} 3rds, ${orig.sixths} 6ths, ${orig.perfects} perfect consonances`,
-  });
-  observations.push({
-    type: 'info',
-    description: `Inverted (CS below): ${inv.thirds} 3rds, ${inv.sixths} 6ths, ${inv.perfects} perfect consonances`,
-  });
+  observations.push(createObservation('info', `Original (CS above): ${orig.thirds} 3rds, ${orig.sixths} 6ths, ${orig.perfects} perfect consonances`, { scoreCategory: 'invertibility' }));
+  observations.push(createObservation('info', `Inverted (CS below): ${inv.thirds} 3rds, ${inv.sixths} 6ths, ${inv.perfects} perfect consonances`, { scoreCategory: 'invertibility' }));
 
   // Report dissonance treatment
   const origDA = orig.dissonanceAnalysis;
@@ -1478,10 +1494,7 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
     if (origDA.appoggiaturas.length) parts.push(`${origDA.appoggiaturas.length} app`);
     if (origDA.unprepared.length) parts.push(`${origDA.unprepared.length} unprepared`);
 
-    observations.push({
-      type: origDA.unprepared.length === 0 ? 'strength' : 'info',
-      description: `Original dissonances: ${parts.join(', ')}`,
-    });
+    observations.push(createObservation(origDA.unprepared.length === 0 ? 'strength' : 'info', `Original dissonances: ${parts.join(', ')}`, { scoreCategory: 'invertibility' }));
   }
 
   if (invDA.summary.total > 0) {
@@ -1493,17 +1506,11 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
     if (invDA.appoggiaturas.length) parts.push(`${invDA.appoggiaturas.length} app`);
     if (invDA.unprepared.length) parts.push(`${invDA.unprepared.length} unprepared`);
 
-    observations.push({
-      type: invDA.unprepared.length === 0 ? 'strength' : 'info',
-      description: `Inverted dissonances: ${parts.join(', ')}`,
-    });
+    observations.push(createObservation(invDA.unprepared.length === 0 ? 'strength' : 'info', `Inverted dissonances: ${parts.join(', ')}`, { scoreCategory: 'invertibility' }));
   }
 
   if (!orig.issues.length && !inv.issues.length) {
-    observations.push({
-      type: 'strength',
-      description: 'Clean invertibility—no parallel perfects or problematic dissonances in either position',
-    });
+    observations.push(createObservation('strength', 'Clean invertibility—no parallel perfects or problematic dissonances in either position', { scoreCategory: 'invertibility' }));
   }
 
   return { original: orig, inverted: inv, observations };
@@ -1553,18 +1560,22 @@ export function testModulatoryRobustness(subject, cs, formatter) {
 
   if (strongSims.length > 0) {
     const consPercent = Math.round((consonant / strongSims.length) * 100);
-    observations.push({
-      type: consPercent >= 80 ? 'strength' : consPercent >= 60 ? 'info' : 'consideration',
-      description: `Against answer: ${consPercent}% consonant on strong beats (${thirds} 3rds, ${sixths} 6ths, ${perfects} perfect)`,
-    });
+    observations.push(createObservation(consPercent >= 80 ? 'strength' : consPercent >= 60 ? 'info' : 'consideration', `Against answer: ${consPercent}% consonant on strong beats (${thirds} 3rds, ${sixths} 6ths, ${perfects} perfect)`, {
+      scoreCategory: 'transpositionStability',
+    }));
   }
 
   if (violations.length) {
     for (const v of violations) {
-      observations.push({ type: 'consideration', description: v.description });
+      observations.push(createObservation('consideration', v.description, {
+        onset: v.onset,
+        scoreCategory: 'transpositionStability',
+      }));
     }
   } else {
-    observations.push({ type: 'strength', description: 'No parallel 5ths or 8ves against answer' });
+    observations.push(createObservation('strength', 'No parallel 5ths or 8ves against answer', {
+      scoreCategory: 'transpositionStability',
+    }));
   }
 
   // Get detailed dissonance scoring
@@ -1578,17 +1589,16 @@ export function testModulatoryRobustness(subject, cs, formatter) {
     );
     if (poorDissonances.length > 0) {
       for (const d of poorDissonances.slice(0, 3)) {
-        observations.push({
-          type: 'issue',
-          description: `Poorly handled dissonance vs answer: ${d.interval} at ${formatter.formatBeat(d.onset)} (score: ${d.score.toFixed(1)})`,
+        observations.push(createObservation('issue', `Poorly handled dissonance vs answer: ${d.interval} at ${formatter.formatBeat(d.onset)} (score: ${d.score.toFixed(1)})`, {
           onset: d.onset,
-        });
+          voice: d.voice,
+          scoreCategory: 'transpositionStability',
+        }));
       }
       if (poorDissonances.length > 3) {
-        observations.push({
-          type: 'issue',
-          description: `...and ${poorDissonances.length - 3} more poorly handled dissonances vs answer`,
-        });
+        observations.push(createObservation('issue', `...and ${poorDissonances.length - 3} more poorly handled dissonances vs answer`, {
+          scoreCategory: 'transpositionStability',
+        }));
       }
     }
   }
