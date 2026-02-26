@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, Fragment } from 'react';
 import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { scoreDissonance, analyzeAllDissonances } from '../../utils/dissonanceScoring';
@@ -6,10 +6,10 @@ import {
   generateGridLines,
   VIZ_COLORS,
   getIntervalStyle,
-  getIntervalName,
   isParallelFifthOrOctave,
 } from '../../utils/vizConstants';
 import { CounterpointScoreDisplay } from '../ui/CounterpointScoreDisplay';
+import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES, TWO_VOICE_SCORING } from '../../utils/constants/thresholds';
 
 /**
  * TwoVoiceViz — unified two-voice counterpoint visualization.
@@ -43,6 +43,7 @@ export function TwoVoiceViz({
 }) {
   const [selectedInterval, setSelectedInterval] = useState(null);
   const [highlightedOnset, setHighlightedOnset] = useState(null);
+  const [highlightedChain, setHighlightedChain] = useState(null);
   const [previousIssueCount, setPreviousIssueCount] = useState(null);
   const containerRef = useRef(null);
 
@@ -121,8 +122,8 @@ export function TwoVoiceViz({
           const prevV2End = prevSim.voice2Note.onset + prevSim.voice2Note.duration;
           const v1RestDur = sim.onset - prevV1End;
           const v2RestDur = sim.onset - prevV2End;
-          const v1Rested = v1RestDur > 0.05;
-          const v2Rested = v2RestDur > 0.05;
+          const v1Rested = v1RestDur > 0.05; // local epsilon to avoid floating-point jitter in rest detection
+          const v2Rested = v2RestDur > 0.05; // local epsilon to avoid floating-point jitter in rest detection
 
           if (v1Rested || v2Rested) {
             const restingVoice = v1Rested && (!v2Rested || v1RestDur >= v2RestDur) ? 1 : 2;
@@ -151,7 +152,7 @@ export function TwoVoiceViz({
               restInfo = `Re-entry (other voice played during rest)`;
             } else {
               restCategory = 'asynchronous';
-              motionScoreMultiplier = 0.5;
+              motionScoreMultiplier = PENALTY_MULTIPLIERS.HALF;
               restInfo = `Asynchronous (${restDur.toFixed(2)} beat offset)`;
             }
           }
@@ -215,7 +216,7 @@ export function TwoVoiceViz({
         const simDuration = Math.min(v1End, v2End) - sim.onset;
         const minNoteDuration = Math.min(sim.voice1Note.duration, sim.voice2Note.duration);
         const isShortNote = minNoteDuration <= shortNoteThreshold;
-        const isOffBeat = sim.metricWeight < 0.75;
+        const isOffBeat = sim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG;
         const motionType = restCategory === 'asynchronous' ? 'asynchronous' : isAnyReentry ? 'reentry' : 'normal';
 
         const point = {
@@ -226,7 +227,7 @@ export function TwoVoiceViz({
           intervalClass: sim.interval.class,
           intervalName: sim.interval.toString(),
           isConsonant: isConsonantInterval,
-          isStrong: sim.metricWeight >= 0.75,
+          isStrong: sim.metricWeight >= METRIC_STRENGTH_CUTOFFS.STRONG,
           metricWeight: sim.metricWeight,
           category: scoring.category || 'consonant_normal',
           score: scoring.score,
@@ -313,6 +314,16 @@ export function TwoVoiceViz({
           pt.consecutiveMitigationCount = chain.consecutiveMitigationCount || 0;
           pt.consecutiveMitigation = chain.consecutiveMitigation || 0;
           pt.passingMotion = chain.passingMotion || null;
+          // Copy back post-mitigation scores so the detail panel reflects actual mitigated values
+          if (!pt.isConsonant && chain.score !== undefined) {
+            pt.score = chain.score;
+            pt.entryScore = chain.entryScore;
+            pt.exitScore = chain.exitScore;
+          }
+          if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
+          const mitigLines = (chain.details || []).filter(d =>
+            typeof d === 'string' && (d.startsWith('Passing character') || d.startsWith('D→D penalty mitigated')));
+          if (mitigLines.length > 0) pt.mitigationDetails = mitigLines;
         }
       }
     }
@@ -338,17 +349,17 @@ export function TwoVoiceViz({
     let parallelPenalty = 0, repetitionPenalty = 0, motionBonus = 0;
 
     for (const pt of intervalPoints) {
-      const dur = Math.max(0.25, pt.duration || 0.25);
+      const dur = Math.max(TWO_VOICE_SCORING.MIN_INTERVAL_DURATION, pt.duration || TWO_VOICE_SCORING.MIN_INTERVAL_DURATION);
       totalDuration += dur;
       if (pt.isConsonant) {
         const isImperfect = [3, 6].includes(pt.intervalClass);
         const isP4 = pt.intervalClass === 4;
-        const baseConsonance = isImperfect ? 0.5 : pt.intervalClass === 5 ? 0.3 : isP4 ? 0.25 : 0.2;
+        const baseConsonance = isImperfect ? TWO_VOICE_SCORING.IMPERFECT_CONSONANCE_BASE : pt.intervalClass === 5 ? TWO_VOICE_SCORING.PERFECT_FIFTH_BASE : isP4 ? TWO_VOICE_SCORING.PERFECT_FOURTH_BASE : TWO_VOICE_SCORING.OTHER_CONSONANCE_BASE;
         let adjusted = baseConsonance;
-        if (pt.category === 'consonant_good_resolution') { resolutionBonus += 0.3 * dur; adjusted += 0.3; }
-        if (pt.category === 'consonant_bad_resolution') { resolutionPenalty += 0.2 * dur; adjusted -= 0.2; }
+        if (pt.category === 'consonant_good_resolution') { resolutionBonus += TWO_VOICE_SCORING.GOOD_RESOLUTION_BONUS * dur; adjusted += TWO_VOICE_SCORING.GOOD_RESOLUTION_BONUS; }
+        if (pt.category === 'consonant_bad_resolution') { resolutionPenalty += TWO_VOICE_SCORING.BAD_RESOLUTION_PENALTY * dur; adjusted -= TWO_VOICE_SCORING.BAD_RESOLUTION_PENALTY; }
         if (pt.isRepeated) {
-          const repAmount = 0.15 * (pt.isShortNote ? 0.5 : 1.0);
+          const repAmount = TWO_VOICE_SCORING.REPETITION_PENALTY_BASE * (pt.isShortNote ? PENALTY_MULTIPLIERS.HALF : TWO_VOICE_SCORING.PARALLEL_BASE_PENALTY);
           repetitionPenalty += repAmount * dur;
           adjusted -= repAmount;
         }
@@ -360,21 +371,21 @@ export function TwoVoiceViz({
         totalWeightedScore += ds;
       }
       if (pt.isParallel) {
-        let mult = pt.motionScoreMultiplier || 1.0;
-        if (pt.parallelInSequence) mult *= 0.25;
-        else if (pt.isShortNote && !pt.isRepeatedParallel) mult *= 0.5;
-        const pp = 1.0 * dur * mult;
+        let mult = pt.motionScoreMultiplier || TWO_VOICE_SCORING.PARALLEL_BASE_PENALTY;
+        if (pt.parallelInSequence) mult *= PENALTY_MULTIPLIERS.QUARTER;
+        else if (pt.isShortNote && !pt.isRepeatedParallel) mult *= PENALTY_MULTIPLIERS.HALF;
+        const pp = TWO_VOICE_SCORING.PARALLEL_BASE_PENALTY * dur * mult;
         parallelPenalty += pp;
         totalWeightedScore -= pp;
       }
       if (pt.v1Motion !== undefined && pt.v2Motion !== undefined) {
         if (Math.abs(pt.v1Motion) <= 2 && pt.v1Motion !== 0 && Math.abs(pt.v2Motion) <= 2 && pt.v2Motion !== 0) {
-          motionBonus += 0.1 * dur;
-          totalWeightedScore += 0.1 * dur;
+          motionBonus += TWO_VOICE_SCORING.MOTION_STEPWISE_BONUS * dur;
+          totalWeightedScore += TWO_VOICE_SCORING.MOTION_STEPWISE_BONUS * dur;
         }
       }
     }
-    const avgScore = totalDuration > 0 ? totalWeightedScore / totalDuration : 0;
+    const avgScore = totalDuration > 0 ? totalWeightedScore / totalDuration : SCORE_BAND_BOUNDARIES.NEGATIVE;
 
     const scoreBreakdown = {
       totalIntervals: intervalPoints.length,
@@ -410,7 +421,7 @@ export function TwoVoiceViz({
       setPreviousIssueCount(prev => prev === null ? analysis.issues.length : prev);
       if (onAnalysis) onAnalysis({ issues: analysis.issues, warnings: analysis.warnings, avgScore: analysis.avgScore });
     }
-  }, [analysis]);
+  }, [analysis, onAnalysis]);
 
   useEffect(() => {
     if (analysis && previousIssueCount !== null && previousIssueCount !== analysis.issues.length) {
@@ -419,12 +430,13 @@ export function TwoVoiceViz({
     }
   }, [analysis, previousIssueCount]);
 
-  const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
+  const getOnsetKey = (onset) => Math.round(onset * 4) / 4; // local quarter-note snapping for UI selection consistency
 
   const handleIntervalClick = useCallback((pt, event) => {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     setSelectedInterval(pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
+    setHighlightedChain(pt.chainStartOnset !== undefined ? pt.chainStartOnset : null);
   }, []);
 
   const handleNoteClick = useCallback((n, event) => {
@@ -434,7 +446,11 @@ export function TwoVoiceViz({
       const noteEnd = n.onset + n.duration;
       return pt.onset >= n.onset && pt.onset < noteEnd;
     });
-    if (overlapping) { setSelectedInterval(overlapping); setHighlightedOnset(getOnsetKey(overlapping.onset)); }
+    if (overlapping) {
+      setSelectedInterval(overlapping);
+      setHighlightedOnset(getOnsetKey(overlapping.onset));
+      setHighlightedChain(overlapping.chainStartOnset !== undefined ? overlapping.chainStartOnset : null);
+    }
   }, [analysis]);
 
   const handleIssueClick = useCallback((issue, event) => {
@@ -461,10 +477,10 @@ export function TwoVoiceViz({
   const issues = propIssues !== null ? propIssues : computedIssues;
   const warnings = propWarnings !== null ? propWarnings : computedWarnings;
   const pRange = maxPitch - minPitch;
-  const noteHeight = 18;
-  const headerHeight = 32;
+  const noteHeight = 18; // local layout: fixed note lane height for readability
+  const headerHeight = 32; // local layout: compact header row height
   const h = pRange * noteHeight + headerHeight + 20;
-  const pixelsPerBeat = 70;
+  const pixelsPerBeat = 70; // local layout: horizontal density in px per beat
   const w = Math.max(500, maxTime * pixelsPerBeat + 100);
   const tScale = (w - 80) / maxTime;
   const pToY = (p) => h - 20 - (p - minPitch) * noteHeight;
@@ -679,7 +695,8 @@ export function TwoVoiceViz({
             {/* ── Interval hit areas + tooltips ── transparent click targets on top of notes */}
             {intervalPoints.map((pt, i) => {
               const x = tToX(pt.onset);
-              const isHighlighted = highlightedOnset === getOnsetKey(pt.onset);
+              const isChainMember = highlightedChain !== null && pt.chainStartOnset === highlightedChain;
+              const isHighlighted = highlightedOnset === getOnsetKey(pt.onset) || isChainMember;
               const isSelected = selectedInterval?.onset === pt.onset;
               const nextPt = intervalPoints[i + 1];
               const regionWidth = nextPt
@@ -798,7 +815,7 @@ export function TwoVoiceViz({
                 {!pt.isConsonant && pt.isConsecutiveDissonance && (
                   <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '600',
                     backgroundColor: '#fff7ed', color: '#c2410c' }}>
-                    Consecutive{pt.consecutiveMitigationCount > 0 ? ` (${pt.consecutiveMitigationCount} mitigating)` : ''}
+                    Consecutive{pt.passingMotion?.isPassing ? ' (passing)' : pt.consecutiveMitigationCount > 0 ? ' (partial)' : ''}
                   </span>
                 )}
                 {pt.isChainResolution && (
@@ -811,20 +828,20 @@ export function TwoVoiceViz({
                 )}
                 {/* Score badges */}
                 {!pt.isConsonant && pt.isChainEntry && pt.entryScore !== undefined && (
-                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600',
-                    backgroundColor: pt.entryScore >= 0 ? '#ede9fe' : '#fee2e2',
-                    color: pt.entryScore >= 0 ? '#6366f1' : '#dc2626' }}>
+                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '800',
+                    backgroundColor: pt.entryScore >= 0 ? '#dcfce7' : '#fee2e2',
+                    color: pt.entryScore >= 0 ? '#16a34a' : '#dc2626' }}>
                     Entry: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(1)}
                   </span>
                 )}
                 {pt.isChainResolution && pt.exitScore !== undefined && (
-                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600',
-                    backgroundColor: pt.exitScore >= 0 ? '#d1fae5' : '#fed7aa',
-                    color: pt.exitScore >= 0 ? '#059669' : '#ea580c' }}>
+                  <span style={{ padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '800',
+                    backgroundColor: pt.exitScore >= 0 ? '#dcfce7' : '#fee2e2',
+                    color: pt.exitScore >= 0 ? '#16a34a' : '#dc2626' }}>
                     Exit: {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(1)}
                   </span>
                 )}
-                <button onClick={() => { setSelectedInterval(null); setHighlightedOnset(null); }}
+                <button onClick={() => { setSelectedInterval(null); setHighlightedOnset(null); setHighlightedChain(null); }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#9ca3af', marginLeft: '4px' }}>
                   ×
                 </button>
@@ -832,8 +849,73 @@ export function TwoVoiceViz({
             </div>
 
             <div style={{ padding: '12px 14px' }}>
-              {/* Motion diagram */}
-              {pt.prevInterval && (
+              {/* Motion diagram — full chain flow or single hop */}
+              {pt.chainStartOnset !== undefined ? (() => {
+                const chainPts = intervalPoints
+                  .filter(p => p.chainStartOnset === pt.chainStartOnset)
+                  .sort((a, b) => a.onset - b.onset);
+                if (!chainPts.length) return null;
+                const firstPt = chainPts[0];
+                const resPt = chainPts.find(p => p.isChainResolution);
+                return (
+                  <div style={{ marginBottom: '12px', backgroundColor: '#ede9fe', borderRadius: '6px',
+                    border: '1.5px dashed rgba(139,92,246,0.6)', padding: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: '700', color: '#6d28d9',
+                        textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                        Dissonance chain ({chainPts.length} notes)
+                      </div>
+                      {!resPt && (
+                        <div style={{ padding: '2px 7px', borderRadius: '4px', border: '1.5px dashed #dc2626',
+                          color: '#dc2626', fontSize: '10px', fontWeight: '600' }}>Unresolved</div>
+                      )}
+                    </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px',
+                      padding: '10px', backgroundColor: '#f1f5f9', borderRadius: '6px',
+                      minWidth: 'max-content' }}>
+                      {firstPt.prevInterval && (
+                        <div style={{ textAlign: 'center', padding: '6px 10px', borderRadius: '5px',
+                          backgroundColor: '#e2e8f0', border: '1.5px solid #cbd5e1', minWidth: '54px' }}>
+                          <div style={{ fontSize: '9px', color: '#94a3b8' }}>Before</div>
+                          <div style={{ fontSize: '12px', fontWeight: '600', color: '#64748b' }}>{firstPt.prevInterval.intervalName}</div>
+                          <div style={{ fontSize: '9px', color: '#94a3b8' }}>{pitchName(firstPt.prevInterval.v1Pitch)}/{pitchName(firstPt.prevInterval.v2Pitch)}</div>
+                        </div>
+                      )}
+                      {chainPts.map((cp, ci) => {
+                        const isThis = cp.onset === pt.onset;
+                        const stepColor = cp.isChainEntry ? '#6366f1' : cp.isChainResolution ? '#059669' : '#c2410c';
+                        const stepBg = cp.isChainEntry ? '#ede9fe' : cp.isChainResolution ? '#d1fae5' : '#fff7ed';
+                        return (
+                          <Fragment key={ci}>
+                            {(ci > 0 || firstPt.prevInterval) && (
+                              <div style={{ textAlign: 'center', padding: '0 4px', minWidth: '64px' }}>
+                                <div style={{ fontSize: '14px', color: '#6366f1' }}>→</div>
+                                <div style={{ fontSize: '9px', color: '#64748b' }}>{voice1Label}: {formatMotion(cp.v1Motion)}</div>
+                                <div style={{ fontSize: '9px', color: '#64748b' }}>{voice2Label}: {formatMotion(cp.v2Motion)}</div>
+                              </div>
+                            )}
+                            <div onClick={() => handleIntervalClick(cp)}
+                              style={{ cursor: 'pointer', textAlign: 'center', padding: '6px 10px',
+                                borderRadius: '5px', minWidth: '54px',
+                                backgroundColor: isThis ? stepColor : stepBg,
+                                border: `2px solid ${stepColor}`,
+                                color: isThis ? 'white' : stepColor }}>
+                              <div style={{ fontSize: '9px', fontWeight: '600', opacity: 0.85 }}>
+                                {cp.isChainEntry ? 'Entry' : cp.isChainResolution ? 'Resolves' : 'Cont.'}
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: '700' }}>{cp.intervalName}</div>
+                              <div style={{ fontSize: '9px', opacity: 0.7 }}>{pitchName(cp.v1Pitch)}/{pitchName(cp.v2Pitch)}</div>
+                            </div>
+                          </Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  </div>
+                );
+              })() : pt.prevInterval ? (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '8px',
                   alignItems: 'center', marginBottom: '12px', padding: '10px',
                   backgroundColor: '#f1f5f9', borderRadius: '6px' }}>
@@ -857,8 +939,7 @@ export function TwoVoiceViz({
                     </div>
                   </div>
                 </div>
-              )}
-              {!pt.prevInterval && (
+              ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '12px' }}>
                   <div style={{ padding: '8px 10px', backgroundColor: `${voice1Color}18`, borderRadius: '4px', borderLeft: `3px solid ${voice1Color}` }}>
                     <div style={{ fontSize: '10px', color: '#64748b' }}>{voice1Label}</div>
@@ -884,20 +965,28 @@ export function TwoVoiceViz({
                         <span style={{ fontWeight: '700', color: '#6366f1', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           Entry Motion
                         </span>
-                        <span style={{ fontWeight: '700',
-                          color: pt.entry.score >= 0 ? '#6366f1' : '#dc2626',
-                          backgroundColor: pt.entry.score >= 0 ? '#ede9fe' : '#fee2e2',
+                        <span style={{ fontWeight: '800',
+                          color: pt.entry.score >= 0 ? '#16a34a' : '#dc2626',
+                          backgroundColor: pt.entry.score >= 0 ? '#dcfce7' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
                           Base: {pt.entry.score >= 0 ? '+' : ''}{pt.entry.score.toFixed(2)}
                         </span>
                       </div>
-                      {(pt.entry.details || []).map((d, i) => (
-                        <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
-                          paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
-                          <span style={{ color: '#6366f1', marginRight: '6px', fontWeight: '600' }}>•</span>
-                          <span>{d}</span>
-                        </div>
-                      ))}
+                      {(pt.entry.details || []).map((d, i) => {
+                        const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
+                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
+                        return (
+                          <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
+                            paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
+                            <span style={{ color: '#6366f1', marginRight: '6px', fontWeight: '600' }}>•</span>
+                            {match ? (
+                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
+                            ) : (
+                              <span>{text}</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {pt.patterns?.length > 0 && (
@@ -916,7 +1005,7 @@ export function TwoVoiceViz({
                               {p.description}
                             </div>
                             <div style={{ display: 'flex', gap: '6px', fontSize: '10px', flexWrap: 'wrap' }}>
-                              <span style={{ backgroundColor: '#ddd6fe', color: '#6366f1', padding: '2px 6px', borderRadius: '3px', fontWeight: '600' }}>
+                              <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '3px', fontWeight: '700' }}>
                                 Entry: +{(p.entryBonus || 0).toFixed(2)}
                               </span>
                               <span style={{ backgroundColor: '#d1fae5', color: '#059669', padding: '2px 6px', borderRadius: '3px', fontWeight: '600' }}>
@@ -934,32 +1023,65 @@ export function TwoVoiceViz({
                         <span style={{ fontWeight: '700', color: '#059669', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                           Exit / Resolution
                         </span>
-                        <span style={{ fontWeight: '700',
-                          color: pt.exit.score >= 0 ? '#059669' : '#ea580c',
-                          backgroundColor: pt.exit.score >= 0 ? '#d1fae5' : '#fed7aa',
+                        <span style={{ fontWeight: '800',
+                          color: pt.exit.score >= 0 ? '#16a34a' : '#dc2626',
+                          backgroundColor: pt.exit.score >= 0 ? '#dcfce7' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
                           Base: {pt.exit.score >= 0 ? '+' : ''}{pt.exit.score.toFixed(2)}
                         </span>
                       </div>
-                      {(pt.exit.details || []).map((d, i) => (
-                        <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
-                          paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
-                          <span style={{ color: '#059669', marginRight: '6px', fontWeight: '600' }}>•</span>
-                          <span>{d}</span>
-                        </div>
-                      ))}
+                      {(pt.exit.details || []).map((d, i) => {
+                        const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
+                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
+                        return (
+                          <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
+                            paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
+                            <span style={{ color: '#059669', marginRight: '6px', fontWeight: '600' }}>•</span>
+                            {match ? (
+                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
+                            ) : (
+                              <span>{text}</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
+
+                    {pt.mitigationDetails?.length > 0 && (
+                      <div style={{ marginBottom: '12px', backgroundColor: '#fef9c3',
+                        borderLeft: '3px solid #ca8a04', borderRadius: '4px', padding: '10px' }}>
+                        <div style={{ fontWeight: '700', color: '#92400e', fontSize: '12px',
+                          textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                          Passing Character Adjustment
+                        </div>
+                        {pt.mitigationDetails.map((d, i) => {
+                          const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
+                          const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
+                          return (
+                            <div key={i} style={{ fontSize: '11px', color: '#78350f', marginBottom: '2px',
+                              paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
+                              <span style={{ color: '#ca8a04', marginRight: '6px', fontWeight: '600' }}>•</span>
+                              {match ? (
+                                <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
+                              ) : (
+                                <span>{text}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     <div style={{ backgroundColor: '#ffffff', border: '2px solid #e2e8f0', borderRadius: '6px', padding: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                         <span style={{ fontWeight: '600', color: '#64748b', fontSize: '11px' }}>Entry Score</span>
-                        <span style={{ fontWeight: '700', color: pt.entryScore >= 0 ? '#6366f1' : '#dc2626', fontSize: '12px' }}>
+                        <span style={{ fontWeight: '800', color: pt.entryScore >= 0 ? '#16a34a' : '#dc2626', fontSize: '13px' }}>
                           {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore?.toFixed(2)}
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                         <span style={{ fontWeight: '600', color: '#64748b', fontSize: '11px' }}>Exit Score</span>
-                        <span style={{ fontWeight: '700', color: pt.exitScore >= 0 ? '#059669' : '#ea580c', fontSize: '12px' }}>
+                        <span style={{ fontWeight: '800', color: pt.exitScore >= 0 ? '#16a34a' : '#dc2626', fontSize: '13px' }}>
                           {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore?.toFixed(2)}
                         </span>
                       </div>
@@ -991,7 +1113,7 @@ export function TwoVoiceViz({
                     <div style={{ backgroundColor: '#fff', border: '2px solid #e2e8f0', borderRadius: '6px', padding: '10px',
                       display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontWeight: '700', color: '#059669', fontSize: '12px', textTransform: 'uppercase' }}>Exit Score</span>
-                      <span style={{ fontWeight: '800', color: pt.exitScore >= 0 ? '#059669' : '#ea580c', fontSize: '16px' }}>
+                      <span style={{ fontWeight: '800', color: pt.exitScore >= 0 ? '#16a34a' : '#dc2626', fontSize: '16px' }}>
                         {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore?.toFixed(2)}
                       </span>
                     </div>

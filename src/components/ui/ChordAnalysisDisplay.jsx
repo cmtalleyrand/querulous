@@ -291,8 +291,8 @@ export function ChordAnalysisDisplay({ chordAnalysis, formatter }) {
             color: '#6b7280',
           }}>
             <div style={{ marginBottom: '6px' }}>
-              <strong>How it works:</strong> Each note's "salience" = duration × metric weight × approach (leaps weight more than steps).
-              The "fit score" = sum of (salience × chord-role weight) for matching notes. Higher = stronger chord implication.
+              <strong>How it works:</strong> Each note&apos;s &quot;salience&quot; = duration × metric weight × approach (leaps weight more than steps).
+              The &quot;fit score&quot; = sum of (salience × chord-role weight) for matching notes. Higher = stronger chord implication.
             </div>
             <div style={{ display: 'flex', gap: '16px' }}>
               <span style={{ color: '#059669' }}>■ Strong fit</span>

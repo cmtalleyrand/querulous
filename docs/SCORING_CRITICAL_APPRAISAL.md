@@ -46,18 +46,7 @@ The ability to weight different categories allows the overall score to reflect r
 - Placement of long notes relative to meter
 - Rhythmic arc (does it build/release tension?)
 
-### 2. Tonal Clarity Weights May Be Arbitrary
-
-**Problem:** The +3/-3 impacts for opening notes, terminal quality, and answer junction seem arbitrarily equal. In practice:
-- A bad terminal note (^5 stasis) may be more damaging than a mediocre opening
-- The answer junction matters enormously for maintaining tonal momentum
-
-**Suggestion:** Consider:
-- Terminal quality: ±5 (endings matter more)
-- Answer junction: ±4 (crucial for fugal flow)
-- Opening note: ±2 (important but recoverable)
-
-### 3. Dissonance Scoring May Over-Penalize Strong Beat Dissonances
+### 2. Dissonance Scoring May Over-Penalize Strong Beat Dissonances
 
 **Problem:** Every strong-beat dissonance receives -1.0, but this doesn't account for:
 - The expressive power of well-prepared strong-beat dissonances
@@ -68,7 +57,7 @@ The ability to weight different categories allows the overall score to reflect r
 
 **Suggestion:** The -1.0 penalty should be reduced or eliminated when a recognized ornamental pattern is detected. The current pattern bonus compensates but doesn't fully offset.
 
-### 4. Voice Independence Thresholds Seem Optimistic
+### 3. Voice Independence Thresholds Seem Optimistic
 
 **Problem:** The current thresholds assume:
 - ≥50% contrary motion is achievable → In practice, good counterpoint often has 30-40%
@@ -81,7 +70,7 @@ The ability to weight different categories allows the overall score to reflect r
 - ≥25% contrary: Good
 - ≥15% contrary: Moderate
 
-### 5. Transposition Stability Assumes Fixed Countersubject
+### 4. Transposition Stability Assumes Fixed Countersubject
 
 **Problem:** The system tests the countersubject against the answer at the dominant level, but historical practice shows:
 - Countersubjects were often adjusted for different scale degrees
@@ -90,7 +79,7 @@ The ability to weight different categories allows the overall score to reflect r
 
 **Suggestion:** Consider adding a "flexibility" measure that rewards countersubjects that work at multiple transposition levels, not just I and V.
 
-### 6. Stretto Potential May Overemphasize Close Entry
+### 5. Stretto Potential May Overemphasize Close Entry
 
 **Problem:** The +5 bonus for close stretto (≥60% overlap, good score) privileges tight stretto. But:
 - Many great fugues have modest stretto distances
@@ -143,7 +132,7 @@ Different subject types have different strengths, and the scoring should accommo
 
 ### 3. Harmonic Implication is Underweighted
 
-**Problem:** The tonal clarity category touches on harmonic implication but doesn't fully analyze:
+**Problem:** The scoring system touches on harmonic implication but doesn't fully analyze:
 - Which harmonies the subject implies and in what order
 - Rate of harmonic change
 - Harmonic variety vs. stability
@@ -158,7 +147,6 @@ A subject that clearly outlines I-IV-V-I has different fugal properties than one
 
 **Problem:** The weighted average can produce acceptable scores even when one category has a severe problem. Example:
 - Stretto potential: -15 (terrible)
-- Tonal clarity: +10
 - Rhythmic character: +10
 - Combined: Still positive, despite being unsuitable for fugue
 
@@ -182,13 +170,12 @@ A subject that clearly outlines I-IV-V-I has different fugal properties than one
 
 ### Medium Priority
 5. Implement "red flag" thresholds that cap overall scores
-6. Re-weight tonal clarity factors based on relative importance
-7. Improve rhythmic character to evaluate coherence, not just variety
+6. Improve rhythmic character to evaluate coherence, not just variety
 
 ### Lower Priority
-8. Consider subject type differentiation
-9. Add harmonic implication analysis
-10. Evaluate "worst moment" impact on dissonance scores
+7. Consider subject type differentiation
+8. Add harmonic implication analysis
+9. Evaluate "worst moment" impact on dissonance scores
 
 ---
 

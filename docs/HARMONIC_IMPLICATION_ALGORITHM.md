@@ -273,15 +273,15 @@ The algorithm outputs:
 
 ## Scoring Impact
 
-The harmonic implication analysis feeds into the **Tonal Clarity** score:
+The harmonic implication analysis is computed as supporting data for other scoring components (e.g., stretto potential and transposition stability). Results such as `dominantArrival` and `harmonicClarityScore` are passed through to the overall score calculation.
 
-| Condition | Impact |
+| Condition | Significance |
 |-----------|--------|
-| Clear harmonic progression detected | +3 |
-| Implies tonic at phrase boundaries | +2 |
-| Implies dominant before cadences | +2 |
-| Ambiguous or unclear harmony | -2 |
-| Contradictory implications | -3 |
+| Clear harmonic progression detected | Strong clarity |
+| Implies tonic at phrase boundaries | Good tonal grounding |
+| Implies dominant before cadences | Good cadential preparation |
+| Ambiguous or unclear harmony | Weak tonal profile |
+| Contradictory implications | Problematic for fugal use |
 
 ---
 

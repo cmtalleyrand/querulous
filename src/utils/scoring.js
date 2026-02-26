@@ -40,17 +40,8 @@ export function toInternalScore(displayScore) {
  */
 export const SCORE_CATEGORIES = {
   // === MELODIC GROUP: Subject line quality ===
-  tonalClarity: {
-    name: 'Tonal Clarity',
-    description: 'Basic tonal orientation (opening/ending notes, answer junction)',
-    group: 'melodic',
-    weight: 0.5,  // Reduced weight - basic indicator
-    baseline: 'Clear enough tonal center',
-    factors: ['Opening note', 'Terminal quality', 'Answer junction'],
-    isBasicIndicator: true,  // Flag for UI to de-emphasize
-  },
   rhythmicCharacter: {
-    name: 'Rhythmic Character',
+    name: 'Subject Rhythmic Character',
     description: 'Distinctiveness and variety of rhythmic profile',
     group: 'melodic',
     weight: 0.8,
@@ -444,64 +435,6 @@ export function calculateAnswerCompatibilityScore(result) {
 }
 
 /**
- * Calculate Tonal Clarity score (base-zero)
- * Combines harmonic implication + answer compatibility into one basic indicator.
- * (Opening/terminal removed - oversimplified and not purely harmonic)
- *
- * Baseline 0 = acceptable tonal orientation
- * Positive = clear tonal structure
- * Negative = unclear or problematic
- */
-export function calculateTonalClarityScore(harmonicResult, answerResult) {
-  const details = [];
-  let internal = 0;
-
-  // --- From Harmonic Implication ---
-  if (harmonicResult && !harmonicResult.error) {
-    // Dominant arrival bonus
-    if (harmonicResult.dominantArrival) {
-      const ratio = harmonicResult.dominantArrival.ratio;
-      if (ratio >= 0.3 && ratio <= 0.7) {
-        internal += 3;
-        details.push({ factor: 'Well-placed dominant arrival', impact: +3 });
-      } else {
-        internal += 1;
-        details.push({ factor: 'Dominant arrival present', impact: +1 });
-      }
-    }
-
-    // Harmonic clarity
-    if (harmonicResult.harmonicClarityScore > 1.5) {
-      internal += 2;
-      details.push({ factor: 'Clear harmonic implications', impact: +2 });
-    } else if (harmonicResult.harmonicClarityScore < 0.5) {
-      internal -= 2;
-      details.push({ factor: 'Ambiguous harmonic implications', impact: -2 });
-    }
-  }
-
-  // --- From Answer Compatibility ---
-  if (answerResult && !answerResult.error) {
-    // Junction quality (simplified)
-    const junctionQ = answerResult.junction?.q;
-    if (junctionQ === 'strong' || junctionQ === 'good') {
-      internal += 3;
-      details.push({ factor: `Answer junction: ${junctionQ}`, impact: +3 });
-    } else if (junctionQ === 'static' || junctionQ === 'unusual') {
-      internal -= 3;
-      details.push({ factor: `Answer junction: ${junctionQ}`, impact: -3 });
-    }
-  }
-
-  return {
-    score: internal,
-    internal,
-    details,
-    isBasicIndicator: true,
-  };
-}
-
-/**
  * Calculate Invertibility score (base-zero)
  * KEY CHANGE: Score based on comparison of inverted to uninverted quality.
  *
@@ -840,14 +773,16 @@ export function calculateTranspositionStabilityScore(result) {
   const totalIntervals = detailedScoring?.totalIntervals || 0;
 
   if (detailedScoring && totalIntervals > 0) {
-    const avgScore = detailedScoring.averageScore || 0;
-    // Scale: avg -3 to +3 maps to internal -15 to +15
+    // Use the duration-weighted overall score (same metric as the TwoVoiceViz badge).
+    // Falls back to dissonance-only average for older results that lack overallAvgScore.
+    const avgScore = detailedScoring.overallAvgScore ?? detailedScoring.averageScore ?? 0;
+    // Scale: avg roughly -3 to +1 maps to internal -15 to +5
     // Weight slightly by length (more intervals = more reliable assessment)
     const lengthFactor = Math.min(1.2, 0.8 + totalIntervals / 50);
     let internal = avgScore * 5 * lengthFactor;
 
     details.push({
-      factor: `CS vs answer avg quality: ${avgScore.toFixed(2)} × 5 × ${lengthFactor.toFixed(2)} (length) = ${(avgScore * 5 * lengthFactor).toFixed(1)}`,
+      factor: `CS vs answer overall quality: ${avgScore.toFixed(2)} × 5 × ${lengthFactor.toFixed(2)} (length) = ${(avgScore * 5 * lengthFactor).toFixed(1)}`,
       impact: parseFloat((avgScore * 5 * lengthFactor).toFixed(1)),
     });
 
@@ -891,16 +826,10 @@ export function calculateTranspositionStabilityScore(result) {
  */
 export function calculateOverallScore(results, hasCountersubject, subjectInfo = null) {
   // Extract subject metrics if available
-  const subjectLength = subjectInfo?.length || results.subject?.length;
   const subjectDuration = subjectInfo?.duration || results.subjectDuration;
   const noteCount = subjectInfo?.noteCount || results.noteCount;
 
   const scores = {};
-
-  // === Melodic group ===
-  // Combined tonal clarity (replaces separate tonalDefinition and answerCompatibility)
-  const tonalClarity = calculateTonalClarityScore(results.harmonicImplication, results.tonalAnswer);
-  scores.tonalClarity = tonalClarity;
 
   // Keep legacy scores for backward compatibility (but they don't contribute to overall)
   const tonalDef = calculateTonalDefinitionScore(results.harmonicImplication);
@@ -990,7 +919,7 @@ export function getScoreSummary(scoreResult) {
 
   // Active category keys (skip deprecated ones)
   const activeKeys = [
-    'tonalClarity', 'rhythmicCharacter', 'strettoPotential',
+    'rhythmicCharacter', 'strettoPotential',
     'invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability'
   ];
 
@@ -1028,10 +957,9 @@ export function getScoreSummary(scoreResult) {
 /**
  * Get improvement suggestions for a category
  */
-function getSuggestion(category, data) {
+function getSuggestion(category) {
   const suggestions = {
     // Active keys
-    tonalClarity: 'Consider the opening/ending notes and harmonic motion at the answer junction.',
     rhythmicCharacter: 'Try incorporating more diverse note values and rhythmic contrasts.',
     strettoPotential: 'Adjust melodic intervals to improve counterpoint quality when overlapping.',
     invertibility: 'Use more thirds and sixths to maintain quality when inverted.',

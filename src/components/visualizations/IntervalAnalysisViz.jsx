@@ -2,29 +2,30 @@ import { useState, useMemo } from 'react';
 import { pitchName, metricWeight, metricPosition } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { scoreDissonance } from '../../utils/dissonanceScoring';
-import { getGridMetrics, generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
+import { generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
+import { METRIC_STRENGTH_CUTOFFS, SCORE_BAND_BOUNDARIES } from '../../utils/constants/thresholds';
 
 // Dissonance type definitions for tooltips
 const DISSONANCE_DEFINITIONS = {
   passing: {
     name: 'Passing Tone (PT)',
-    definition: 'Occurs on a weak beat, approached by step from one direction, left by step in the same direction. Connects two consonances.',
+    definition: 'Approached by step and left by step in the same direction. Commonly weak-beat, but accented instances are allowed with reduced reward.',
   },
   neighbor: {
     name: 'Neighbor Tone (N)',
-    definition: 'Steps away from a consonance and returns to the same note. Also called auxiliary note. Usually on weak beats.',
+    definition: 'Steps away from a consonance and returns to the same note. Also called auxiliary note. Usually weak-beat, but accented instances are allowed with reduced reward.',
   },
   suspension: {
     name: 'Suspension (Sus)',
-    definition: 'Preparation: consonant note held into next beat. Dissonance: held note clashes with moving voice. Resolution: suspended note moves DOWN by step.',
+    definition: 'Preparation: consonant note held into next beat. Dissonance: held note clashes with moving voice. Resolution: suspended note moves DOWN by step // NOTE: SHOULD ALLOW UP WITH NO EXIT BONUS.',
   },
   appoggiatura: {
     name: 'Appoggiatura (App)',
-    definition: 'Approached by leap to a strong beat dissonance, resolves by step (usually down). Creates expressive emphasis.',
+    definition: 'Approached by leap or skip on a strong beat and resolves by step (direction may continue or reverse). Creates expressive emphasis.',
   },
   anticipation: {
     name: 'Anticipation (Ant)',
-    definition: 'Arrives early—the note of the next consonance sounds before its time. Usually short and on weak beats.',
+    definition: 'Early-arrival behavior is folded into weak-beat suspension/retardation handling with reduced bonus rather than a separate anticipation class.',
   },
   cambiata: {
     name: 'Cambiata (Cam)',
@@ -52,7 +53,7 @@ const DISSONANCE_DEFINITIONS = {
   },
   unprepared: {
     name: 'Unprepared Dissonance',
-    definition: 'Strong-beat dissonance not fitting standard ornamental patterns. Generally avoided in strict style.',
+    definition: 'Strong-beat dissonance not fitting standard ornamental patterns. Generally avoided in strict style. // SHOULD BE NOT APPROACHED BY STEP IN EITHER VOICE',
   },
 };
 
@@ -75,9 +76,9 @@ export function IntervalAnalysisViz({
   const [selectedInterval, setSelectedInterval] = useState(null);
 
   // Calculate simultaneities and interval data
-  const { intervalPoints, allSims, maxTime, minPitch, maxPitch } = useMemo(() => {
+  const { intervalPoints, maxTime, minPitch, maxPitch } = useMemo(() => {
     if (!voice1?.notes?.length || !voice2?.notes?.length) {
-      return { intervalPoints: [], allSims: [], maxTime: 0, minPitch: 60, maxPitch: 72 };
+      return { intervalPoints: [], maxTime: 0, minPitch: 60, maxPitch: 72 };
     }
 
     const v1 = voice1.notes;
@@ -115,7 +116,7 @@ export function IntervalAnalysisViz({
           intervalClass: sim.interval.class,
           intervalName: sim.interval.toString(),
           isConsonant: scoring.isConsonant,
-          isStrong: sim.metricWeight >= 0.75,
+          isStrong: sim.metricWeight >= METRIC_STRENGTH_CUTOFFS.STRONG,
           dissonanceLabel: scoring.label,
           dissonanceType: scoring.type,
           category: scoring.category || 'consonant_normal',
@@ -139,8 +140,7 @@ export function IntervalAnalysisViz({
     const maxP = Math.max(...allNotes.map(n => n.pitch)) + 2;
 
     return {
-      intervalPoints: showProblemsOnly ? points.filter(p => !p.isConsonant && p.score < 0) : points,
-      allSims: sims,
+      intervalPoints: showProblemsOnly ? points.filter(p => !p.isConsonant && p.score < SCORE_BAND_BOUNDARIES.NEGATIVE) : points,
       maxTime: maxT,
       minPitch: minP,
       maxPitch: maxP,
@@ -151,17 +151,17 @@ export function IntervalAnalysisViz({
 
   const pRange = maxPitch - minPitch;
   const noteHeight = Math.max(14, Math.min(20, 250 / pRange));
-  const headerHeight = 36;
+  const headerHeight = 36; // local layout: room for section title + issue summary
   const h = pRange * noteHeight + headerHeight + 24;
 
-  const pixelsPerBeat = 60;
+  const pixelsPerBeat = 60; // local layout: moderate horizontal density for interval labels
   const w = Math.max(500, maxTime * pixelsPerBeat + 100);
 
   const tScale = (w - 80) / maxTime;
   const pToY = (p) => h - 20 - (p - minPitch) * noteHeight;
   const tToX = (t) => 60 + t * tScale;
 
-  const getOnsetKey = (onset) => Math.round(onset * 4) / 4;
+  const getOnsetKey = (onset) => Math.round(onset * 4) / 4; // local quarter-note snapping for hover/selection state
 
   // Colors - use VIZ_COLORS for consistency with stretto viz
   const hasIssues = issues.length > 0;
