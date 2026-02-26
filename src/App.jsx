@@ -19,7 +19,6 @@ import {
   AVAILABLE_MODES,
   NOTE_LENGTH_OPTIONS,
   STRETTO_STEP_OPTIONS,
-  STRETTO_TRANSPOSITION_OPTIONS,
   CS_POSITION_OPTIONS,
   TIME_SIGNATURE_OPTIONS,
   BeatFormatter,
@@ -57,6 +56,14 @@ const DEFAULT_SUBJECT = `C8 | ^B,4 E4 | D8 |`;
 const DEFAULT_CS = `e2 d2 e2 f2 | g2 f2 g2 a2 | g2 f2 e2 g2 | f2 e2 f2 g2 |`;
 const DEFAULT_CS2 = `c2 B2 c2 d2 | e2 d2 e2 f2 | e2 d2 c2 e2 | d2 c2 d2 e2 |`;
 const DEFAULT_ANSWER = `G8 | =G4 B4 | ^A8 |`;
+
+const CS_SHIFT_OPTIONS = [
+  { value: '24', label: '+2 octaves' },
+  { value: '12', label: '+1 octave' },
+  { value: '0', label: 'Unshifted' },
+  { value: '-12', label: '-1 octave' },
+  { value: '-24', label: '-2 octaves' },
+];
 
 /**
  * Main Fugue Analyzer Application
@@ -616,20 +623,6 @@ export default function App() {
 
           {/* Spelling Key Option */}
           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eee' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(170px, 1fr))', gap: '14px', marginBottom: '12px' }}>
-              <Select
-                label="CS Position"
-                value={csPos}
-                onChange={setCsPos}
-                options={CS_POSITION_OPTIONS}
-              />
-              <Select
-                label="CS Shift"
-                value={csShift}
-                onChange={setCsShift}
-                options={STRETTO_TRANSPOSITION_OPTIONS}
-              />
-            </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -962,6 +955,34 @@ export default function App() {
               }}
               placeholder="Leave empty for auto-generation"
               aria-label="Answer in ABC notation (optional, auto-generated if empty)"
+            />
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: '#fff',
+            borderRadius: '6px',
+            border: '1px solid #e0e0e0',
+            padding: '12px 16px',
+            marginBottom: '14px',
+          }}
+        >
+          <div style={{ fontSize: '12px', fontWeight: '600', color: '#546e7a', marginBottom: '10px' }}>
+            Countersubject placement
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(170px, 1fr))', gap: '14px' }}>
+            <Select
+              label="CS Position"
+              value={csPos}
+              onChange={setCsPos}
+              options={CS_POSITION_OPTIONS}
+            />
+            <Select
+              label="CS Shift"
+              value={csShift}
+              onChange={setCsShift}
+              options={CS_SHIFT_OPTIONS}
             />
           </div>
         </div>
@@ -1507,23 +1528,6 @@ export default function App() {
               {/* Settings row */}
               <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'flex-end' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '10px', color: '#546e7a', marginBottom: '4px' }}>
-                    Transposition
-                  </label>
-                  <select
-                    value={strettoOctave}
-                    onChange={(e) => {
-                      setStrettoOctave(e.target.value);
-                      setSelectedStretto(null);
-                    }}
-                    style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}
-                  >
-                    {STRETTO_TRANSPOSITION_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#37474f', cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -1540,7 +1544,7 @@ export default function App() {
                   </label>
                 </div>
                 <span style={{ fontSize: '11px', color: '#94a3b8', paddingBottom: '8px' }}>
-                  Testing at {strettoStep}-beat intervals
+                  Testing all transpositions at {strettoStep}-beat intervals
                 </span>
               </div>
 
