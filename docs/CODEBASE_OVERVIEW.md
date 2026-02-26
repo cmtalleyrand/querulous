@@ -1,5 +1,7 @@
 # Codebase Overview - Fugue Subject Analyzer
 
+**Last validated against codebase:** 2026-02-24 (`src/`, `docs/`)
+
 This document provides technical orientation for developers continuing work on this project.
 
 ---
@@ -9,50 +11,41 @@ This document provides technical orientation for developers continuing work on t
 ```
 querulous/
 ├── src/
-│   ├── App.jsx                 # Main application (1528 lines)
+│   ├── App.jsx                 # Main application
 │   ├── main.jsx               # Entry point
 │   ├── components/
 │   │   ├── scoring/           # Score display components
-│   │   │   ├── ScoreDashboard.jsx   # Main score summary (297 lines)
-│   │   │   ├── ScoreBar.jsx         # Category score bars (228 lines)
-│   │   │   ├── ScoreGauge.jsx       # Circular gauge (79 lines)
-│   │   │   └── ScoreSummaryCard.jsx # Summary card (82 lines)
 │   │   ├── ui/                # Reusable UI components
-│   │   │   ├── ABCBox.jsx           # ABC notation input
-│   │   │   ├── DataRow.jsx          # Key-value display
-│   │   │   ├── IssuesSummary.jsx    # Issues list (362 lines)
-│   │   │   ├── InfoButton.jsx       # Help tooltips (177 lines)
-│   │   │   ├── Observation.jsx      # Analysis observations
-│   │   │   ├── Section.jsx          # Collapsible sections
-│   │   │   └── Select.jsx           # Styled select
 │   │   └── visualizations/    # Core visualizations
-│   │       ├── IntervalAnalysisViz.jsx  # Main interval viz (898 lines)
-│   │       ├── StrettoViz.jsx           # Stretto analysis (518 lines)
-│   │       ├── InvertibilityViz.jsx     # Double counterpoint (478 lines)
-│   │       ├── PianoRoll.jsx            # Piano roll renderer (369 lines)
-│   │       └── IntervalTimeline.jsx     # Compact timeline (103 lines)
+│   │       ├── UnifiedCounterpointViz.jsx
+│   │       ├── IntervalAnalysisViz.jsx
+│   │       ├── CounterpointComparisonViz.jsx
+│   │       ├── InvertibilityViz.jsx
+│   │       ├── TwoVoiceViz.jsx
+│   │       ├── PianoRoll.jsx
+│   │       └── IntervalTimeline.jsx
 │   ├── utils/
-│   │   ├── analysis.js        # Core analysis functions (1412 lines)
-│   │   ├── dissonanceScoring.js # Dissonance evaluation (1208 lines)
-│   │   ├── scoring.js         # Category scoring (978 lines)
-│   │   ├── abcParser.js       # ABC notation parser (526 lines)
-│   │   ├── formatter.js       # Beat/pitch formatting (306 lines)
-│   │   ├── vizConstants.js    # Visualization constants (236 lines)
-│   │   ├── constants.js       # Musical constants (152 lines)
-│   │   └── helpContent.js     # Help text (436 lines)
+│   │   ├── analysis.js        # Core analysis functions
+│   │   ├── dissonanceScoring.js # Dissonance evaluation
+│   │   ├── scoring.js         # Category scoring
+│   │   ├── harmonicAnalysis.js # Harmonic implication support
+│   │   ├── abcParser.js       # ABC notation parser
+│   │   ├── formatter.js       # Beat/pitch formatting
+│   │   ├── vizConstants.js    # Visualization constants
+│   │   ├── defaultAnalysis.js
+│   │   └── constants/thresholds.js
 │   └── types/
-│       └── music.js           # Type definitions (90 lines)
+│       └── music.js           # Type definitions
 ├── docs/
-│   ├── DEFINITIONS.md         # Terms and definitions reference
-│   ├── SCORING_SYSTEM.md      # Comprehensive scoring docs
-│   ├── SCORING_CRITICAL_APPRAISAL.md  # Critical analysis
-│   ├── HARMONIC_IMPLICATION_ALGORITHM.md # Chord analysis spec
-│   ├── PROJECT_PLAN.md        # Planned improvements
-│   ├── CODEBASE_OVERVIEW.md   # Technical orientation (this file)
-│   └── WORKING_WITH_USER.md   # Communication guidance
-├── PROJECT_INTENT.md          # Design principles
-├── PENDING_FEEDBACK.md        # Feedback tracking / changelog
-└── IMPLEMENTATION_PLAN.md     # Task tracking
+│   ├── DEFINITIONS.md
+│   ├── SCORING_SYSTEM.md
+│   ├── SCORING_CRITICAL_APPRAISAL.md
+│   ├── HARMONIC_IMPLICATION_ALGORITHM.md
+│   ├── PROJECT_PLAN.md
+│   ├── CODEBASE_OVERVIEW.md
+│   └── WORKING_WITH_USER.md
+├── PROJECT_INTENT.md
+└── PENDING_FEEDBACK.md
 ```
 
 ---
@@ -65,190 +58,96 @@ querulous/
 User ABC input → parseABC() → NoteEvent[] → analysis functions
 ```
 
-**Key files**: `abcParser.js`, `types/music.js`
-
-The parser converts ABC notation to arrays of `NoteEvent` objects:
-```javascript
-class NoteEvent {
-  pitch: number;      // MIDI pitch (60 = C4)
-  duration: number;   // In beats (e.g., 0.5 for eighth note in 4/4)
-  onset: number;      // Beat position (0-indexed)
-  scaleDegree: ScaleDegree;  // ^1, ^2, etc.
-  abcNote: string;    // Original ABC notation
-}
-```
+**Key files**: `src/utils/abcParser.js`, `src/types/music.js`
 
 ### 2. Analysis Pipeline
 
-**File**: `analysis.js`
+**File**: `src/utils/analysis.js`
 
 Main analysis functions (called from `App.jsx:analyze()`):
 
-| Function | Purpose | Returns |
-|----------|---------|---------|
-| `findSimultaneities()` | Find note overlaps | `Simultaneity[]` |
-| `testHarmonicImplication()` | Tonal orientation | observations |
-| `testRhythmicVariety()` | Duration diversity | observations |
-| `testStrettoViability()` | Self-overlap quality | detailed results |
-| `testTonalAnswer()` | Real vs tonal answer | mutation point |
-| `testDoubleCounterpoint()` | Invertibility | both configs |
-| `testContourIndependence()` | Motion types | ratios |
-| `testModulatoryRobustness()` | CS vs answer | violations |
-| `testSequentialPotential()` | Detect sequences | ranges |
-| `detectSequences()` | Core sequence detection | matches |
+| Function | Purpose |
+|----------|---------|
+| `findSimultaneities()` | Find note overlaps |
+| `testHarmonicImplication()` | Tonal orientation |
+| `testRhythmicVariety()` | Duration diversity/coherence signals |
+| `testStrettoViability()` | Self-overlap quality |
+| `testTonalAnswer()` | Real vs tonal answer |
+| `testDoubleCounterpoint()` | Invertibility |
+| `testContourIndependence()` | Motion type ratios |
+| `testMelodicContour()` | Shape, climax, leap behavior |
+| `testModulatoryRobustness()` | CS vs answer transposition robustness |
+| `testSequentialPotential()` / `detectSequences()` | Sequence detection |
 
 ### 3. Dissonance Scoring
 
-**File**: `dissonanceScoring.js`
+**File**: `src/utils/dissonanceScoring.js`
 
-The most complex analysis module. Evaluates each dissonance in context:
+Context-sensitive dissonance evaluation pipeline:
 
 ```
 Entry (how arrived) → Dissonance (type/position) → Exit (resolution)
 ```
 
 Key functions:
-- `scoreDissonance(sim, allSims)` - Score single dissonance
-- `analyzeAllDissonances(sims)` - Score all simultaneities
-- `checkPatterns(...)` - Detect suspensions, PT, etc.
-- `scoreEntry(...)` - Evaluate approach motion
-- `scoreExit(...)` - Evaluate resolution
+- `scoreDissonance(sim, allSims)`
+- `analyzeAllDissonances(sims)`
+- `checkPatterns(...)`
+- `scoreEntry(...)`
+- `scoreExit(...)`
 
-**Important**: Uses module-level state for meter and P4 treatment:
-```javascript
-setMeter({ num, denom })      // Call before analysis
-setP4Treatment(bool)          // P4 as dissonant or consonant
-setSequenceRanges(ranges)     // For leap penalty mitigation
-```
+Uses module-level state for meter and P4 treatment:
+- `setMeter({ num, denom })`
+- `setP4Treatment(bool)`
+- `setSequenceRanges(ranges)`
 
 ### 4. Scoring Aggregation
 
-**File**: `scoring.js`
+**File**: `src/utils/scoring.js`
 
-`calculateOverallScore(results)` aggregates category scores:
-
-```javascript
-// Categories and weights
-const WEIGHTS = {
-  tonalClarity: 0.5,
-  rhythmicCharacter: 0.8,
-  strettoPotential: 1.0,
-  invertibility: 1.0,
-  rhythmicInterplay: 0.8,
-  voiceIndependence: 0.9,
-  transpositionStability: 1.0,
-};
-```
-
-Each category has a dedicated scoring function:
-- `scoreTonalClarity(results)`
-- `scoreRhythmicCharacter(results)`
-- `scoreStrettoPotential(results)`
-- etc.
-
----
-
-## Key Concepts
-
-### Simultaneity
-
-A moment when two notes overlap:
-```javascript
-class Simultaneity {
-  onset: number;           // Beat position
-  voice1Note: NoteEvent;   // Upper voice
-  voice2Note: NoteEvent;   // Lower voice
-  interval: Interval;      // Musical interval
-  metricWeight: number;    // 0-1, higher = stronger beat
-}
-```
-
-### Interval
-
-```javascript
-class Interval {
-  semitones: number;  // Absolute distance
-  class: number;      // 1-8 (unison through octave)
-  quality: string;    // 'perfect', 'major', 'minor', etc.
-  isConsonant(): boolean
-}
-```
-
-### Scale Degree
-
-```javascript
-class ScaleDegree {
-  degree: number;      // 1-7
-  alteration: number;  // -1, 0, +1 (flat, natural, sharp)
-  toString(): string   // "^1", "^#4", etc.
-}
-```
-
-### Metric Weight
-
-Calculated in `formatter.js:metricWeight(beat, meter)`:
-- 1.0 = downbeat
-- 0.75+ = strong beat
-- 0.45-0.74 = weak beat
-- <0.45 = off-beat
+`calculateOverallScore(results, hasCountersubject, subjectInfo)` aggregates category scores from dedicated calculators such as:
+- `calculateMelodicContourScore(result)`
+- `calculateRhythmicCharacterScore(result)`
+- `calculateStrettoPotentialScore(result, subjectLength)`
+- `calculateVoiceIndependenceScore(result)`
+- `calculateTranspositionStabilityScore(result)`
 
 ---
 
 ## Visualization Components
 
-### PianoRoll
-
-Renders notes as colored rectangles. Features:
-- Click note for details
-- Sequence highlighting (golden glow)
-- Subject vs CS color coding
-
-**Props**: `notes`, `width`, `height`, `onNoteClick`, `highlightRanges`
+### UnifiedCounterpointViz
+High-level combined visualization entry point in the current UI flow.
 
 ### IntervalAnalysisViz
-
-The main analysis view. Shows:
-- Two-voice piano roll
-- Interval connections between voices
-- Click for interval details
-
-**Complex because**: Handles voice crossing, interval display, highlighting
-
-### StrettoViz
-
-Shows subject overlapping with itself (comes) at various distances.
+Main interval-focused analysis display; handles voice crossing and interval-detail interaction.
 
 ### InvertibilityViz
-
 Shows original and inverted configurations side-by-side.
+
+### PianoRoll / TwoVoiceViz / CounterpointComparisonViz / IntervalTimeline
+Supporting visual and comparative views for note layout and interval timeline perspectives.
 
 ---
 
 ## State Management
 
-All in `App.jsx` via React useState:
+Primary state is in `src/App.jsx` via React hooks:
 
-- **Input**: `subjectInput`, `csInput`, `answerInput`
-- **Settings**: `selKey`, `selMode`, `selNoteLen`, `selTimeSig`, etc.
-- **Results**: `results`, `scoreResult`, `error`
-- **UI state**: `highlightedItem`, `activeSequenceVoice`, `activeSequenceRange`
+- **Input**: subject/countersubject/answer ABC data
+- **Settings**: key/mode/note-length/time-signature controls
+- **Results**: analysis results, score summary, error state
+- **UI state**: active highlights and selection context
 
-Analysis is triggered by clicking "Analyze" button, calling `analyze()`.
+Analysis is triggered by the Analyze action in the app workflow.
 
 ---
 
 ## Sequence Detection (Recently Fixed)
 
-**File**: `analysis.js:detectSequences()`
+**File**: `src/utils/analysis.js:detectSequences()`
 
-A melodic sequence is a pattern that repeats consecutively (not scattered occurrences).
-
-Key fix (Jan 2025): Changed from "find all matching patterns anywhere" to "find consecutive repetitions only". The old code would report "Notes 1-19 (3-note pattern)" when notes 1-3 and 13-15 matched - that's a motif, not a sequence. Now it requires patterns to be adjacent.
-
-Detection uses:
-- Interval classes (M3/m3 = same "3rd" class)
-- Rhythm matching (within 10% tolerance)
-- Inversion equivalence (P4 up ≈ P5 down)
+Sequence detection now emphasizes **consecutive** repetition rather than distant motif matches.
 
 ---
 
@@ -256,72 +155,29 @@ Detection uses:
 
 ### Adding a new analysis category
 
-1. Add analysis function in `analysis.js`
-2. Call it from `App.jsx:analyze()`
-3. Add scoring function in `scoring.js`
-4. Add to category weights
-5. Display results in appropriate component
+1. Add analysis function in `src/utils/analysis.js`
+2. Call it from `src/App.jsx`
+3. Add scoring function in `src/utils/scoring.js`
+4. Add/adjust weighting and display integration in scoring/UI components
 
 ### Modifying dissonance scoring
 
-All in `dissonanceScoring.js`. Key locations:
-- `scoreEntry()` - lines ~400-470
-- `scoreExit()` - lines ~480-560
-- `checkPatterns()` - lines ~570-730
-- Pattern bonuses are defined in `checkPatterns()`
+Most work is in `src/utils/dissonanceScoring.js` (`scoreEntry`, `scoreExit`, `checkPatterns`, `scoreDissonance`).
 
 ### Changing visualization colors
 
-**File**: `vizConstants.js`
-
-Semantic colors:
-```javascript
-VIZ_COLORS = {
-  consonant: '#22c55e',
-  dissonantGood: '#8b5cf6',
-  dissonantMarginal: '#f59e0b',
-  dissonantBad: '#ef4444',
-}
-```
+Use `src/utils/vizConstants.js` and then verify visual consumers in `src/components/visualizations/*.jsx`.
 
 ---
 
-## Testing
+## Testing and Technical Debt
 
-No comprehensive test suite currently. Testing is manual via UI.
-
-**Recommended test cases** (from IMPLEMENTATION_PLAN.md):
-- Various time signatures (4/4, 6/8, 9/8)
-- Voice crossing scenarios
-- Subjects with rests
-- Short (2-bar) and long (8+ bar) subjects
+- Automated tests exist for selected utilities (`src/utils/*.test.js`, `src/App.test.jsx`) but coverage is not comprehensive.
+- Known debt includes module-level dissonance-scoring state and large UI components that are candidates for decomposition.
 
 ---
 
-## Known Issues / Technical Debt
+## Planning Artifact Status
 
-1. **Module-level state in dissonanceScoring.js** - `setMeter()`, `setP4Treatment()` etc. must be called before analysis. Not ideal for concurrent analysis.
-
-2. **Large components** - `App.jsx` (1528 lines), `IntervalAnalysisViz.jsx` (898 lines) could be split.
-
-3. **No TypeScript** - Using JSDoc comments but no static typing.
-
-4. **Visualization complexity** - Voice crossing handling is complex; consider simplification.
-
----
-
-## Documentation Locations
-
-| Document | Path | Purpose |
-|----------|------|---------|
-| Design principles | `PROJECT_INTENT.md` | UI/UX goals, visualization spec, color semantics |
-| Definitions reference | `docs/DEFINITIONS.md` | All terms, data structures, and scoring rules with code cross-references |
-| Scoring system | `docs/SCORING_SYSTEM.md` | Comprehensive scoring documentation |
-| Scoring critique | `docs/SCORING_CRITICAL_APPRAISAL.md` | Identified weaknesses and improvement proposals |
-| Harmonic algorithm | `docs/HARMONIC_IMPLICATION_ALGORITHM.md` | Beat-by-beat chord analysis specification |
-| Project plan | `docs/PROJECT_PLAN.md` | Planned improvements and next steps |
-| Working with user | `docs/WORKING_WITH_USER.md` | Communication style, preferences, domain context |
-| Codebase overview | `docs/CODEBASE_OVERVIEW.md` | This file — technical orientation |
-| Pending feedback | `PENDING_FEEDBACK.md` | User confirmation tracking and changelog |
-| Implementation tasks | `IMPLEMENTATION_PLAN.md` | Original task list (partially complete) |
-| README | `README.md` | Public-facing project description |
+- `IMPLEMENTATION_PLAN.md` is **not present** in this repository and should be treated as an archived reference.
+- Legacy roadmap mentions of `StrettoViz.jsx` should be treated as archived; current visualization work should target existing files under `src/components/visualizations/`.

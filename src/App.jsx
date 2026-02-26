@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   PianoRoll,
-  IntervalTimeline,
   TwoVoiceViz,
-  IntervalAnalysisViz,
-  InvertibilityViz,
-  UnifiedCounterpointViz,
   CounterpointComparisonViz,
   Section,
   ObservationList,
@@ -15,11 +11,9 @@ import {
   ScoreDashboard,
   IssuesSummary,
   ChordAnalysisDisplay,
-  CounterpointScoreDisplay,
 } from './components';
 import {
   NOTE_TO_MIDI,
-  KEY_SIGNATURES,
   AVAILABLE_KEYS,
   AVAILABLE_MODES,
   NOTE_LENGTH_OPTIONS,
@@ -53,33 +47,49 @@ import {
   setSequenceBeatRanges,
 } from './utils';
 import { VIZ_COLORS } from './utils/vizConstants';
+import { MODE_HEADER_SUFFIX, MODE_DEFINITIONS } from './utils/modes';
+import {
+  ACCIDENTAL_OPTIONS,
+  NOTE_LETTER_OPTIONS,
+  getKeySignatureMap,
+  keySignatureMapToLegacyArray,
+  serializeKeySignatureModifiers,
+} from './utils/keySignature';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
- * Default example subject and countersubject (D minor, 4/4 time, L:1/8)
- * Each measure = 8 eighth notes = 4 beats
+ * Default example set in C# minor (2/2 time, L:1/8)
  */
-const DEFAULT_SUBJECT = `D4 A4 | F2 E2 D2 C2 | _B,2 A,2 G,2 A,2 | _B,2 C2 D4 |]`;
-const DEFAULT_CS = `F4 E4 | D2 C2 D2 E2 | F2 G2 F2 E2 | D2 C2 D4 |]`;
+const DEFAULT_SUBJECT = `C8 | ^B,4 E4 | D8 |`;
+const DEFAULT_CS = `e2 d2 e2 f2 | g2 f2 g2 a2 | g2 f2 e2 g2 | f2 e2 f2 g2 |`;
+const DEFAULT_CS2 = `c2 B2 c2 d2 | e2 d2 e2 f2 | e2 d2 c2 e2 | d2 c2 d2 e2 |`;
+const DEFAULT_ANSWER = `G8 | =G4 B4 | ^A8 |`;
 
 /**
  * Main Fugue Analyzer Application
  */
 export default function App() {
+  const safeToFixed = (value, digits = 1) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
+  };
+
   // Input state
   const [subjectInput, setSubjectInput] = useState(DEFAULT_SUBJECT);
+  const [subject2Input, setSubject2Input] = useState('');
   const [csInput, setCsInput] = useState(DEFAULT_CS);
-  const [cs2Input, setCs2Input] = useState('');
-  const [answerInput, setAnswerInput] = useState('');
+  const [cs2Input, setCs2Input] = useState(DEFAULT_CS2);
+  const [answerInput, setAnswerInput] = useState(DEFAULT_ANSWER);
 
   // Settings state
-  const [selKey, setSelKey] = useState('D');
+  const [selKey, setSelKey] = useState('C#');
   const [selMode, setSelMode] = useState('natural_minor');
   const [spellingKey, setSpellingKey] = useState('C');
   const [spellingMode, setSpellingMode] = useState('major');
+  const [keySignatureModifiers, setKeySignatureModifiers] = useState([]);
   const [useSpellingKey, setUseSpellingKey] = useState(false);
   const [selNoteLen, setSelNoteLen] = useState('1/8');
-  const [selTimeSig, setSelTimeSig] = useState('4/4');
+  const [selTimeSig, setSelTimeSig] = useState('2/2');
   const [strettoStep, setStrettoStep] = useState('1');
   const [strettoOctave, setStrettoOctave] = useState('12');
   const [selectedStretto, setSelectedStretto] = useState(null);
@@ -92,6 +102,8 @@ export default function App() {
   // Results state
   const [results, setResults] = useState(null);
   const [scoreResult, setScoreResult] = useState(null);
+  const [scoreProfiles, setScoreProfiles] = useState([]);
+  const [selectedScoreProfile, setSelectedScoreProfile] = useState('subject_cs1');
   const [error, setError] = useState(null);
   const [timingWarnings, setTimingWarnings] = useState([]);
 
@@ -137,7 +149,7 @@ export default function App() {
   };
 
   // Helper: prepend ABC headers if not already present
-  const prependABCHeaders = (abc, key, mode, noteLength, timeSig) => {
+  const prependABCHeaders = (abc, key, mode, noteLength, timeSig, modifiers = []) => {
     if (!abc.trim()) return abc;
 
     const headers = [];
@@ -145,19 +157,10 @@ export default function App() {
     const hasL = /^\s*L:/m.test(abc);
     const hasM = /^\s*M:/m.test(abc);
 
-    // Build mode suffix for key
-    const modeMap = {
-      major: '',
-      natural_minor: 'm',
-      harmonic_minor: 'm',
-      dorian: 'dor',
-      phrygian: 'phr',
-      lydian: 'lyd',
-      mixolydian: 'mix',
-    };
-    const modeStr = modeMap[mode] || '';
+    const modeStr = MODE_HEADER_SUFFIX[mode] || '';
+    const modifierStr = serializeKeySignatureModifiers(modifiers);
 
-    if (!hasK) headers.push(`K:${key}${modeStr}`);
+    if (!hasK) headers.push(`K:${key}${modeStr}${modifierStr ? ` ${modifierStr}` : ''}`);
     if (!hasL) headers.push(`L:${noteLength}`);
     if (!hasM) headers.push(`M:${timeSig}`);
 
@@ -170,14 +173,16 @@ export default function App() {
     if (!saveName.trim()) return;
 
     // Include ABC headers (K, L, M) in the saved text
-    const subjectWithHeaders = prependABCHeaders(subjectInput, selKey, selMode, selNoteLen, selTimeSig);
-    const csWithHeaders = csInput.trim() ? prependABCHeaders(csInput, selKey, selMode, selNoteLen, selTimeSig) : '';
-    const cs2WithHeaders = cs2Input.trim() ? prependABCHeaders(cs2Input, selKey, selMode, selNoteLen, selTimeSig) : '';
-    const answerWithHeaders = answerInput.trim() ? prependABCHeaders(answerInput, selKey, selMode, selNoteLen, selTimeSig) : '';
+    const subjectWithHeaders = prependABCHeaders(subjectInput, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers);
+    const subject2WithHeaders = subject2Input.trim() ? prependABCHeaders(subject2Input, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers) : '';
+    const csWithHeaders = csInput.trim() ? prependABCHeaders(csInput, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers) : '';
+    const cs2WithHeaders = cs2Input.trim() ? prependABCHeaders(cs2Input, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers) : '';
+    const answerWithHeaders = answerInput.trim() ? prependABCHeaders(answerInput, selKey, selMode, selNoteLen, selTimeSig, keySignatureModifiers) : '';
 
     const preset = {
       name: saveName.trim(),
       subject: subjectWithHeaders,
+      secondSubject: subject2WithHeaders,
       countersubject: csWithHeaders,
       countersubject2: cs2WithHeaders,
       answer: answerWithHeaders,
@@ -186,6 +191,7 @@ export default function App() {
         mode: selMode,
         noteLength: selNoteLen,
         timeSig: selTimeSig,
+        keySignatureModifiers,
       },
       savedAt: new Date().toISOString(),
     };
@@ -200,6 +206,7 @@ export default function App() {
   // Load preset
   const loadPreset = (preset) => {
     setSubjectInput(preset.subject || '');
+    setSubject2Input(preset.secondSubject || '');
     setCsInput(preset.countersubject || '');
     setCs2Input(preset.countersubject2 || '');
     setAnswerInput(preset.answer || '');
@@ -208,6 +215,7 @@ export default function App() {
       if (preset.settings.mode) setSelMode(preset.settings.mode);
       if (preset.settings.noteLength) setSelNoteLen(preset.settings.noteLength);
       if (preset.settings.timeSig) setSelTimeSig(preset.settings.timeSig);
+      if (Array.isArray(preset.settings.keySignatureModifiers)) setKeySignatureModifiers(preset.settings.keySignatureModifiers);
     }
   };
 
@@ -234,6 +242,7 @@ export default function App() {
       // Analysis key - what key we're analyzing scale degrees in
       const analysisKey = h.key || selKey;
       const analysisMode = h.mode || selMode;
+      const activeModifiers = h.key ? (h.keySignatureModifiers || []) : keySignatureModifiers;
 
       // Spelling key - what key signature to use for parsing ABC accidentals
       // If useSpellingKey is true and no K: header, use separate spelling key
@@ -250,17 +259,9 @@ export default function App() {
       if (analysisKey.includes('#')) tonic += 1;
       if (analysisKey.includes('b')) tonic -= 1;
 
-      // Get key signature for spelling (parsing ABC)
-      // For minor keys, append 'm' to the FULL key (e.g., 'Ebm' not 'Em')
-      let spellingKeyForSig = effSpellingKey;
-      if (['natural_minor', 'harmonic_minor'].includes(effSpellingMode)) spellingKeyForSig = effSpellingKey + 'm';
-      const spellingKeySig = KEY_SIGNATURES[spellingKeyForSig] || KEY_SIGNATURES[effSpellingKey] || [];
-
-      // Get key signature for answer generation (based on analysis key)
-      // Same fix: use full key with accidental when appending 'm'
-      let analysisKeyForSig = analysisKey;
-      if (['natural_minor', 'harmonic_minor'].includes(analysisMode)) analysisKeyForSig = analysisKey + 'm';
-      const analysisKeySig = KEY_SIGNATURES[analysisKeyForSig] || KEY_SIGNATURES[analysisKey] || [];
+      // Get key signatures for spelling and answer generation
+      const spellingKeySig = keySignatureMapToLegacyArray(getKeySignatureMap(effSpellingKey, effSpellingMode, activeModifiers));
+      const analysisKeySig = keySignatureMapToLegacyArray(getKeySignatureMap(analysisKey, analysisMode, activeModifiers));
 
       const keyInfo = { key: analysisKey, tonic, mode: analysisMode, keySignature: analysisKeySig };
 
@@ -282,6 +283,8 @@ export default function App() {
 
       // Validate ABC timing against time signature
       const subjectWarnings = validateABCTiming(subjectInput, meter, effNL);
+      const secondSubject = subject2Input.trim() ? parseABC(subject2Input, tonic, analysisMode, effNL, spellingKeySig).notes : null;
+      const secondSubjectWarnings = subject2Input.trim() ? validateABCTiming(subject2Input, meter, effNL) : [];
 
       const formatter = new BeatFormatter(effNL, meter);
 
@@ -294,6 +297,7 @@ export default function App() {
       // Combine all timing warnings
       const allWarnings = [
         ...subjectWarnings.map(w => ({ ...w, source: 'Subject' })),
+        ...secondSubjectWarnings.map(w => ({ ...w, source: 'Second Subject' })),
         ...csWarnings.map(w => ({ ...w, source: 'Countersubject 1' })),
         ...cs2Warnings.map(w => ({ ...w, source: 'Countersubject 2' })),
       ];
@@ -319,6 +323,7 @@ export default function App() {
         keyInfo,
         formatter,
         subject,
+        secondSubject,
         countersubject: shiftedCs, // Store shifted CS - analysis and visualization use the same data
         countersubjectOriginal: cs, // Keep original for reference
         countersubject2: shiftedCs2, // Second countersubject
@@ -331,8 +336,10 @@ export default function App() {
           mode: analysisMode,
           spellingKey: useSpellingKey ? effSpellingKey : null,
           spellingMode: useSpellingKey ? effSpellingMode : null,
+          keySignatureModifiers: activeModifiers,
           defaultNoteLength: effNL,
           subjectNotes: subject.length,
+          secondSubjectNotes: secondSubject?.length || 0,
           csNotes: cs?.length || 0,
           cs2Notes: cs2?.length || 0,
           csOctaveShift: csOctaveShiftVal, // Include shift info in parsed info
@@ -348,6 +355,21 @@ export default function App() {
       res.sequences = {
         subject: testSequentialPotential(subject, formatter),
       };
+
+      if (secondSubject?.length) {
+        res.sequences.secondSubject = testSequentialPotential(secondSubject, formatter);
+        res.subject2DoubleCounterpoint = testDoubleCounterpoint(subject, secondSubject, formatter);
+        res.secondSubjectRhythmicVariety = testRhythmicVariety(secondSubject, formatter);
+        res.secondSubjectStretto = testStrettoViability(secondSubject, formatter, 0.5, parseFloat(strettoStep), parseInt(strettoOctave));
+
+        if (shiftedCs?.length) {
+          res.subject2Cs1DoubleCounterpoint = testDoubleCounterpoint(secondSubject, shiftedCs, formatter);
+        }
+
+        if (shiftedCs2?.length) {
+          res.subject2Cs2DoubleCounterpoint = testDoubleCounterpoint(secondSubject, shiftedCs2, formatter);
+        }
+      }
 
       // Set sequence ranges for motion penalty mitigation (subject only for now)
       if (res.sequences.subject.noteRanges?.length > 0) {
@@ -408,6 +430,8 @@ export default function App() {
         res.cs2DoubleCounterpoint = testDoubleCounterpoint(subject, shiftedCs2, formatter);
         res.cs2RhythmicComplementarity = testRhythmicComplementarity(subject, shiftedCs2, meter);
         res.cs2ContourIndependence = testContourIndependence(subject, shiftedCs2, formatter);
+        res.answerCs2Sims = findSimultaneities(answerNotes, shiftedCs2, meter);
+        res.cs2AnswerDoubleCounterpoint = testDoubleCounterpoint(answerNotes, shiftedCs2, formatter);
 
         // CS2 vs CS1 interaction
         if (shiftedCs?.length) {
@@ -426,8 +450,102 @@ export default function App() {
       // Calculate scores
       const scores = calculateOverallScore(res, !!cs?.length);
 
+      const buildScoreProfile = ({ key, label, hasCountersubject, rhythmicVariety, stretto, doubleCounterpoint, rhythmicComplementarity, contourIndependence, transpositionStabilitySource, subjectNotes }) => {
+        const profileResults = {
+          ...res,
+          rhythmicVariety,
+          stretto,
+          doubleCounterpoint,
+          rhythmicComplementarity,
+          contourIndependence,
+          modulatoryRobustness: transpositionStabilitySource,
+          subject: subjectNotes,
+        };
+
+        return {
+          key,
+          label,
+          hasCountersubject,
+          score: calculateOverallScore(profileResults, hasCountersubject),
+        };
+      };
+
+      const profiles = [];
+      if (shiftedCs?.length) {
+        profiles.push(buildScoreProfile({
+          key: 'subject_cs1',
+          label: 'Subject 1 + CS1',
+          hasCountersubject: true,
+          rhythmicVariety: res.rhythmicVariety,
+          stretto: res.stretto,
+          doubleCounterpoint: res.doubleCounterpoint,
+          rhythmicComplementarity: res.rhythmicComplementarity,
+          contourIndependence: res.contourIndependence,
+          transpositionStabilitySource: res.modulatoryRobustness,
+          subjectNotes: res.subject,
+        }));
+      }
+
+      if (shiftedCs2?.length) {
+        profiles.push(buildScoreProfile({
+          key: 'subject_cs2',
+          label: 'Subject 1 + CS2',
+          hasCountersubject: true,
+          rhythmicVariety: res.rhythmicVariety,
+          stretto: res.stretto,
+          doubleCounterpoint: res.cs2DoubleCounterpoint,
+          rhythmicComplementarity: res.cs2RhythmicComplementarity,
+          contourIndependence: res.cs2ContourIndependence,
+          transpositionStabilitySource: testModulatoryRobustness(subject, shiftedCs2, formatter),
+          subjectNotes: res.subject,
+        }));
+      }
+
+      if (secondSubject?.length && shiftedCs?.length) {
+        profiles.push(buildScoreProfile({
+          key: 'subject2_cs1',
+          label: 'Subject 2 + CS1',
+          hasCountersubject: true,
+          rhythmicVariety: res.secondSubjectRhythmicVariety,
+          stretto: res.secondSubjectStretto,
+          doubleCounterpoint: res.subject2Cs1DoubleCounterpoint,
+          rhythmicComplementarity: testRhythmicComplementarity(secondSubject, shiftedCs, meter),
+          contourIndependence: testContourIndependence(secondSubject, shiftedCs, formatter),
+          transpositionStabilitySource: testModulatoryRobustness(secondSubject, shiftedCs, formatter),
+          subjectNotes: secondSubject,
+        }));
+      }
+
+      if (secondSubject?.length && shiftedCs2?.length) {
+        profiles.push(buildScoreProfile({
+          key: 'subject2_cs2',
+          label: 'Subject 2 + CS2',
+          hasCountersubject: true,
+          rhythmicVariety: res.secondSubjectRhythmicVariety,
+          stretto: res.secondSubjectStretto,
+          doubleCounterpoint: res.subject2Cs2DoubleCounterpoint,
+          rhythmicComplementarity: testRhythmicComplementarity(secondSubject, shiftedCs2, meter),
+          contourIndependence: testContourIndependence(secondSubject, shiftedCs2, formatter),
+          transpositionStabilitySource: testModulatoryRobustness(secondSubject, shiftedCs2, formatter),
+          subjectNotes: secondSubject,
+        }));
+      }
+
+      if (profiles.length === 0) {
+        profiles.push({
+          key: 'subject_only',
+          label: 'Subject 1 (no countersubject)',
+          hasCountersubject: false,
+          score: scores,
+        });
+      }
+
+      const defaultProfile = profiles.find(p => p.key === 'subject_cs1') || profiles[0];
+
       setResults(res);
-      setScoreResult(scores);
+      setScoreProfiles(profiles);
+      setSelectedScoreProfile(defaultProfile.key);
+      setScoreResult(defaultProfile.score);
     } catch (e) {
       setError(`Error: ${e.message}`);
     }
@@ -465,7 +583,7 @@ export default function App() {
             marginBottom: '16px',
           }}
         >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '14px' }}>
             <Select
               label="Analysis Key"
               value={selKey}
@@ -478,6 +596,27 @@ export default function App() {
               onChange={setSelMode}
               options={AVAILABLE_MODES}
             />
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#546e7a', marginBottom: '5px' }}>
+                Key Signature Modifiers
+              </label>
+              {keySignatureModifiers.map((modifier, index) => (
+                <div key={`${index}-${modifier.note}-${modifier.accidental}`} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                  <select value={modifier.accidental} onChange={(e) => setKeySignatureModifiers((prev) => prev.map((m, i) => i === index ? { ...m, accidental: e.target.value } : m))} style={{ flex: 1, padding: '7px 6px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}>
+                    {ACCIDENTAL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <select value={modifier.note} onChange={(e) => setKeySignatureModifiers((prev) => prev.map((m, i) => i === index ? { ...m, note: e.target.value } : m))} style={{ width: '64px', padding: '7px 6px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}>
+                    {NOTE_LETTER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <button type="button" onClick={() => setKeySignatureModifiers((prev) => prev.filter((_, i) => i !== index))} style={{ border: '1px solid #d0d0d0', borderRadius: '4px', background: '#fff', fontSize: '11px', padding: '0 8px' }}>
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button type="button" onClick={() => setKeySignatureModifiers((prev) => [...prev, { accidental: '^', note: 'F' }])} style={{ width: '100%', padding: '7px 8px', border: '1px solid #c9a227', borderRadius: '4px', background: '#fffdf5', fontSize: '12px', color: '#7a6220' }}>
+                Add modifier
+              </button>
+            </div>
             <Select
               label="Time Sig (M:)"
               value={selTimeSig}
@@ -500,6 +639,20 @@ export default function App() {
 
           {/* Spelling Key Option */}
           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eee' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(170px, 1fr))', gap: '14px', marginBottom: '12px' }}>
+              <Select
+                label="CS Position"
+                value={csPos}
+                onChange={setCsPos}
+                options={CS_POSITION_OPTIONS}
+              />
+              <Select
+                label="CS Shift"
+                value={csShift}
+                onChange={setCsShift}
+                options={STRETTO_TRANSPOSITION_OPTIONS}
+              />
+            </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -525,7 +678,7 @@ export default function App() {
                   options={AVAILABLE_MODES}
                 />
                 <p style={{ fontSize: '11px', color: '#78909c', marginTop: '18px', flex: 1 }}>
-                  ABC accidentals use {spellingKey} {spellingMode.replace('_', ' ')}, but scale degrees analyzed in {selKey} {selMode.replace('_', ' ')}
+                  ABC accidentals use {spellingKey} {MODE_DEFINITIONS[spellingMode]?.label || spellingMode}, but scale degrees analyzed in {selKey} {MODE_DEFINITIONS[selMode]?.label || selMode}
                 </p>
               </div>
             )}
@@ -724,6 +877,36 @@ export default function App() {
                 fontSize: '12px',
               }}
             >
+              Second Subject
+            </label>
+            <textarea
+              value={subject2Input}
+              onChange={(e) => setSubject2Input(e.target.value)}
+              style={{
+                width: '100%',
+                height: '90px',
+                padding: '9px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                resize: 'vertical',
+                boxSizing: 'border-box',
+              }}
+              placeholder="Optional"
+              aria-label="Second subject in ABC notation (optional)"
+            />
+          </div>
+          <div>
+            <label
+              style={{
+                display: 'block',
+                marginBottom: '5px',
+                fontWeight: '600',
+                color: '#2c3e50',
+                fontSize: '12px',
+              }}
+            >
               Countersubject
             </label>
             <textarea
@@ -879,9 +1062,9 @@ export default function App() {
                 color: '#546e7a',
               }}
             >
-              Analysis: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.key} {results.parsedInfo.mode.replace('_', ' ')}</strong>
+              Analysis: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.key} {MODE_DEFINITIONS[results.parsedInfo.mode]?.label || results.parsedInfo.mode}</strong>
               {results.parsedInfo.spellingKey && (
-                <> · Spelling: <strong style={{ color: '#78909c' }}>{results.parsedInfo.spellingKey} {results.parsedInfo.spellingMode.replace('_', ' ')}</strong></>
+                <> · Spelling: <strong style={{ color: '#78909c' }}>{results.parsedInfo.spellingKey} {MODE_DEFINITIONS[results.parsedInfo.spellingMode]?.label || results.parsedInfo.spellingMode}</strong></>
               )}
               {' · '}Subject: <strong style={{ color: '#2c3e50' }}>{results.parsedInfo.subjectNotes} notes</strong>
               {' · '}L: <strong style={{ color: '#2c3e50' }}>1/{Math.round(1 / results.parsedInfo.defaultNoteLength)}</strong>
@@ -897,6 +1080,13 @@ export default function App() {
             <ScoreDashboard
               scoreResult={scoreResult}
               hasCountersubject={!!results.countersubject}
+              scoreProfiles={scoreProfiles}
+              selectedScoreProfile={selectedScoreProfile}
+              onSelectScoreProfile={(profileKey) => {
+                setSelectedScoreProfile(profileKey);
+                const nextProfile = scoreProfiles.find((p) => p.key === profileKey);
+                if (nextProfile) setScoreResult(nextProfile.score);
+              }}
               selectedCategory={selectedScoreCategory}
             />
 
@@ -919,15 +1109,16 @@ export default function App() {
             </Section>
 
             {/* Countersubject Sections */}
-            {results.countersubject && (
+            {(results.countersubject || results.countersubject2) && (
               <>
                 {/* Voice Comparison - unified view with tabs and transposition testing */}
                 <Section title="Counterpoint Comparison" helpKey="countersubject">
                   <CounterpointComparisonViz
                     voices={{
                       subject: results.subject,
+                      ...(results.secondSubject ? { secondSubject: results.secondSubject } : {}),
                       answer: results.answerNotes,
-                      cs1: results.countersubject,
+                      ...(results.countersubject ? { cs1: results.countersubject } : {}),
                       ...(results.countersubject2 ? { cs2: results.countersubject2 } : {}),
                     }}
                     formatter={results.formatter}
@@ -994,6 +1185,15 @@ export default function App() {
                   color: '#ef6c00',
                   data: results.sequences.countersubject.detailedSequences,
                   notes: results.countersubject,
+                });
+              }
+              if (results.sequences?.secondSubject?.detailedSequences?.length > 0) {
+                allSequences.push({
+                  voice: 'Second Subject',
+                  voiceKey: 'secondSubject',
+                  color: '#7c3aed',
+                  data: results.sequences.secondSubject.detailedSequences,
+                  notes: results.secondSubject,
                 });
               }
 
@@ -1381,7 +1581,7 @@ export default function App() {
                     const warningCount = s.warningCount || 0;
 
                     // Get the dissonance score for this stretto
-                    const strettoScore = s.dissonanceAnalysis?.summary?.averageScore || 0;
+                    const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
 
                     // Gradation: based on score AND issues
                     let bgColor, borderColor, textColor, badge, scoreDisplay;
@@ -1389,42 +1589,42 @@ export default function App() {
                       bgColor = '#1f2937';
                       borderColor = '#1f2937';
                       textColor = 'white';
-                      scoreDisplay = strettoScore.toFixed(1);
+                      scoreDisplay = safeToFixed(strettoScore, 1);
                     } else if (s.clean) {
                       // Clean - bright green
                       bgColor = '#dcfce7';
                       borderColor = '#86efac';
                       textColor = '#166534';
                       badge = '✓';
-                      scoreDisplay = `+${strettoScore.toFixed(1)}`;
+                      scoreDisplay = `+${safeToFixed(strettoScore, 1)}`;
                     } else if (s.viable) {
                       // Viable with warnings - yellow-green
                       bgColor = '#fef9c3';
                       borderColor = '#fde047';
                       textColor = '#854d0e';
                       badge = `⚠${warningCount}`;
-                      scoreDisplay = strettoScore >= 0 ? `+${strettoScore.toFixed(1)}` : strettoScore.toFixed(1);
+                      scoreDisplay = strettoScore >= 0 ? `+${safeToFixed(strettoScore, 1)}` : safeToFixed(strettoScore, 1);
                     } else if (strettoScore >= 0) {
                       // Positive score but has issues - light orange
                       bgColor = '#ffedd5';
                       borderColor = '#fdba74';
                       textColor = '#c2410c';
                       badge = issueCount.toString();
-                      scoreDisplay = `+${strettoScore.toFixed(1)}`;
+                      scoreDisplay = `+${safeToFixed(strettoScore, 1)}`;
                     } else if (strettoScore >= -1) {
                       // Slightly negative - orange
                       bgColor = '#fee2e2';
                       borderColor = '#fca5a5';
                       textColor = '#b91c1c';
                       badge = issueCount.toString();
-                      scoreDisplay = strettoScore.toFixed(1);
+                      scoreDisplay = safeToFixed(strettoScore, 1);
                     } else {
                       // Very negative - red
                       bgColor = '#fecaca';
                       borderColor = '#f87171';
                       textColor = '#991b1b';
                       badge = issueCount.toString();
-                      scoreDisplay = strettoScore.toFixed(1);
+                      scoreDisplay = safeToFixed(strettoScore, 1);
                     }
 
                     return (
@@ -1492,7 +1692,7 @@ export default function App() {
                     }}
                   >
                     {(() => {
-                      const strettoScore = s.dissonanceAnalysis?.summary?.averageScore || 0;
+                      const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
                       return (
                         <div
                           style={{
@@ -1517,7 +1717,7 @@ export default function App() {
                             color: strettoScore >= 0.5 ? '#16a34a' : strettoScore >= 0 ? '#ca8a04' : '#dc2626',
                             border: `1px solid ${strettoScore >= 0.5 ? '#86efac' : strettoScore >= 0 ? '#fde047' : '#fca5a5'}`,
                           }}>
-                            Score: {strettoScore >= 0 ? '+' : ''}{strettoScore.toFixed(2)}
+                            Score: {strettoScore >= 0 ? '+' : ''}{safeToFixed(strettoScore, 2)}
                           </span>
                           <span style={{
                             fontSize: '11px',
@@ -1560,7 +1760,7 @@ export default function App() {
                             {w.score !== undefined && (
                               <span style={{ marginLeft: '6px', fontWeight: '700',
                                 color: w.score >= 0 ? '#059669' : '#dc2626' }}>
-                                ({w.score >= 0 ? '+' : ''}{w.score.toFixed(1)})
+                                ({w.score >= 0 ? '+' : ''}{safeToFixed(w.score, 1)})
                               </span>
                             )}
                           </div>
@@ -1601,7 +1801,7 @@ export default function App() {
             </Section>
 
             {/* Countersubject Analysis Sections */}
-            {results.countersubject && (
+            {(results.countersubject || results.countersubject2) && (
               <>
                 <h2
                   style={{
@@ -1616,34 +1816,38 @@ export default function App() {
                   Countersubject Analysis
                 </h2>
 
-                <Section title="Rhythmic Complementarity" helpKey="rhythmicComplementarity" defaultCollapsed={true}>
-                  <DataRow
-                    data={{
-                      Overlap: `${Math.round(results.rhythmicComplementarity.overlapRatio * 100)}%`,
-                    }}
-                  />
-                  <ObservationList observations={results.rhythmicComplementarity.observations} />
-                </Section>
+                {results.countersubject && (
+                  <>
+                    <Section title="Rhythmic Complementarity" helpKey="rhythmicComplementarity" defaultCollapsed={true}>
+                      <DataRow
+                        data={{
+                          Overlap: `${Math.round(results.rhythmicComplementarity.overlapRatio * 100)}%`,
+                        }}
+                      />
+                      <ObservationList observations={results.rhythmicComplementarity.observations} />
+                    </Section>
 
-                <Section title="Contour Independence" helpKey="contourIndependence" defaultCollapsed={true}>
-                  <DataRow
-                    data={{
-                      Parallel: `${results.contourIndependence.parallelMotions} (${Math.round(results.contourIndependence.parallelRatio * 100)}%)`,
-                      Similar: `${results.contourIndependence.similarMotions} (${Math.round(results.contourIndependence.similarRatio * 100)}%)`,
-                      Contrary: `${results.contourIndependence.contraryMotions} (${Math.round(results.contourIndependence.contraryRatio * 100)}%)`,
-                      Oblique: `${results.contourIndependence.obliqueMotions} (${Math.round(results.contourIndependence.obliqueRatio * 100)}%)`,
-                    }}
-                  />
-                  <ObservationList
-                    observations={[
-                      { type: 'info', description: results.contourIndependence.assessment },
-                      ...results.contourIndependence.details.map((d) => ({
-                        type: 'consideration',
-                        description: d.description,
-                      })),
-                    ]}
-                  />
-                </Section>
+                    <Section title="Contour Independence" helpKey="contourIndependence" defaultCollapsed={true}>
+                      <DataRow
+                        data={{
+                          Parallel: `${results.contourIndependence.parallelMotions} (${Math.round(results.contourIndependence.parallelRatio * 100)}%)`,
+                          Similar: `${results.contourIndependence.similarMotions} (${Math.round(results.contourIndependence.similarRatio * 100)}%)`,
+                          Contrary: `${results.contourIndependence.contraryMotions} (${Math.round(results.contourIndependence.contraryRatio * 100)}%)`,
+                          Oblique: `${results.contourIndependence.obliqueMotions} (${Math.round(results.contourIndependence.obliqueRatio * 100)}%)`,
+                        }}
+                      />
+                      <ObservationList
+                        observations={[
+                          { type: 'info', description: results.contourIndependence.assessment },
+                          ...results.contourIndependence.details.map((d) => ({
+                            type: 'consideration',
+                            description: d.description,
+                          })),
+                        ]}
+                      />
+                    </Section>
+                  </>
+                )}
 
                 {/* CS2 analysis sections */}
                 {results.countersubject2 && (
@@ -1679,7 +1883,31 @@ export default function App() {
                         <ObservationList observations={results.cs1Cs2Counterpoint.observations} />
                       </Section>
                     )}
+
+                    {results.cs2AnswerDoubleCounterpoint && (
+                      <Section title="CS2 vs Answer" defaultCollapsed={true}>
+                        <ObservationList observations={results.cs2AnswerDoubleCounterpoint.observations} />
+                      </Section>
+                    )}
                   </>
+                )}
+
+                {results.secondSubject && results.subject2DoubleCounterpoint && (
+                  <Section title="Second Subject vs Subject" defaultCollapsed={true}>
+                    <ObservationList observations={results.subject2DoubleCounterpoint.observations} />
+                  </Section>
+                )}
+
+                {results.secondSubject && results.subject2Cs1DoubleCounterpoint && (
+                  <Section title="Second Subject vs CS1" defaultCollapsed={true}>
+                    <ObservationList observations={results.subject2Cs1DoubleCounterpoint.observations} />
+                  </Section>
+                )}
+
+                {results.secondSubject && results.subject2Cs2DoubleCounterpoint && (
+                  <Section title="Second Subject vs CS2" defaultCollapsed={true}>
+                    <ObservationList observations={results.subject2Cs2DoubleCounterpoint.observations} />
+                  </Section>
                 )}
               </>
             )}

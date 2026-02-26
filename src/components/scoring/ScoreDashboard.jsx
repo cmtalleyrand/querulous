@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScoreGauge } from './ScoreGauge';
 import { ScoreBar } from './ScoreBar';
 import { getScoreSummary } from '../../utils/scoring';
@@ -6,15 +6,18 @@ import { getScoreSummary } from '../../utils/scoring';
 /**
  * Main scoring dashboard component
  * Displays overall score and breakdown by category
- *
- * Categories are now organized by conceptual groups:
- * - MELODIC: Properties of the subject line itself
- * - FUGAL: How well it works as fugue material
- * - COMBINATION: How voices work together (with CS)
  */
-export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategory = null }) {
+export function ScoreDashboard({
+  scoreResult,
+  hasCountersubject,
+  scoreProfiles = [],
+  selectedScoreProfile,
+  onSelectScoreProfile,
+  selectedCategory = null,
+}) {
   const [showDetails, setShowDetails] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
+  const categoryRefs = useRef({});
 
 
   useEffect(() => {
@@ -27,28 +30,46 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
 
   const { strengths, improvements } = getScoreSummary(scoreResult);
 
-  // Organize categories by conceptual group
+  // Requested order:
+  // 1) Answer vs Countersubject
+  // 2) Subject vs Countersubject
+  // 3) Rhythm + Interplay area (includes subject rhythmic character)
+  // 4) Stretto
   const categoryGroups = {
-    melodic: {
-      title: 'Melodic Quality',
-      subtitle: 'Properties of the subject line',
+    pairQuality: {
+      title: 'Counterpoint Quality',
+      subtitle: 'Direct pair quality first: answer vs countersubject, then subject vs countersubject',
+      color: '#81c784',
+      categories: hasCountersubject
+        ? ['transpositionStability', 'invertibility']
+        : [],
+    },
+    interplayRhythm: {
+      title: 'Rhythmic & Voice Interplay',
+      subtitle: 'Rhythmic character here refers to the currently selected subject',
       color: '#5c6bc0',
-      categories: ['rhythmicCharacter'],
+      categories: hasCountersubject
+        ? ['rhythmicInterplay', 'voiceIndependence', 'rhythmicCharacter']
+        : ['rhythmicCharacter'],
     },
     fugal: {
-      title: 'Fugal Potential',
-      subtitle: 'How well it works as fugue material',
+      title: 'Stretto',
+      subtitle: 'Overlap viability after pair/rhythm checks',
       color: '#7e57c2',
       categories: ['strettoPotential'],
     },
-    combination: {
-      title: 'Voice Combination',
-      subtitle: 'How voices work together',
-      color: '#81c784',
-      categories: hasCountersubject
-        ? ['transpositionStability', 'invertibility', 'rhythmicInterplay', 'voiceIndependence']
-        : [],
-    },
+  };
+
+  const groupedCategoryKeys = Object.values(categoryGroups).flatMap(group => group.categories);
+  const summaryCategoryKeys = [...new Set([...strengths, ...improvements].map(item => item.key))];
+  const ungroupedSummaryKeys = summaryCategoryKeys.filter(key => !groupedCategoryKeys.includes(key));
+
+  const openCategory = (key) => {
+    setShowDetails(true);
+    setExpandedCategory(key);
+    requestAnimationFrame(() => {
+      categoryRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   };
 
   return (
@@ -61,7 +82,6 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
         marginBottom: '20px',
       }}
     >
-      {/* Header */}
       <div
         style={{
           background: 'linear-gradient(135deg, #2c3e50, #34495e)',
@@ -81,7 +101,6 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
         <ScoreGauge score={scoreResult.overall} size={80} strokeWidth={8} />
       </div>
 
-      {/* Rating banner */}
       <div
         style={{
           padding: '12px 20px',
@@ -90,6 +109,8 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
         }}
       >
         <div>
@@ -103,28 +124,53 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
             0 = baseline
           </span>
         </div>
-        <button
-          onClick={() => setShowDetails(!showDetails)}
-          style={{
-            padding: '6px 12px',
-            backgroundColor: showDetails ? '#37474f' : 'white',
-            color: showDetails ? 'white' : '#37474f',
-            border: '1px solid #37474f',
-            borderRadius: '4px',
-            fontSize: '12px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-          }}
-        >
-          {showDetails ? 'Hide Details' : 'Show Details'}
-        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {scoreProfiles.length > 1 && (
+            <>
+              <label htmlFor="score-profile" style={{ fontSize: '12px', color: '#37474f', fontWeight: 600 }}>
+                Score view:
+              </label>
+              <select
+                id="score-profile"
+                value={selectedScoreProfile || scoreProfiles[0]?.key}
+                onChange={(e) => onSelectScoreProfile?.(e.target.value)}
+                style={{
+                  padding: '6px 8px',
+                  border: '1px solid #90a4ae',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  color: '#37474f',
+                  backgroundColor: '#fff',
+                }}
+              >
+                {scoreProfiles.map((profile) => (
+                  <option key={profile.key} value={profile.key}>{profile.label}</option>
+                ))}
+              </select>
+            </>
+          )}
+
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: showDetails ? '#37474f' : 'white',
+              color: showDetails ? 'white' : '#37474f',
+              border: '1px solid #37474f',
+              borderRadius: '4px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            {showDetails ? 'Hide Details' : 'Show Details'}
+          </button>
+        </div>
       </div>
 
-      {/* Main content */}
       <div style={{ padding: '16px 20px' }}>
-        {/* Summary cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-          {/* Strengths */}
           <div
             style={{
               padding: '12px',
@@ -138,10 +184,24 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
             </div>
             {strengths.length > 0 ? (
               <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: '#37474f' }}>
-                {strengths.slice(0, 3).map((s, i) => (
-                  <li key={i}>{s.category}</li>
+                {strengths.map((s, i) => (
+                  <li key={i} style={{ marginBottom: '4px' }}>
+                    <button
+                      onClick={() => openCategory(s.key)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: '#2e7d32',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                      }}
+                    >
+                      {s.category}
+                    </button>
+                  </li>
                 ))}
-                {strengths.length > 3 && <li>+{strengths.length - 3} more</li>}
               </ul>
             ) : (
               <div style={{ fontSize: '11px', color: '#757575', fontStyle: 'italic' }}>
@@ -150,7 +210,6 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
             )}
           </div>
 
-          {/* Areas for Improvement */}
           <div
             style={{
               padding: '12px',
@@ -164,10 +223,24 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
             </div>
             {improvements.length > 0 ? (
               <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '12px', color: '#37474f' }}>
-                {improvements.slice(0, 3).map((s, i) => (
-                  <li key={i}>{s.category}</li>
+                {improvements.map((s, i) => (
+                  <li key={i} style={{ marginBottom: '4px' }}>
+                    <button
+                      onClick={() => openCategory(s.key)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: '#e65100',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                      }}
+                    >
+                      {s.category}
+                    </button>
+                  </li>
                 ))}
-                {improvements.length > 3 && <li>+{improvements.length - 3} more</li>}
               </ul>
             ) : (
               <div style={{ fontSize: '11px', color: '#757575', fontStyle: 'italic' }}>
@@ -177,9 +250,7 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
           </div>
         </div>
 
-        {/* Category Groups */}
         {Object.entries(categoryGroups).map(([groupKey, group]) => {
-          // Skip empty groups
           if (group.categories.length === 0) return null;
 
           return (
@@ -203,7 +274,13 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
                 const data = scoreResult.categories[key];
                 if (!data) return null;
                 return (
-                  <div key={key} onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}>
+                  <div
+                    key={key}
+                    ref={(el) => {
+                      categoryRefs.current[key] = el;
+                    }}
+                    onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}
+                  >
                     <ScoreBar
                       categoryKey={key}
                       score={data.internal}
@@ -218,7 +295,44 @@ export function ScoreDashboard({ scoreResult, hasCountersubject, selectedCategor
           );
         })}
 
-        {/* Improvement suggestions */}
+        {ungroupedSummaryKeys.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <h3
+              style={{
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#37474f',
+                marginBottom: '4px',
+                paddingBottom: '6px',
+                borderBottom: '2px solid #90a4ae',
+              }}
+            >
+              Additional Categories
+            </h3>
+            {ungroupedSummaryKeys.map((key) => {
+              const data = scoreResult.categories[key];
+              if (!data) return null;
+              return (
+                <div
+                  key={key}
+                  ref={(el) => {
+                    categoryRefs.current[key] = el;
+                  }}
+                  onClick={() => setExpandedCategory(expandedCategory === key ? null : key)}
+                >
+                  <ScoreBar
+                    categoryKey={key}
+                    score={data.internal}
+                    internalScore={data.internal}
+                    showDetails={showDetails || expandedCategory === key}
+                    details={data.details}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {improvements.length > 0 && (
           <div
             style={{

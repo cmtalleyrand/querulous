@@ -1,4 +1,4 @@
-import { getScoreColor, getScoreRating, SCORE_CATEGORIES } from '../../utils/scoring';
+import { getScoreColor, SCORE_CATEGORIES } from '../../utils/scoring';
 
 /**
  * Compact score summary card for quick overview
