@@ -2,7 +2,7 @@ import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
 import { metricWeight, pitchName } from './formatter';
 import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis';
-import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants';
+import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants/analysisThresholds';
 import { METRIC_STRENGTH_CUTOFFS } from './constants/thresholds';
 
 /**

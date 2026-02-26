@@ -13,15 +13,6 @@ import {
   ChordAnalysisDisplay,
 } from './components';
 import {
-  NOTE_TO_MIDI,
-  KEY_SIGNATURES,
-  AVAILABLE_KEYS,
-  AVAILABLE_MODES,
-  NOTE_LENGTH_OPTIONS,
-  STRETTO_STEP_OPTIONS,
-  STRETTO_TRANSPOSITION_OPTIONS,
-  CS_POSITION_OPTIONS,
-  TIME_SIGNATURE_OPTIONS,
   BeatFormatter,
   pitchName,
   extractABCHeaders,
@@ -47,6 +38,16 @@ import {
   setSequenceRanges,
   setSequenceBeatRanges,
 } from './utils';
+import { NOTE_TO_MIDI, KEY_SIGNATURES } from './utils/constants/musicTheory';
+import {
+  AVAILABLE_KEYS,
+  AVAILABLE_MODES,
+  NOTE_LENGTH_OPTIONS,
+  STRETTO_STEP_OPTIONS,
+  STRETTO_TRANSPOSITION_OPTIONS,
+  CS_POSITION_OPTIONS,
+} from './utils/constants/uiOptions';
+import { TIME_SIGNATURE_OPTIONS } from './utils/constants/timeSignatures';
 import { VIZ_COLORS } from './utils/vizConstants';
 import { NoteEvent, ScaleDegree } from './types';
 

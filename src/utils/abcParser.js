@@ -1,5 +1,5 @@
 import { ScaleDegree, NoteEvent } from '../types';
-import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants';
+import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants/musicTheory';
 
 /**
  * Validate ABC notation against time signature
