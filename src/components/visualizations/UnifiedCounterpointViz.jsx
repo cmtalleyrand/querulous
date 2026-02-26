@@ -3,27 +3,7 @@ import { pitchName, metricWeight } from '../../utils/formatter';
 import { Simultaneity } from '../../types';
 import { scoreDissonance } from '../../utils/dissonanceScoring';
 import { generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
-
-// Transposition options - includes octaves, fifths, fourths, sixths, and thirds
-const TRANSPOSITION_OPTIONS = [
-  { value: 12, label: '+P8 (up octave)', shortLabel: '+8ve' },
-  { value: 9, label: '+M6 (up major 6th)', shortLabel: '+M6' },
-  { value: 8, label: '+m6 (up minor 6th)', shortLabel: '+m6' },
-  { value: 7, label: '+P5 (up fifth)', shortLabel: '+5th' },
-  { value: 5, label: '+P4 (up fourth)', shortLabel: '+4th' },
-  { value: 4, label: '+M3 (up major 3rd)', shortLabel: '+M3' },
-  { value: 3, label: '+m3 (up minor 3rd)', shortLabel: '+m3' },
-  { value: 0, label: 'Original', shortLabel: 'orig' },
-  { value: -3, label: '-m3 (down minor 3rd)', shortLabel: '-m3' },
-  { value: -4, label: '-M3 (down major 3rd)', shortLabel: '-M3' },
-  { value: -5, label: '-P4 (down fourth)', shortLabel: '-4th' },
-  { value: -7, label: '-P5 (down fifth)', shortLabel: '-5th' },
-  { value: -8, label: '-m6 (down minor 6th)', shortLabel: '-m6' },
-  { value: -9, label: '-M6 (down major 6th)', shortLabel: '-M6' },
-  { value: -12, label: '-P8 (down octave)', shortLabel: '-8ve' },
-  { value: -19, label: '-P12 (down 12th)', shortLabel: '-12th' },
-  { value: -24, label: '-P15 (down 2 octaves)', shortLabel: '-15th' },
-];
+import { COUNTERPOINT_VIZ_TRANSPOSITION_OPTIONS } from '../../utils/constants/transpositionOptions';
 
 /**
  * Unified Counterpoint Visualization
@@ -260,7 +240,7 @@ export function UnifiedCounterpointViz({
             onChange={(e) => setTransposition(parseInt(e.target.value))}
             style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
           >
-            {TRANSPOSITION_OPTIONS.map(opt => (
+            {COUNTERPOINT_VIZ_TRANSPOSITION_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
@@ -297,7 +277,7 @@ export function UnifiedCounterpointViz({
             <rect x={0} y={0} width={w} height={headerHeight} fill="rgba(0,0,0,0.04)" />
             <text x={16} y={22} fontSize="14" fontWeight="600" fill="#374151">
               {voice1Info.label} vs {voice2Info.label}
-              {transposition !== 0 && ` (${TRANSPOSITION_OPTIONS.find(o => o.value === transposition)?.shortLabel})`}
+              {transposition !== 0 && ` (${COUNTERPOINT_VIZ_TRANSPOSITION_OPTIONS.find(o => o.value === transposition)?.shortLabel})`}
             </text>
             <text x={w - 16} y={22} fontSize="12" fill="#6b7280" textAnchor="end">
               {hasIssues ? `${issues.length} issue${issues.length !== 1 ? 's' : ''}` :
