@@ -46,6 +46,7 @@ import {
   setSequenceBeatRanges,
 } from './utils';
 import { VIZ_COLORS } from './utils/vizConstants';
+import { STRETTO_TRANSPOSITION_OPTIONS } from './utils/constants/transpositionOptions';
 import { MODE_HEADER_SUFFIX, MODE_DEFINITIONS } from './utils/modes';
 import {
   ACCIDENTAL_OPTIONS,
@@ -79,6 +80,12 @@ export default function App() {
   const safeToFixed = (value, digits = 1) => {
     const n = Number(value);
     return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
+  };
+
+  const getStrettoScore = (strettoResult) => {
+    const summary = strettoResult?.dissonanceAnalysis?.summary;
+    const raw = Number(summary?.overallAvgScore ?? summary?.averageScore ?? 0);
+    return Number.isFinite(raw) ? raw : 0;
   };
 
   // Input state
@@ -974,35 +981,6 @@ export default function App() {
             />
           </div>
         </div>
-
-        <div
-          style={{
-            backgroundColor: '#fff',
-            borderRadius: '6px',
-            border: '1px solid #e0e0e0',
-            padding: '12px 16px',
-            marginBottom: '14px',
-          }}
-        >
-          <div style={{ fontSize: '12px', fontWeight: '600', color: '#546e7a', marginBottom: '10px' }}>
-            Countersubject placement
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(170px, 1fr))', gap: '14px' }}>
-            <Select
-              label="CS Position"
-              value={csPos}
-              onChange={setCsPos}
-              options={CS_POSITION_OPTIONS}
-            />
-            <Select
-              label="CS Shift"
-              value={csShift}
-              onChange={setCsShift}
-              options={CS_SHIFT_OPTIONS}
-            />
-          </div>
-        </div>
-
         {/* Analyze Button */}
         <button
           onClick={analyze}
@@ -1064,6 +1042,34 @@ export default function App() {
         {/* Results */}
         {results && (
           <div style={{ marginTop: '18px' }}>
+            <div
+              style={{
+                backgroundColor: '#fff',
+                borderRadius: '6px',
+                border: '1px solid #e0e0e0',
+                padding: '12px 16px',
+                marginBottom: '14px',
+              }}
+            >
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#546e7a', marginBottom: '10px' }}>
+                Countersubject placement (live)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(170px, 1fr))', gap: '14px' }}>
+                <Select
+                  label="CS Position"
+                  value={csPos}
+                  onChange={setCsPos}
+                  options={CS_POSITION_OPTIONS}
+                />
+                <Select
+                  label="CS Shift"
+                  value={csShift}
+                  onChange={setCsShift}
+                  options={CS_SHIFT_OPTIONS}
+                />
+              </div>
+            </div>
+
             {/* Parsed Info Summary */}
             <div
               style={{
@@ -1529,6 +1535,8 @@ export default function App() {
                               }}
                             >
                               {s.distanceFormatted}
+                              {' · '}
+                              Score {getStrettoScore(s) >= 0 ? '+' : ''}{safeToFixed(getStrettoScore(s), 1)}
                             </button>
                           ))}
                           <span style={{ color: '#94a3b8', fontSize: '11px' }}>
@@ -1576,7 +1584,7 @@ export default function App() {
                     const warningCount = s.warningCount || 0;
 
                     // Get the dissonance score for this stretto
-                    const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
+                    const strettoScore = getStrettoScore(s);
 
                     // Gradation: based on score AND issues
                     let bgColor, borderColor, textColor, badge, scoreDisplay;
@@ -1641,7 +1649,7 @@ export default function App() {
                           gap: '6px',
                         }}
                       >
-                        <span>{s.distanceFormatted}</span>
+                        <span title="Entry delay in beats">{s.distanceFormatted}</span>
                         <span style={{
                           fontSize: '10px',
                           fontWeight: '700',
@@ -1650,7 +1658,7 @@ export default function App() {
                           padding: '1px 4px',
                           borderRadius: '3px',
                         }}>
-                          {scoreDisplay}
+                          Score {scoreDisplay}
                         </span>
                         {badge && (
                           <span style={{
@@ -1666,6 +1674,7 @@ export default function App() {
                   })}
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '10px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <span><strong>Distance:</strong> entry delay in beats</span>
                   <span><strong>Score:</strong> dissonance quality</span>
                   <span><span style={{ color: '#166534' }}>✓</span> = clean</span>
                   <span><span style={{ color: '#854d0e' }}>⚠</span> = warnings</span>
@@ -1687,7 +1696,7 @@ export default function App() {
                     }}
                   >
                     {(() => {
-                      const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
+                      const strettoScore = getStrettoScore(s);
                       return (
                         <div
                           style={{
@@ -1701,7 +1710,7 @@ export default function App() {
                             flexWrap: 'wrap',
                           }}
                         >
-                          <span>{s.distanceFormatted}</span>
+                          <span title="Entry delay in beats">{s.distanceFormatted}</span>
                           {/* Individual stretto score - prominently displayed */}
                           <span style={{
                             fontSize: '16px',
