@@ -121,6 +121,7 @@ export default function App() {
 
   // Global highlight state - used for clicking issues/items to highlight in visualizations
   const [highlightedItem, setHighlightedItem] = useState(null);
+  const [selectedScoreCategory, setSelectedScoreCategory] = useState(null);
 
   // Sequence highlight state - for highlighting sequence ranges in piano roll
   const [activeSequenceVoice, setActiveSequenceVoice] = useState(null);
@@ -147,6 +148,12 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [csPos, csShift]);
+
+
+  const handleIssueHighlight = (item) => {
+    setHighlightedItem(item?.onset !== undefined ? item : null);
+    setSelectedScoreCategory(item?.scoreCategory || null);
+  };
 
   // Helper: prepend ABC headers if not already present
   const prependABCHeaders = (abc, key, mode, noteLength, timeSig, modifiers = []) => {
@@ -496,7 +503,7 @@ export default function App() {
           doubleCounterpoint: res.cs2DoubleCounterpoint,
           rhythmicComplementarity: res.cs2RhythmicComplementarity,
           contourIndependence: res.cs2ContourIndependence,
-          transpositionStabilitySource: res.cs2AnswerDoubleCounterpoint,
+          transpositionStabilitySource: testModulatoryRobustness(subject, shiftedCs2, formatter),
           subjectNotes: res.subject,
         }));
       }
@@ -511,7 +518,7 @@ export default function App() {
           doubleCounterpoint: res.subject2Cs1DoubleCounterpoint,
           rhythmicComplementarity: testRhythmicComplementarity(secondSubject, shiftedCs, meter),
           contourIndependence: testContourIndependence(secondSubject, shiftedCs, formatter),
-          transpositionStabilitySource: testDoubleCounterpoint(answerNotes, shiftedCs, formatter),
+          transpositionStabilitySource: testModulatoryRobustness(secondSubject, shiftedCs, formatter),
           subjectNotes: secondSubject,
         }));
       }
@@ -526,7 +533,7 @@ export default function App() {
           doubleCounterpoint: res.subject2Cs2DoubleCounterpoint,
           rhythmicComplementarity: testRhythmicComplementarity(secondSubject, shiftedCs2, meter),
           contourIndependence: testContourIndependence(secondSubject, shiftedCs2, formatter),
-          transpositionStabilitySource: testDoubleCounterpoint(answerNotes, shiftedCs2, formatter),
+          transpositionStabilitySource: testModulatoryRobustness(secondSubject, shiftedCs2, formatter),
           subjectNotes: secondSubject,
         }));
       }
@@ -1101,12 +1108,13 @@ export default function App() {
                 const nextProfile = scoreProfiles.find((p) => p.key === profileKey);
                 if (nextProfile) setScoreResult(nextProfile.score);
               }}
+              selectedCategory={selectedScoreCategory}
             />
 
             {/* Issues Summary - Show problems first */}
             <IssuesSummary
               results={results}
-              onHighlight={setHighlightedItem}
+              onHighlight={handleIssueHighlight}
               highlightedItem={highlightedItem}
             />
 
@@ -1246,6 +1254,7 @@ export default function App() {
                   const endNote = notes[seq.endNote - 1];
                   const endBeat = endNote ? endNote.onset + endNote.duration : startBeat;
                   setHighlightedItem({ onset: startBeat, endOnset: endBeat, type: 'sequence', voice: voiceKey });
+                  setSelectedScoreCategory(null);
                 }
               };
 

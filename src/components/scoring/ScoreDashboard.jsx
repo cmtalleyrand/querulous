@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScoreGauge } from './ScoreGauge';
 import { ScoreBar } from './ScoreBar';
 import { getScoreSummary } from '../../utils/scoring';
@@ -13,10 +13,18 @@ export function ScoreDashboard({
   scoreProfiles = [],
   selectedScoreProfile,
   onSelectScoreProfile,
+  selectedCategory = null,
 }) {
   const [showDetails, setShowDetails] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
   const categoryRefs = useRef({});
+
+
+  useEffect(() => {
+    if (!selectedCategory) return;
+    setShowDetails(true);
+    setExpandedCategory(selectedCategory);
+  }, [selectedCategory]);
 
   if (!scoreResult) return null;
 

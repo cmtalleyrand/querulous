@@ -13,63 +13,54 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
 
   if (!results) return null;
 
-  const withAnchors = (item, categoryName, rowType, fallbackIndex) => ({
-    ...item,
-    sourceCategory: item.sourceCategory ?? categoryName,
-    sourceType: item.sourceType ?? rowType,
-    sourceId: item.sourceId ?? item.id ?? null,
-    sourceIndex: item.sourceIndex ?? item.index ?? fallbackIndex,
-  });
-
-  const getUndrillableReason = (item) => {
-    if (item.onset === undefined) return 'missing onset';
-    return null;
-  };
-
   // Helper to handle item clicks
   const handleItemClick = (item, categoryName) => {
-    const undrillableReason = getUndrillableReason(item);
-    if (onHighlight && !undrillableReason) {
-      onHighlight({
-        onset: item.onset,
-        type: categoryName,
-        description: item.description,
-        sourceCategory: item.sourceCategory,
-        sourceType: item.sourceType,
-        sourceId: item.sourceId,
-        sourceIndex: item.sourceIndex,
-      });
-    }
+    if (!onHighlight) return;
+
+    const hasAnchor = item.onset !== undefined || item.voice !== undefined || item.index !== undefined || item.id !== undefined || item.scoreCategory;
+    if (!hasAnchor) return;
+
+    onHighlight({
+      type: categoryName,
+      description: item.description,
+      ...(item.onset !== undefined ? { onset: item.onset } : {}),
+      ...(item.voice !== undefined ? { voice: item.voice } : {}),
+      ...(item.index !== undefined ? { index: item.index } : {}),
+      ...(item.id !== undefined ? { id: item.id } : {}),
+      ...(item.scoreCategory ? { scoreCategory: item.scoreCategory } : {}),
+    });
   };
 
   // Check if an item is currently highlighted
   const isHighlighted = (item) => {
-    if (!highlightedItem || item.onset === undefined) return false;
-
-    const onsetMatch = Math.abs(highlightedItem.onset - item.onset) < 0.01;
-    const categoryMatch = !highlightedItem.sourceCategory || !item.sourceCategory || highlightedItem.sourceCategory === item.sourceCategory;
-    const idMatch = highlightedItem.sourceId == null || item.sourceId == null || highlightedItem.sourceId === item.sourceId;
-    const indexMatch = highlightedItem.sourceIndex == null || item.sourceIndex == null || highlightedItem.sourceIndex === item.sourceIndex;
-
-    return onsetMatch && categoryMatch && idMatch && indexMatch;
+    if (!highlightedItem) return false;
+    if (item.id && highlightedItem.id) return item.id === highlightedItem.id;
+    if (item.onset === undefined || highlightedItem.onset === undefined) return false;
+    return Math.abs(highlightedItem.onset - item.onset) < 0.01;
   };
+
+
+  const withCategoryAnchor = (items, scoreCategory) =>
+    items.map((item, index) => ({
+      ...item,
+      ...(item.scoreCategory ? {} : { scoreCategory }),
+      ...(item.id || item.onset !== undefined ? {} : {
+        id: `${scoreCategory}-${(item.description || 'item').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || index}`,
+      }),
+    }));
 
   // Collect all issues from various analyses
   const categories = [];
 
   // Harmonic issues
   if (results.harmonicImplication?.observations) {
-    const issues = results.harmonicImplication.observations
-      .filter(o => o.type === 'issue')
-      .map((o, i) => withAnchors(o, 'Harmonic Implication', 'issue', i));
-    const warnings = results.harmonicImplication.observations
-      .filter(o => o.type === 'consideration')
-      .map((o, i) => withAnchors(o, 'Harmonic Implication', 'warning', i));
+    const issues = results.harmonicImplication.observations.filter(o => o.type === 'issue');
+    const warnings = results.harmonicImplication.observations.filter(o => o.type === 'consideration');
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Harmonic Implication',
-        issues,
-        warnings,
+        issues: withCategoryAnchor(issues, 'transpositionStability'),
+        warnings: withCategoryAnchor(warnings, 'transpositionStability'),
         icon: '🎹',
       });
     }
@@ -77,17 +68,13 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
 
   // Tonal answer issues
   if (results.tonalAnswer?.observations) {
-    const issues = results.tonalAnswer.observations
-      .filter(o => o.type === 'issue')
-      .map((o, i) => withAnchors(o, 'Tonal Answer', 'issue', i));
-    const warnings = results.tonalAnswer.observations
-      .filter(o => o.type === 'consideration')
-      .map((o, i) => withAnchors(o, 'Tonal Answer', 'warning', i));
+    const issues = results.tonalAnswer.observations.filter(o => o.type === 'issue');
+    const warnings = results.tonalAnswer.observations.filter(o => o.type === 'consideration');
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Tonal Answer',
-        issues,
-        warnings,
+        issues: withCategoryAnchor(issues, 'transpositionStability'),
+        warnings: withCategoryAnchor(warnings, 'transpositionStability'),
         icon: '↗️',
       });
     }
@@ -101,7 +88,11 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
       categories.push({
         name: 'Stretto Viability',
         issues: [],
-        warnings: [withAnchors({ description: 'No viable stretto found at any transposition or distance' }, 'Stretto Viability', 'warning', 0)],
+        warnings: [{
+          description: 'No viable stretto found at any transposition or distance',
+          scoreCategory: 'strettoPotential',
+          id: 'stretto-no-viable',
+        }],
         icon: '🎼',
       });
     }
@@ -115,25 +106,29 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
     // Show each inverted position issue separately
     if (results.doubleCounterpoint.inverted?.issues?.length > 0) {
       for (const issue of results.doubleCounterpoint.inverted.issues) {
-        issues.push(withAnchors({
+        issues.push({
           description: `Inverted: ${issue.description || issue}`,
-          onset: issue.onset,
-        }, 'Invertible Counterpoint', 'issue', issues.length));
+          ...(issue.onset !== undefined ? { onset: issue.onset } : {}),
+          ...(issue.voice !== undefined ? { voice: issue.voice } : {}),
+          ...(issue.index !== undefined ? { index: issue.index } : {}),
+          ...(issue.id !== undefined ? { id: issue.id } : {}),
+          scoreCategory: issue.scoreCategory || 'invertibility',
+        });
       }
     }
 
     if (results.doubleCounterpoint.observations) {
       const obsIssues = results.doubleCounterpoint.observations.filter(o => o.type === 'issue');
       const obsWarnings = results.doubleCounterpoint.observations.filter(o => o.type === 'consideration');
-      issues.push(...obsIssues.map((o, i) => withAnchors(o, 'Invertible Counterpoint', 'issue', i)));
-      warnings.push(...obsWarnings.map((o, i) => withAnchors(o, 'Invertible Counterpoint', 'warning', i)));
+      issues.push(...withCategoryAnchor(obsIssues, 'invertibility'));
+      warnings.push(...withCategoryAnchor(obsWarnings, 'invertibility'));
     }
 
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Invertible Counterpoint',
-        issues,
-        warnings,
+        issues: withCategoryAnchor(issues, 'invertibility'),
+        warnings: withCategoryAnchor(warnings, 'invertibility'),
         icon: '🔄',
       });
     }
@@ -149,7 +144,7 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
       categories.push({
         name: 'Contour Independence',
         issues: [],
-        warnings: warnings.map((w, i) => withAnchors({ description: w.description, onset: w.onset }, 'Contour Independence', 'warning', i)),
+        warnings: withCategoryAnchor(warnings, 'voiceIndependence'),
         icon: '📈',
       });
     }
@@ -157,17 +152,13 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
 
   // Rhythmic complementarity issues
   if (results.rhythmicComplementarity?.observations) {
-    const issues = results.rhythmicComplementarity.observations
-      .filter(o => o.type === 'issue')
-      .map((o, i) => withAnchors(o, 'Rhythmic Complementarity', 'issue', i));
-    const warnings = results.rhythmicComplementarity.observations
-      .filter(o => o.type === 'consideration')
-      .map((o, i) => withAnchors(o, 'Rhythmic Complementarity', 'warning', i));
+    const issues = results.rhythmicComplementarity.observations.filter(o => o.type === 'issue');
+    const warnings = results.rhythmicComplementarity.observations.filter(o => o.type === 'consideration');
     if (issues.length > 0 || warnings.length > 0) {
       categories.push({
         name: 'Rhythmic Complementarity',
-        issues,
-        warnings,
+        issues: withCategoryAnchor(issues, 'rhythmicInterplay'),
+        warnings: withCategoryAnchor(warnings, 'rhythmicInterplay'),
         icon: '🥁',
       });
     }
@@ -303,13 +294,12 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
                   </div>
                 )}
                 {cat.issues.map((issue, i) => {
-                  const undrillableReason = getUndrillableReason(issue);
-                  const isDrillable = !undrillableReason;
+                  const canDrillDown = issue.onset !== undefined || issue.voice !== undefined || issue.index !== undefined || issue.id !== undefined || issue.scoreCategory;
                   const highlighted = isHighlighted(issue);
                   return (
                     <div
                       key={`issue-${i}`}
-                      onClick={isDrillable ? () => handleItemClick(issue, cat.name) : undefined}
+                      onClick={canDrillDown ? () => handleItemClick(issue, cat.name) : undefined}
                       style={{
                         fontSize: '12px',
                         color: '#dc2626',
@@ -317,36 +307,29 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
                         borderLeft: highlighted ? '4px solid #dc2626' : '2px solid #fca5a5',
                         marginBottom: '4px',
                         borderRadius: '0 4px 4px 0',
-                        backgroundColor: highlighted ? '#fef2f2' : isDrillable ? '#fff' : '#fff7f7',
-                        cursor: isDrillable ? 'pointer' : 'default',
+                        backgroundColor: highlighted ? '#fef2f2' : canDrillDown ? '#fff' : 'transparent',
+                        cursor: canDrillDown ? 'pointer' : 'default',
                         transition: 'all 0.15s',
-                        opacity: isDrillable ? 1 : 0.9,
                       }}
-                      onMouseEnter={isDrillable ? (e) => e.currentTarget.style.backgroundColor = '#fef2f2' : undefined}
-                      onMouseLeave={isDrillable && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
+                      onMouseEnter={canDrillDown ? (e) => e.currentTarget.style.backgroundColor = '#fef2f2' : undefined}
+                      onMouseLeave={canDrillDown && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
                     >
-                      {isDrillable && (
+                      {canDrillDown && (
                         <span style={{ marginRight: '6px', opacity: 0.6 }}>
                           ▸
                         </span>
                       )}
                       {issue.description}
-                      {!isDrillable && (
-                        <span style={{ marginLeft: '8px', fontSize: '11px', color: '#991b1b', opacity: 0.8 }}>
-                          (not drillable: {undrillableReason})
-                        </span>
-                      )}
                     </div>
                   );
                 })}
                 {cat.warnings.map((warning, i) => {
-                  const undrillableReason = getUndrillableReason(warning);
-                  const isDrillable = !undrillableReason;
+                  const canDrillDown = warning.onset !== undefined || warning.voice !== undefined || warning.index !== undefined || warning.id !== undefined || warning.scoreCategory;
                   const highlighted = isHighlighted(warning);
                   return (
                     <div
                       key={`warn-${i}`}
-                      onClick={isDrillable ? () => handleItemClick(warning, cat.name) : undefined}
+                      onClick={canDrillDown ? () => handleItemClick(warning, cat.name) : undefined}
                       style={{
                         fontSize: '12px',
                         color: '#92400e',
@@ -354,25 +337,19 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
                         borderLeft: highlighted ? '4px solid #f59e0b' : '2px solid #fcd34d',
                         marginBottom: '4px',
                         borderRadius: '0 4px 4px 0',
-                        backgroundColor: highlighted ? '#fffbeb' : isDrillable ? '#fff' : '#fffcf2',
-                        cursor: isDrillable ? 'pointer' : 'default',
+                        backgroundColor: highlighted ? '#fffbeb' : canDrillDown ? '#fff' : 'transparent',
+                        cursor: canDrillDown ? 'pointer' : 'default',
                         transition: 'all 0.15s',
-                        opacity: isDrillable ? 1 : 0.9,
                       }}
-                      onMouseEnter={isDrillable ? (e) => e.currentTarget.style.backgroundColor = '#fffbeb' : undefined}
-                      onMouseLeave={isDrillable && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
+                      onMouseEnter={canDrillDown ? (e) => e.currentTarget.style.backgroundColor = '#fffbeb' : undefined}
+                      onMouseLeave={canDrillDown && !highlighted ? (e) => e.currentTarget.style.backgroundColor = '#fff' : undefined}
                     >
-                      {isDrillable && (
+                      {canDrillDown && (
                         <span style={{ marginRight: '6px', opacity: 0.6 }}>
                           ▸
                         </span>
                       )}
                       {warning.description}
-                      {!isDrillable && (
-                        <span style={{ marginLeft: '8px', fontSize: '11px', color: '#92400e', opacity: 0.8 }}>
-                          (not drillable: {undrillableReason})
-                        </span>
-                      )}
                     </div>
                   );
                 })}
