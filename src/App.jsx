@@ -19,7 +19,6 @@ import {
   AVAILABLE_MODES,
   NOTE_LENGTH_OPTIONS,
   STRETTO_STEP_OPTIONS,
-  STRETTO_TRANSPOSITION_OPTIONS,
   CS_POSITION_OPTIONS,
   TIME_SIGNATURE_OPTIONS,
   BeatFormatter,
@@ -48,6 +47,7 @@ import {
   setSequenceBeatRanges,
 } from './utils';
 import { VIZ_COLORS } from './utils/vizConstants';
+import { STRETTO_TRANSPOSITION_OPTIONS } from './utils/constants/transpositionOptions';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
@@ -58,6 +58,14 @@ const DEFAULT_CS = `e2 d2 e2 f2 | g2 f2 g2 a2 | g2 f2 e2 g2 | f2 e2 f2 g2 |`;
 const DEFAULT_CS2 = `c2 B2 c2 d2 | e2 d2 e2 f2 | e2 d2 c2 e2 | d2 c2 d2 e2 |`;
 const DEFAULT_ANSWER = `G8 | =G4 B4 | ^A8 |`;
 
+const CS_SHIFT_OPTIONS = [
+  { value: '24', label: '+2 octaves' },
+  { value: '12', label: '+1 octave' },
+  { value: '0', label: 'Unshifted' },
+  { value: '-12', label: '-1 octave' },
+  { value: '-24', label: '-2 octaves' },
+];
+
 /**
  * Main Fugue Analyzer Application
  */
@@ -65,6 +73,12 @@ export default function App() {
   const safeToFixed = (value, digits = 1) => {
     const n = Number(value);
     return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
+  };
+
+  const getStrettoScore = (strettoResult) => {
+    const summary = strettoResult?.dissonanceAnalysis?.summary;
+    const raw = Number(summary?.overallAvgScore ?? summary?.averageScore ?? 0);
+    return Number.isFinite(raw) ? raw : 0;
   };
 
   // Input state
@@ -616,20 +630,6 @@ export default function App() {
 
           {/* Spelling Key Option */}
           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eee' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(170px, 1fr))', gap: '14px', marginBottom: '12px' }}>
-              <Select
-                label="CS Position"
-                value={csPos}
-                onChange={setCsPos}
-                options={CS_POSITION_OPTIONS}
-              />
-              <Select
-                label="CS Shift"
-                value={csShift}
-                onChange={setCsShift}
-                options={STRETTO_TRANSPOSITION_OPTIONS}
-              />
-            </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -965,7 +965,6 @@ export default function App() {
             />
           </div>
         </div>
-
         {/* Analyze Button */}
         <button
           onClick={analyze}
@@ -1027,6 +1026,34 @@ export default function App() {
         {/* Results */}
         {results && (
           <div style={{ marginTop: '18px' }}>
+            <div
+              style={{
+                backgroundColor: '#fff',
+                borderRadius: '6px',
+                border: '1px solid #e0e0e0',
+                padding: '12px 16px',
+                marginBottom: '14px',
+              }}
+            >
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#546e7a', marginBottom: '10px' }}>
+                Countersubject placement (live)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(170px, 1fr))', gap: '14px' }}>
+                <Select
+                  label="CS Position"
+                  value={csPos}
+                  onChange={setCsPos}
+                  options={CS_POSITION_OPTIONS}
+                />
+                <Select
+                  label="CS Shift"
+                  value={csShift}
+                  onChange={setCsShift}
+                  options={CS_SHIFT_OPTIONS}
+                />
+              </div>
+            </div>
+
             {/* Parsed Info Summary */}
             <div
               style={{
@@ -1492,6 +1519,8 @@ export default function App() {
                               }}
                             >
                               {s.distanceFormatted}
+                              {' · '}
+                              {getStrettoScore(s) >= 0 ? '+' : ''}{safeToFixed(getStrettoScore(s), 1)}
                             </button>
                           ))}
                           <span style={{ color: '#94a3b8', fontSize: '11px' }}>
@@ -1540,7 +1569,7 @@ export default function App() {
                   </label>
                 </div>
                 <span style={{ fontSize: '11px', color: '#94a3b8', paddingBottom: '8px' }}>
-                  Testing at {strettoStep}-beat intervals
+                  Testing all transpositions at {strettoStep}-beat intervals
                 </span>
               </div>
 
@@ -1556,7 +1585,7 @@ export default function App() {
                     const warningCount = s.warningCount || 0;
 
                     // Get the dissonance score for this stretto
-                    const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
+                    const strettoScore = getStrettoScore(s);
 
                     // Gradation: based on score AND issues
                     let bgColor, borderColor, textColor, badge, scoreDisplay;
@@ -1646,7 +1675,6 @@ export default function App() {
                   })}
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '10px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <span><strong>Score:</strong> dissonance quality</span>
                   <span><span style={{ color: '#166534' }}>✓</span> = clean</span>
                   <span><span style={{ color: '#854d0e' }}>⚠</span> = warnings</span>
                   <span style={{ color: '#c2410c' }}>numbers = issue count</span>
@@ -1667,7 +1695,7 @@ export default function App() {
                     }}
                   >
                     {(() => {
-                      const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
+                      const strettoScore = getStrettoScore(s);
                       return (
                         <div
                           style={{
@@ -1692,7 +1720,7 @@ export default function App() {
                             color: strettoScore >= 0.5 ? '#16a34a' : strettoScore >= 0 ? '#ca8a04' : '#dc2626',
                             border: `1px solid ${strettoScore >= 0.5 ? '#86efac' : strettoScore >= 0 ? '#fde047' : '#fca5a5'}`,
                           }}>
-                            Score: {strettoScore >= 0 ? '+' : ''}{safeToFixed(strettoScore, 2)}
+                            {strettoScore >= 0 ? '+' : ''}{safeToFixed(strettoScore, 2)}
                           </span>
                           <span style={{
                             fontSize: '11px',
