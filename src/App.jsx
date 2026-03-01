@@ -75,6 +75,13 @@ export default function App() {
     return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
   };
 
+  const getStrettoScore = (strettoResult) => {
+    const summary = strettoResult?.dissonanceAnalysis?.summary;
+    const raw = Number(summary?.overallAvgScore ?? summary?.averageScore ?? 0);
+    const bounded = Math.max(-1, Math.min(1, raw));
+    return Number.isFinite(bounded) ? bounded : 0;
+  };
+
   // Input state
   const [subjectInput, setSubjectInput] = useState(DEFAULT_SUBJECT);
   const [subject2Input, setSubject2Input] = useState('');
@@ -1512,9 +1519,9 @@ export default function App() {
                                 color: s.clean ? '#166534' : '#854d0e',
                               }}
                             >
-                              Delay {s.distanceFormatted}
+                              {s.distanceFormatted}
                               {' · '}
-                              Score {Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0) >= 0 ? '+' : ''}{safeToFixed(Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0), 1)}
+                              Score {getStrettoScore(s) >= 0 ? '+' : ''}{safeToFixed(getStrettoScore(s), 1)}
                             </button>
                           ))}
                           <span style={{ color: '#94a3b8', fontSize: '11px' }}>
@@ -1579,7 +1586,7 @@ export default function App() {
                     const warningCount = s.warningCount || 0;
 
                     // Get the dissonance score for this stretto
-                    const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
+                    const strettoScore = getStrettoScore(s);
 
                     // Gradation: based on score AND issues
                     let bgColor, borderColor, textColor, badge, scoreDisplay;
@@ -1644,7 +1651,7 @@ export default function App() {
                           gap: '6px',
                         }}
                       >
-                        <span title="Entry delay in beats (this is not a score)">Delay {s.distanceFormatted}</span>
+                        <span title="Entry delay in beats">{s.distanceFormatted}</span>
                         <span style={{
                           fontSize: '10px',
                           fontWeight: '700',
@@ -1669,7 +1676,7 @@ export default function App() {
                   })}
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '10px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <span><strong>Delay:</strong> entry delay in beats (not score)</span>
+                  <span><strong>Distance:</strong> entry delay in beats</span>
                   <span><strong>Score:</strong> dissonance quality</span>
                   <span><span style={{ color: '#166534' }}>✓</span> = clean</span>
                   <span><span style={{ color: '#854d0e' }}>⚠</span> = warnings</span>
@@ -1691,7 +1698,7 @@ export default function App() {
                     }}
                   >
                     {(() => {
-                      const strettoScore = Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0);
+                      const strettoScore = getStrettoScore(s);
                       return (
                         <div
                           style={{
@@ -1705,7 +1712,7 @@ export default function App() {
                             flexWrap: 'wrap',
                           }}
                         >
-                          <span title="Entry delay in beats (not score)">Delay: {s.distanceFormatted}</span>
+                          <span title="Entry delay in beats">{s.distanceFormatted}</span>
                           {/* Individual stretto score - prominently displayed */}
                           <span style={{
                             fontSize: '16px',
