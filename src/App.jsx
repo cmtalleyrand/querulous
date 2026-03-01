@@ -47,6 +47,7 @@ import {
   setSequenceBeatRanges,
 } from './utils';
 import { VIZ_COLORS } from './utils/vizConstants';
+import { STRETTO_TRANSPOSITION_OPTIONS } from './utils/constants/transpositionOptions';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
@@ -1526,6 +1527,23 @@ export default function App() {
 
               {/* Settings row */}
               <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', alignItems: 'flex-end' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '10px', color: '#546e7a', marginBottom: '4px' }}>
+                    Transposition
+                  </label>
+                  <select
+                    value={strettoOctave}
+                    onChange={(e) => {
+                      setStrettoOctave(e.target.value);
+                      setSelectedStretto(null);
+                    }}
+                    style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '12px' }}
+                  >
+                    {STRETTO_TRANSPOSITION_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#37474f', cursor: 'pointer' }}>
                     <input
