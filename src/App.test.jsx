@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import App from './App';
+import { AVAILABLE_MODES } from './utils/modes';
 
 const SUBJECT = `K: Cm
 L: 1/16
@@ -35,6 +36,59 @@ describe('App analyze flow', () => {
     expect(
       screen.queryByText(/Cannot read properties of undefined \(reading 'toFixed'\)/)
     ).not.toBeInTheDocument();
+  });
+
+
+  it('uses derived non-experimental mode options in both mode dropdowns', () => {
+    render(<App />);
+
+    const expectedLabels = AVAILABLE_MODES.map((mode) => mode.label);
+    const expectedSignature = expectedLabels.join('|');
+
+    const findModeSelect = () => screen
+      .getAllByRole('combobox')
+      .find((select) => Array.from(select.options).map((option) => option.textContent).join('|') === expectedSignature);
+
+    const analysisModeSelect = findModeSelect();
+    expect(analysisModeSelect).toBeDefined();
+
+    const analysisLabels = Array.from(analysisModeSelect.options).map((option) => option.textContent);
+    expect(analysisLabels).toEqual(expectedLabels);
+    expect(analysisLabels).not.toContain('Locrian');
+
+    fireEvent.click(screen.getByLabelText('Use separate spelling key (parse accidentals from a different key signature)'));
+
+    const modeSelects = screen
+      .getAllByRole('combobox')
+      .filter((select) => Array.from(select.options).map((option) => option.textContent).join('|') === expectedSignature);
+
+    expect(modeSelects).toHaveLength(2);
+  });
+
+
+  it('runs analysis successfully with key-signature modifier selections', () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add modifier' }));
+
+    const modifierSelects = screen.getAllByRole('combobox');
+    const accidentalSelect = modifierSelects.find((select) =>
+      Array.from(select.options).some((option) => option.value === '^^')
+    );
+    const noteSelect = modifierSelects.find((select) =>
+      Array.from(select.options).map((option) => option.value).join(',') === 'A,B,C,D,E,F,G'
+    );
+
+    expect(accidentalSelect).toBeDefined();
+    expect(noteSelect).toBeDefined();
+
+    fireEvent.change(accidentalSelect, { target: { value: '^^' } });
+    fireEvent.change(noteSelect, { target: { value: 'C' } });
+
+    const analyzeButton = screen.getByRole('button', { name: 'Analyze' });
+    expect(() => fireEvent.click(analyzeButton)).not.toThrow();
+
+    expect(screen.getByText(/Analysis:/)).toBeInTheDocument();
   });
 
   it('supports second subject input and analyzes answer against countersubject 2', () => {
