@@ -17,7 +17,6 @@ export function UnifiedCounterpointViz({
   defaultVoice1 = 'answer',
   defaultVoice2 = 'cs1',
   defaultTransposition = 0,
-  title = 'Counterpoint Analysis',
 }) {
   const [voice1Key, setVoice1Key] = useState(defaultVoice1);
   const [voice2Key, setVoice2Key] = useState(defaultVoice2);
@@ -164,7 +163,7 @@ export function UnifiedCounterpointViz({
     );
   }
 
-  const { minPitch, maxPitch, maxTime, intervalPoints, beatMap, issues, warnings, avgScore } = analysis;
+  const { minPitch, maxPitch, maxTime, intervalPoints, issues, warnings, avgScore } = analysis;
   const pRange = maxPitch - minPitch;
   const noteHeight = 18;
   const headerHeight = 32;

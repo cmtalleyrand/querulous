@@ -19,6 +19,7 @@ export class BeatFormatter {
     this.meter = meter;
     this.numerator = meter[0];
     this.denominator = meter[1];
+    this.defaultNoteLength = defaultNoteLength;
 
     // Determine if compound meter (6/8, 9/8, 12/8)
     // Note: 3/8 is typically simple, not compound

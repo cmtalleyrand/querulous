@@ -61,6 +61,7 @@ export class Interval {
   }
 
   toString() {
+    if (this.semitones === 6) return 'TT';
     const qualAbbr = { perfect: 'P', major: 'M', minor: 'm', augmented: 'A', diminished: 'd' };
     return `${qualAbbr[this.quality]}${this.class}`;
   }

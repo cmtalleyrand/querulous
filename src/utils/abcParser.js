@@ -1,5 +1,11 @@
 import { ScaleDegree, NoteEvent } from '../types';
 import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants';
+import { MODE_PARSER_TOKEN_TO_MODE } from './modes';
+import {
+  getKeySignatureMap,
+  parseKeyHeaderAccidentalModifier,
+  parseKeySignatureArrayToMap,
+} from './keySignature';
 
 /**
  * Validate ABC notation against time signature
@@ -118,45 +124,36 @@ export function extractABCHeaders(abcText) {
 
     // Parse key signature (K:)
     if (t.startsWith('K:')) {
-      // More flexible regex that handles Maj, Major, minor, m, etc.
-      const km = t.match(
-        /K:\s*([A-Ga-g][#b]?)\s*(maj|major|m|min|minor|dor|dorian|phr|phrygian|lyd|lydian|mix|mixolydian|harm|harmonic|loc|locrian|ion|ionian|aeo|aeolian)?/i
-      );
-      if (km) {
-        key = km[1].charAt(0).toUpperCase() + (km[1].slice(1) || '');
-        if (km[2]) {
-          const x = km[2].toLowerCase();
-          // Check for major indicators first (before checking 'm' for minor)
-          if (x.startsWith('maj') || x.startsWith('ion')) {
-            mode = 'major';
-          } else if (x.startsWith('m') && !x.startsWith('mix') && !x.startsWith('maj')) {
-            mode = 'natural_minor';
-          } else if (x.startsWith('aeo')) {
-            mode = 'natural_minor';
-          } else if (x.startsWith('dor')) {
-            mode = 'dorian';
-          } else if (x.startsWith('phr')) {
-            mode = 'phrygian';
-          } else if (x.startsWith('lyd')) {
-            mode = 'lydian';
-          } else if (x.startsWith('mix')) {
-            mode = 'mixolydian';
-          } else if (x.startsWith('harm')) {
-            mode = 'harmonic_minor';
-          } else if (x.startsWith('loc')) {
-            mode = 'locrian';
-          } else {
-            mode = 'major';
-          }
-        } else {
-          // No mode specified - default to major
-          mode = 'major';
+      const keyBody = t.slice(2).trim();
+      const keyParts = keyBody.split(/\s+/).filter(Boolean);
+      const tonicToken = keyParts.shift();
+
+      if (!tonicToken) continue;
+
+      const tonicMatch = tonicToken.match(/^([A-Ga-g][#b]?)(m)?$/);
+      if (!tonicMatch) continue;
+
+      key = tonicMatch[1].charAt(0).toUpperCase() + (tonicMatch[1].slice(1) || '');
+      mode = tonicMatch[2] ? 'natural_minor' : 'major';
+
+      if (keyParts[0]) {
+        const tokenMode = MODE_PARSER_TOKEN_TO_MODE[keyParts[0].toLowerCase()];
+        if (tokenMode) {
+          mode = tokenMode;
+          keyParts.shift();
         }
       }
+
+      const keySignatureModifiers = keyParts
+        .map(parseKeyHeaderAccidentalModifier)
+        .filter(Boolean);
+      const keySignatureMap = getKeySignatureMap(key, mode, keySignatureModifiers);
+
+      return { key, mode, noteLength, noteLengthFraction, meter, keySignatureModifiers, keySignatureMap };
     }
   }
 
-  return { key, mode, noteLength, noteLengthFraction, meter };
+  return { key, mode, noteLength, noteLengthFraction, meter, keySignatureModifiers: [], keySignatureMap: null };
 }
 
 /**
@@ -203,9 +200,8 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
         defaultNoteLengthFraction = [num, denom];
       }
     } else if (t.startsWith('K:') && !keySignatureOverride) {
-      // Only use K: header for key signature if no override provided
-      const km = t.match(/K:\s*([A-Ga-g][#b]?m?)/);
-      if (km) keySignature = KEY_SIGNATURES[km[1]] || [];
+      const parsedHeader = extractABCHeaders(t);
+      if (parsedHeader.keySignatureMap) keySignature = parsedHeader.keySignatureMap;
     } else if (!t.startsWith('%') && !t.match(/^[A-Z]:/)) {
       noteText += ' ' + t;
     }
@@ -215,7 +211,8 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
   noteText = noteText.replace(/\[.*?\]/g, ' ').replace(/"/g, ' ');
 
   // Determine if key signature uses flats (for display preference)
-  const keyUsesFlats = keySignature.some(s => s.endsWith('b'));
+  const keySignatureMap = Array.isArray(keySignature) ? parseKeySignatureArrayToMap(keySignature) : keySignature;
+  const keyUsesFlats = Object.values(keySignatureMap).some((alteration) => alteration < 0);
 
   const notes = [];
   let currentOnset = 0;
@@ -322,11 +319,9 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
       }
     } else {
       // No explicit accidental - use key signature
-      if (keySignature.includes(base + '#')) pitch += 1;
-      if (keySignature.includes(base + 'b')) {
-        pitch -= 1;
-        usesFlat = true;
-      }
+      const alteration = keySignatureMap[base] || 0;
+      pitch += alteration;
+      if (alteration < 0) usesFlat = true;
     }
 
     // Parse duration
@@ -486,7 +481,7 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
       else if (d.degree === 5 && d.alteration === 0) newPitch = n.pitch + 5;
     }
 
-    const durMatch = n.abcNote.match(/[\d\/]+$/);
+    const durMatch = n.abcNote.match(/[\d/]+$/);
     const noteMeas = Math.floor(n.onset / measDur);
 
     if (noteMeas > measCount && tokens.length > 0) {
@@ -591,7 +586,7 @@ export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNo
       }
     }
 
-    const durMatch = n.abcNote.match(/[\d\/]+$/);
+    const durMatch = n.abcNote.match(/[\d/]+$/);
     const noteMeas = Math.floor(n.onset / measDur);
 
     if (noteMeas > measCount && tokens.length > 0) {
@@ -623,7 +618,6 @@ export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNo
 
   if (line.trim()) body += line;
 
-  const answerLabel = forceReal ? 'Real' : 'Tonal';
   return `K:${key}${modeSuffix}\nL:${lNumDisplay}/${lDenomDisplay}\n${body.trim()}`;
 }
 
