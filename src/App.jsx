@@ -78,8 +78,7 @@ export default function App() {
   const getStrettoScore = (strettoResult) => {
     const summary = strettoResult?.dissonanceAnalysis?.summary;
     const raw = Number(summary?.overallAvgScore ?? summary?.averageScore ?? 0);
-    const bounded = Math.max(-1, Math.min(1, raw));
-    return Number.isFinite(bounded) ? bounded : 0;
+    return Number.isFinite(raw) ? raw : 0;
   };
 
   // Input state
