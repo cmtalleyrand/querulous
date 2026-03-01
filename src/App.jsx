@@ -1512,7 +1512,7 @@ export default function App() {
                                 color: s.clean ? '#166534' : '#854d0e',
                               }}
                             >
-                              {s.distanceFormatted}
+                              Delay {s.distanceFormatted}
                               {' · '}
                               Score {Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0) >= 0 ? '+' : ''}{safeToFixed(Number(s.dissonanceAnalysis?.summary?.averageScore ?? 0), 1)}
                             </button>
@@ -1644,7 +1644,7 @@ export default function App() {
                           gap: '6px',
                         }}
                       >
-                        <span title="Entry delay in beats">{s.distanceFormatted}</span>
+                        <span title="Entry delay in beats (this is not a score)">Delay {s.distanceFormatted}</span>
                         <span style={{
                           fontSize: '10px',
                           fontWeight: '700',
@@ -1669,7 +1669,7 @@ export default function App() {
                   })}
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '10px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <span><strong>Distance:</strong> entry delay in beats</span>
+                  <span><strong>Delay:</strong> entry delay in beats (not score)</span>
                   <span><strong>Score:</strong> dissonance quality</span>
                   <span><span style={{ color: '#166534' }}>✓</span> = clean</span>
                   <span><span style={{ color: '#854d0e' }}>⚠</span> = warnings</span>
@@ -1705,7 +1705,7 @@ export default function App() {
                             flexWrap: 'wrap',
                           }}
                         >
-                          <span>{s.distanceFormatted}</span>
+                          <span title="Entry delay in beats (not score)">Delay: {s.distanceFormatted}</span>
                           {/* Individual stretto score - prominently displayed */}
                           <span style={{
                             fontSize: '16px',
