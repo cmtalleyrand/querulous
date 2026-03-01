@@ -47,14 +47,6 @@ import {
 } from './utils';
 import { VIZ_COLORS } from './utils/vizConstants';
 import { STRETTO_TRANSPOSITION_OPTIONS } from './utils/constants/transpositionOptions';
-import { MODE_HEADER_SUFFIX, MODE_DEFINITIONS } from './utils/modes';
-import {
-  ACCIDENTAL_OPTIONS,
-  NOTE_LETTER_OPTIONS,
-  getKeySignatureMap,
-  keySignatureMapToLegacyArray,
-  serializeKeySignatureModifiers,
-} from './utils/keySignature';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
@@ -1536,7 +1528,7 @@ export default function App() {
                             >
                               {s.distanceFormatted}
                               {' · '}
-                              Score {getStrettoScore(s) >= 0 ? '+' : ''}{safeToFixed(getStrettoScore(s), 1)}
+                              {getStrettoScore(s) >= 0 ? '+' : ''}{safeToFixed(getStrettoScore(s), 1)}
                             </button>
                           ))}
                           <span style={{ color: '#94a3b8', fontSize: '11px' }}>
@@ -1674,8 +1666,6 @@ export default function App() {
                   })}
                 </div>
                 <div style={{ marginTop: '8px', fontSize: '10px', color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <span><strong>Distance:</strong> entry delay in beats</span>
-                  <span><strong>Score:</strong> dissonance quality</span>
                   <span><span style={{ color: '#166534' }}>✓</span> = clean</span>
                   <span><span style={{ color: '#854d0e' }}>⚠</span> = warnings</span>
                   <span style={{ color: '#c2410c' }}>numbers = issue count</span>
@@ -1721,7 +1711,7 @@ export default function App() {
                             color: strettoScore >= 0.5 ? '#16a34a' : strettoScore >= 0 ? '#ca8a04' : '#dc2626',
                             border: `1px solid ${strettoScore >= 0.5 ? '#86efac' : strettoScore >= 0 ? '#fde047' : '#fca5a5'}`,
                           }}>
-                            Score: {strettoScore >= 0 ? '+' : ''}{safeToFixed(strettoScore, 2)}
+                            {strettoScore >= 0 ? '+' : ''}{safeToFixed(strettoScore, 2)}
                           </span>
                           <span style={{
                             fontSize: '11px',
