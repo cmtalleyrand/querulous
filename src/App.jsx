@@ -40,14 +40,19 @@ import {
   testModulatoryRobustness,
   testSequentialPotential,
   calculateOverallScore,
+  MODE_DEFINITIONS,
+  ACCIDENTAL_OPTIONS,
+  NOTE_LETTER_OPTIONS,
+  getKeySignatureMap,
+  keySignatureMapToLegacyArray,
+  MODE_HEADER_SUFFIX,
+  serializeKeySignatureModifiers,
   setP4Treatment,
   setMeter,
   setSequenceRanges,
   setSequenceBeatRanges,
 } from './utils';
 import { VIZ_COLORS } from './utils/vizConstants';
-import { STRETTO_TRANSPOSITION_OPTIONS } from './utils/constants/transpositionOptions';
-import { getKeySignatureMap, keySignatureMapToLegacyArray } from './utils/keySignature';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
