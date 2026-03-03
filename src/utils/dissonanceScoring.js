@@ -781,6 +781,9 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     details.push('Resolved by abandonment (voice dropped out): -0.5');
   }
 
+  // Melodic motion into the next simultaneity (used for rest-resolution semantics)
+  const motion = getMotionType(currSim, nextSim);
+
   // Resolution-after-rest rules:
   // - If ONE voice held through rest and other enters → valid resolution
   // - If BOTH voices have moved since rest → not a true resolution
@@ -791,22 +794,38 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     const v1PhantomLimit = currSim.voice1Note.duration * PENALTY_MULTIPLIERS.HALF;
     const v2PhantomLimit = currSim.voice2Note.duration * PENALTY_MULTIPLIERS.HALF;
 
-    // Check if this is a "both moved after rest" situation (invalid resolution)
-    const v1HadLongRest = v1RestDur > v1PhantomLimit;
-    const v2HadLongRest = v2RestDur > v2PhantomLimit;
+    // Check for long rests before the next simultaneity, per voice.
+    // We only call it an invalid resolution when BOTH voices actually have rests
+    // and both rests exceed their phantom-note limits.
+    const v1HasRest = Boolean(restContext.exitToRest?.v1);
+    const v2HasRest = Boolean(restContext.exitToRest?.v2);
+    const v1HadLongRest = v1HasRest && v1RestDur > v1PhantomLimit;
+    const v2HadLongRest = v2HasRest && v2RestDur > v2PhantomLimit;
 
     if (v1HadLongRest && v2HadLongRest) {
-      // Both voices had long rests - not a valid resolution
-      score -= 1.0;
-      details.push('Invalid resolution (both voices rested then moved): -1.0');
+      if (motion.v1Moved && motion.v2Moved) {
+        // True "both rested then moved" situation: both voices re-enter after long rests and both change pitch.
+        score -= 1.0;
+        details.push(
+          `Invalid resolution (both voices rested then moved: v1 ${v1RestDur.toFixed(2)}>${v1PhantomLimit.toFixed(2)}, v2 ${v2RestDur.toFixed(2)}>${v2PhantomLimit.toFixed(2)}): -1.0`
+        );
+      } else {
+        // Both voices had long rests, but one/both re-entered on same pitch (no melodic move).
+        // Penalize as delayed continuity rather than fully invalid resolution.
+        score -= 0.3;
+        details.push(
+          `Delayed resolution (both voices rested, but not both moved: v1 ${v1RestDur.toFixed(2)}>${v1PhantomLimit.toFixed(2)}, v2 ${v2RestDur.toFixed(2)}>${v2PhantomLimit.toFixed(2)}): -0.3`
+        );
+      }
     } else if (v1HadLongRest || v2HadLongRest) {
       // One voice had long rest but other held - still valid but weaker
       score -= 0.3;
-      details.push('Delayed resolution (one voice rested): -0.3');
+      const restedVoice = v1HadLongRest ? 'v1' : 'v2';
+      const restDur = v1HadLongRest ? v1RestDur : v2RestDur;
+      const phantom = v1HadLongRest ? v1PhantomLimit : v2PhantomLimit;
+      details.push(`Delayed resolution (${restedVoice} rested ${restDur.toFixed(2)}>${phantom.toFixed(2)}): -0.3`);
     }
   }
-
-  const motion = getMotionType(currSim, nextSim);
 
   // Check if either voice's motion is part of a sequence (by onset time)
   const v1InSequence = isOnsetInSequence(currSim.onset, ctx);
