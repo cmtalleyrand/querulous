@@ -37,11 +37,11 @@ export function ScoreDashboard({
         : [],
     },
     interplayRhythm: {
-      title: 'Rhythmic & Voice Interplay',
-      subtitle: 'Rhythmic character here refers to the currently selected subject',
+      title: 'Rhythmic Independence',
+      subtitle: 'Combined rhythmic offset and contour independence, plus subject rhythmic character',
       color: '#5c6bc0',
       categories: hasCountersubject
-        ? ['rhythmicInterplay', 'voiceIndependence', 'rhythmicCharacter']
+        ? ['voiceIndependence', 'rhythmicCharacter']
         : ['rhythmicCharacter'],
     },
     fugal: {

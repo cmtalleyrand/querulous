@@ -85,15 +85,15 @@ export const SCORE_CATEGORIES = {
   },
   rhythmicInterplay: {
     name: 'Rhythmic Interplay',
-    description: 'Degree of rhythmic independence between voices',
+    description: 'Legacy category merged into Rhythmic Independence',
     group: 'combination',
-    weight: 0.8,
+    weight: 0,
     baseline: '50% attack overlap (neutral)',
     factors: ['+15 complementary (low overlap)', '-15 homorhythmic (high overlap)'],
   },
   voiceIndependence: {
-    name: 'Voice Independence',
-    description: 'Differentiation of melodic contours between voices',
+    name: 'Rhythmic Independence',
+    description: 'Combined rhythmic and contour independence between voices',
     group: 'combination',
     weight: 0.9,
     baseline: 'Average motion variety',
@@ -565,9 +565,6 @@ export function calculateInvertibilityScore(result) {
  * - Desirable baseline: 33-66%
  * - Penalize: <20% (shadowing) or >80% (disjointed)
  *
- * Secondary: Strong beat simultaneity
- * - Punish: >90%
- * - Reward: <80%
  */
 export function calculateRhythmicInterplayScore(result) {
   if (!result || result.error) return { score: 0, internal: 0, details: [] };
@@ -576,7 +573,6 @@ export function calculateRhythmicInterplayScore(result) {
   const details = [];
 
   const soloRatio = result.soloOnsetRatio;
-  const strongBeatSim = result.strongBeatSimultaneity;
 
   // Main metric: solo onset ratio
   if (soloRatio !== undefined) {
@@ -598,18 +594,6 @@ export function calculateRhythmicInterplayScore(result) {
     }
   }
 
-  // Secondary metric: strong beat simultaneity
-  if (strongBeatSim !== undefined) {
-    if (strongBeatSim > 0.90) {
-      // Too lockstep on strong beats
-      internal -= 5;
-      details.push({ factor: `${Math.round(strongBeatSim * 100)}% strong beat simultaneity (lockstep)`, impact: -5 });
-    } else if (strongBeatSim < 0.80) {
-      // Good independence on strong beats
-      internal += 5;
-      details.push({ factor: `${Math.round(strongBeatSim * 100)}% strong beat simultaneity (independent)`, impact: +5 });
-    }
-  }
 
   return {
     score: toDisplayScore(internal),
@@ -856,12 +840,19 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
     scores.doubleCounterpoint = invert;
 
     const rhythmInt = calculateRhythmicInterplayScore(results.rhythmicComplementarity);
-    scores.rhythmicInterplay = rhythmInt;
-    scores.rhythmicComplementarity = rhythmInt;
 
     const voiceInd = calculateVoiceIndependenceScore(results.contourIndependence);
-    scores.voiceIndependence = voiceInd;
-    scores.contourIndependence = voiceInd;
+    const combinedVoiceInd = {
+      score: toDisplayScore((voiceInd.internal || 0) + (rhythmInt.internal || 0)),
+      internal: (voiceInd.internal || 0) + (rhythmInt.internal || 0),
+      details: [
+        ...((voiceInd.details || []).map((d) => ({ ...d, factor: `[Contour] ${d.factor}` }))),
+        ...((rhythmInt.details || []).map((d) => ({ ...d, factor: `[Rhythm] ${d.factor}` }))),
+      ],
+    };
+    scores.voiceIndependence = combinedVoiceInd;
+    scores.contourIndependence = combinedVoiceInd;
+    scores.rhythmicComplementarity = rhythmInt;
 
     const transpStab = calculateTranspositionStabilityScore(results.modulatoryRobustness);
     scores.transpositionStability = transpStab;
@@ -875,7 +866,7 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
   // Categories used for scoring
   const scoringKeys = ['rhythmicCharacter', 'strettoPotential'];
   if (hasCountersubject) {
-    scoringKeys.push('invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability');
+    scoringKeys.push('invertibility', 'voiceIndependence', 'transpositionStability');
   }
 
   for (const key of scoringKeys) {
@@ -920,7 +911,7 @@ export function getScoreSummary(scoreResult) {
   // Active category keys (skip deprecated ones)
   const activeKeys = [
     'rhythmicCharacter', 'strettoPotential',
-    'invertibility', 'rhythmicInterplay', 'voiceIndependence', 'transpositionStability'
+    'invertibility', 'voiceIndependence', 'transpositionStability'
   ];
 
   for (const key of activeKeys) {
@@ -964,7 +955,7 @@ function getSuggestion(category) {
     strettoPotential: 'Adjust melodic intervals to improve counterpoint quality when overlapping.',
     invertibility: 'Use more thirds and sixths to maintain quality when inverted.',
     rhythmicInterplay: 'Offset attack points between voices for better independence.',
-    voiceIndependence: 'Add more contrary motion to differentiate voice contours.',
+    voiceIndependence: 'Increase rhythmic offset and contrary motion to better differentiate the voices.',
     transpositionStability: 'Ensure the countersubject works smoothly against the dominant-level answer.',
     // Legacy keys
     tonalDefinition: 'Consider starting on a tonic chord tone and ending on a degree that creates clear harmonic motion.',
