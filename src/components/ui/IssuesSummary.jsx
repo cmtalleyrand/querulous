@@ -139,38 +139,26 @@ export function IssuesSummary({ results, onHighlight, highlightedItem }) {
     }
   }
 
-  // Contour independence issues
-  if (results.contourIndependence?.details) {
-    const warnings = results.contourIndependence.details.filter(d =>
-      d.description?.toLowerCase().includes('parallel') ||
-      d.description?.toLowerCase().includes('consecutive')
-    );
-    if (warnings.length > 0) {
-      categories.push({
-        name: 'Contour Independence',
-        issues: [],
-        warnings: warnings.map((w, i) => withAnchors({ description: w.description, onset: w.onset }, 'Contour Independence', 'warning', i)),
-        icon: '📈',
-      });
-    }
-  }
+  // Rhythmic independence issues (merged rhythmic + contour)
+  const rhythmicIssues = results.rhythmicComplementarity?.observations
+    ?.filter(o => o.type === 'issue')
+    .map((o, i) => withAnchors(o, 'Rhythmic Independence', 'issue', i)) || [];
 
-  // Rhythmic complementarity issues
-  if (results.rhythmicComplementarity?.observations) {
-    const issues = results.rhythmicComplementarity.observations
-      .filter(o => o.type === 'issue')
-      .map((o, i) => withAnchors(o, 'Rhythmic Complementarity', 'issue', i));
-    const warnings = results.rhythmicComplementarity.observations
-      .filter(o => o.type === 'consideration')
-      .map((o, i) => withAnchors(o, 'Rhythmic Complementarity', 'warning', i));
-    if (issues.length > 0 || warnings.length > 0) {
-      categories.push({
-        name: 'Rhythmic Complementarity',
-        issues,
-        warnings,
-        icon: '🥁',
-      });
-    }
+  const rhythmicWarnings = results.rhythmicComplementarity?.observations
+    ?.filter(o => o.type === 'consideration')
+    .map((o, i) => withAnchors(o, 'Rhythmic Independence', 'warning', i)) || [];
+
+  const contourWarnings = results.contourIndependence?.details
+    ?.filter(d => d.description?.toLowerCase().includes('parallel') || d.description?.toLowerCase().includes('consecutive'))
+    .map((w, i) => withAnchors({ description: w.description, onset: w.onset }, 'Rhythmic Independence', 'warning', i)) || [];
+
+  if (rhythmicIssues.length > 0 || rhythmicWarnings.length > 0 || contourWarnings.length > 0) {
+    categories.push({
+      name: 'Rhythmic Independence',
+      issues: rhythmicIssues,
+      warnings: [...rhythmicWarnings, ...contourWarnings],
+      icon: '🥁',
+    });
   }
 
   const totalIssues = categories.reduce((sum, c) => sum + c.issues.length, 0);
