@@ -508,6 +508,46 @@ export function TwoVoiceViz({
     return `${dir}${abs}st`;
   };
 
+  const normalizeDetailText = (detail = '') => detail
+    .replace(/\bV1\b/g, voice1Label)
+    .replace(/\bV2\b/g, voice2Label)
+    .replace('(no resolution)', '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const parseScoreDetail = (detail = '') => {
+    const cleaned = normalizeDetailText(detail);
+    const match = cleaned.match(/^(.*?):\s*([+-]\d+\.?\d*)(.*)?$/);
+    if (!match) return { text: cleaned };
+    return { label: match[1].trim(), value: match[2], suffix: (match[3] || '').trim() };
+  };
+
+  const parseMitigationContributions = (mitigationDetails = []) => {
+    const contributions = { entry: [], exit: [] };
+
+    mitigationDetails.forEach((line) => {
+      const cleaned = normalizeDetailText(line);
+
+      if (cleaned.startsWith('Passing character')) {
+        const bracketMatch = cleaned.match(/\[(.*)\]/);
+        if (!bracketMatch) return;
+        bracketMatch[1].split(',').map(part => part.trim()).forEach((part) => {
+          const parsed = parseScoreDetail(part);
+          const target = (parsed.label || '').toLowerCase().includes('entry') ? 'entry' : 'exit';
+          contributions[target].push(parsed);
+        });
+        return;
+      }
+
+      if (cleaned.startsWith('D→D penalty mitigated')) {
+        const parsed = parseScoreDetail(cleaned);
+        contributions.exit.push(parsed);
+      }
+    });
+
+    return contributions;
+  };
+
   return (
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Score badge */}
@@ -789,6 +829,7 @@ export function TwoVoiceViz({
           consecutiveMitigationCount: pt.consecutiveMitigationCount || 0,
           isChainResolution: pt.isChainResolution, chainLength: pt.chainLength || 0,
         });
+        const mitigationContrib = parseMitigationContributions(pt.mitigationDetails);
         return (
           <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
             {/* Header */}
@@ -848,7 +889,7 @@ export function TwoVoiceViz({
               </div>
             </div>
 
-            <div style={{ padding: '12px 14px' }}>
+            <div style={{ padding: '12px 14px', fontFamily: "Inter, 'Segoe UI', Roboto, sans-serif" }}>
               {/* Motion diagram — full chain flow or single hop */}
               {pt.chainStartOnset !== undefined ? (() => {
                 const chainPts = intervalPoints
@@ -953,7 +994,16 @@ export function TwoVoiceViz({
               )}
 
               {/* Score breakdown */}
-              <div style={{ backgroundColor: '#f8fafc', borderRadius: '8px', padding: '14px', fontSize: '12px' }}>
+              <div data-testid="interval-score-breakdown" style={{ backgroundColor: '#f8fafc', borderRadius: '8px', padding: '14px', fontSize: '12px' }}>
+                {pt.chainStartOnset !== undefined && !pt.isConsonant && (
+                  <div data-testid="chain-score-banner" style={{ marginBottom: '10px', padding: '8px 10px', borderRadius: '6px', backgroundColor: '#eef2ff', border: '1px solid #c7d2fe' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                      <span style={{ color: '#4338ca', fontWeight: '700' }}>Chain score (whole chain)</span>
+                      <span style={{ color: pt.score >= 0 ? '#16a34a' : '#dc2626', fontWeight: '800' }}>{pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}</span>
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#6366f1' }}>Selected note in chain: #{(pt.chainPosition ?? 0) + 1} of {pt.chainLength || 1}</div>
+                  </div>
+                )}
                 <div style={{ fontWeight: '700', marginBottom: '12px', color: '#1e293b', fontSize: '14px',
                   borderBottom: '2px solid #cbd5e1', paddingBottom: '6px' }}>Score Breakdown</div>
 
@@ -969,24 +1019,32 @@ export function TwoVoiceViz({
                           color: pt.entry.score >= 0 ? '#16a34a' : '#dc2626',
                           backgroundColor: pt.entry.score >= 0 ? '#dcfce7' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
-                          Base: {pt.entry.score >= 0 ? '+' : ''}{pt.entry.score.toFixed(2)}
+                          Score: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(2)}
                         </span>
                       </div>
                       {(pt.entry.details || []).map((d, i) => {
-                        const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
+                        const parsed = parseScoreDetail(d);
                         return (
                           <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
                             paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                             <span style={{ color: '#6366f1', marginRight: '6px', fontWeight: '600' }}>•</span>
-                            {match ? (
-                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
+                            {parsed.value ? (
+                              <span>{parsed.label}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(parsed.value) >= 0 ? '#16a34a' : '#dc2626' }}>{parsed.value}</span>{parsed.suffix && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{parsed.suffix}</span>}</span>
                             ) : (
-                              <span>{text}</span>
+                              <span>{parsed.text}</span>
                             )}
                           </div>
                         );
                       })}
+                      {mitigationContrib.entry.length > 0 && (
+                        <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #c4b5fd' }}>
+                          {mitigationContrib.entry.map((item, i) => (
+                            <div key={`entry-mit-${i}`} style={{ fontSize: '10px', color: '#5b21b6', marginBottom: '2px', paddingLeft: '8px' }}>
+                              • Mitigation — {item.label}: <span style={{ fontWeight: '700', color: '#16a34a' }}>{item.value || '+0.00'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {pt.patterns?.length > 0 && (
@@ -1027,50 +1085,33 @@ export function TwoVoiceViz({
                           color: pt.exit.score >= 0 ? '#16a34a' : '#dc2626',
                           backgroundColor: pt.exit.score >= 0 ? '#dcfce7' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
-                          Base: {pt.exit.score >= 0 ? '+' : ''}{pt.exit.score.toFixed(2)}
+                          Score: {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(2)}
                         </span>
                       </div>
                       {(pt.exit.details || []).map((d, i) => {
-                        const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
+                        const parsed = parseScoreDetail(d);
                         return (
                           <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
                             paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                             <span style={{ color: '#059669', marginRight: '6px', fontWeight: '600' }}>•</span>
-                            {match ? (
-                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
+                            {parsed.value ? (
+                              <span>{parsed.label}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(parsed.value) >= 0 ? '#16a34a' : '#dc2626' }}>{parsed.value}</span>{parsed.suffix && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{parsed.suffix}</span>}</span>
                             ) : (
-                              <span>{text}</span>
+                              <span>{parsed.text}</span>
                             )}
                           </div>
                         );
                       })}
-                    </div>
-
-                    {pt.mitigationDetails?.length > 0 && (
-                      <div style={{ marginBottom: '12px', backgroundColor: '#fef9c3',
-                        borderLeft: '3px solid #ca8a04', borderRadius: '4px', padding: '10px' }}>
-                        <div style={{ fontWeight: '700', color: '#92400e', fontSize: '12px',
-                          textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-                          Passing Character Adjustment
-                        </div>
-                        {pt.mitigationDetails.map((d, i) => {
-                          const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                          const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
-                          return (
-                            <div key={i} style={{ fontSize: '11px', color: '#78350f', marginBottom: '2px',
-                              paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
-                              <span style={{ color: '#ca8a04', marginRight: '6px', fontWeight: '600' }}>•</span>
-                              {match ? (
-                                <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
-                              ) : (
-                                <span>{text}</span>
-                              )}
+                      {mitigationContrib.exit.length > 0 && (
+                        <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #86efac' }}>
+                          {mitigationContrib.exit.map((item, i) => (
+                            <div key={`exit-mit-${i}`} style={{ fontSize: '10px', color: '#065f46', marginBottom: '2px', paddingLeft: '8px' }}>
+                              • Mitigation — {item.label}: <span style={{ fontWeight: '700', color: '#16a34a' }}>{item.value || '+0.00'}</span>{item.suffix ? ` ${item.suffix}` : ''}
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     <div style={{ backgroundColor: '#ffffff', border: '2px solid #e2e8f0', borderRadius: '6px', padding: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
