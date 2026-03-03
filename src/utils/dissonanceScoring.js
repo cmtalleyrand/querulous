@@ -662,17 +662,17 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   const v2MelodicInterval = motion.v2Moved ? currSim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
 
   // Note entry leap types for reference (human-readable labels, not raw enum)
-  const _leapLabel = { skip: 'skip (3rd)', perfect_leap: 'P4/P5 leap', large_leap: 'large leap', octave: 'octave leap' };
+  const _leapLabel = { skip: 'm3', perfect_leap: 'P4/P5', large_leap: '6th+', octave: 'P8' };
   if (motion.v1Moved) {
     const mag = getIntervalMagnitude(v1MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
-      details.push(`V1 entered by ${_leapLabel[mag.type] || mag.type} (${Math.abs(v1MelodicInterval)} st)`);
+      details.push(`V1 entered by ${_leapLabel[mag.type] || mag.type}`);
     }
   }
   if (motion.v2Moved) {
     const mag = getIntervalMagnitude(v2MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
-      details.push(`V2 entered by ${_leapLabel[mag.type] || mag.type} (${Math.abs(v2MelodicInterval)} st)`);
+      details.push(`V2 entered by ${_leapLabel[mag.type] || mag.type}`);
     }
   }
 
@@ -771,7 +771,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     } else {
       score = -0.75;
       baseExitComponent = -0.75;
-      details.push('Leads to another dissonance (no resolution): -0.75');
+      details.push('Leads to another dissonance: -0.75');
     }
   }
 
@@ -1813,30 +1813,39 @@ export function analyzeAllDissonances(sims, options = {}) {
       let entryAdj = 0;
       let exitAdj = 0;
       const adjDetails = [];
+      const entryMitigationDetails = [];
+      const exitMitigationDetails = [];
 
       // (a/b) Between-voice entry motion component
       if (entryMotionComp < 0 && bestPassing.mitigation > 0) {
         const mitigated = Math.min(0, entryMotionComp + bestPassing.mitigation);
         entryAdj += mitigated - entryMotionComp;
-        adjDetails.push(`entry motion (${bestPassing.mitigation.toFixed(2)}): +${(mitigated - entryMotionComp).toFixed(2)}`);
+        const adjustment = mitigated - entryMotionComp;
+        adjDetails.push(`entry motion (${bestPassing.mitigation.toFixed(2)}): +${adjustment.toFixed(2)}`);
+        entryMitigationDetails.push(`Passing mitigation (entry motion): +${adjustment.toFixed(2)}`);
       } else if (entryMotionComp > 0 && bestPassing.mitigation > 0) {
         const reduction = Math.min(entryMotionComp, Math.min(0.8, bestPassing.mitigation / 2.5));
         entryAdj -= reduction;
         adjDetails.push(`entry reward reduction: -${reduction.toFixed(2)}`);
+        entryMitigationDetails.push(`Passing mitigation (entry reward reduction): -${reduction.toFixed(2)}`);
       }
 
       // (a) V1 single-voice exit motion penalties
       if (v1ResComp < 0 && v1Passing.mitigation > 0) {
         const mitigated = Math.min(0, v1ResComp + v1Passing.mitigation);
         exitAdj += mitigated - v1ResComp;
-        adjDetails.push(`V1 resolution (${v1Passing.mitigation.toFixed(2)}): +${(mitigated - v1ResComp).toFixed(2)}`);
+        const adjustment = mitigated - v1ResComp;
+        adjDetails.push(`V1 resolution (${v1Passing.mitigation.toFixed(2)}): +${adjustment.toFixed(2)}`);
+        exitMitigationDetails.push(`Passing mitigation (V1 resolution): +${adjustment.toFixed(2)}`);
       }
 
       // (a) V2 single-voice exit motion penalties
       if (v2ResComp < 0 && v2Passing.mitigation > 0) {
         const mitigated = Math.min(0, v2ResComp + v2Passing.mitigation);
         exitAdj += mitigated - v2ResComp;
-        adjDetails.push(`V2 resolution (${v2Passing.mitigation.toFixed(2)}): +${(mitigated - v2ResComp).toFixed(2)}`);
+        const adjustment = mitigated - v2ResComp;
+        adjDetails.push(`V2 resolution (${v2Passing.mitigation.toFixed(2)}): +${adjustment.toFixed(2)}`);
+        exitMitigationDetails.push(`Passing mitigation (V2 resolution): +${adjustment.toFixed(2)}`);
       }
 
       // (c) D→D penalty — only for consecutive members (middle of 3+ chains)
@@ -1845,7 +1854,9 @@ export function analyzeAllDissonances(sims, options = {}) {
         if (ddComp < 0 && bestPassing.mitigation > 0) {
           const mitigated = Math.min(0, ddComp + bestPassing.mitigation);
           exitAdj += mitigated - ddComp;
-          adjDetails.push(`D→D (own exit, ${bestPassing.mitigation.toFixed(2)}): +${(mitigated - ddComp).toFixed(2)}`);
+          const adjustment = mitigated - ddComp;
+          adjDetails.push(`D→D (own exit, ${bestPassing.mitigation.toFixed(2)}): +${adjustment.toFixed(2)}`);
+          exitMitigationDetails.push(`Passing mitigation (D→D exit): +${adjustment.toFixed(2)}`);
         }
       }
 
@@ -1855,6 +1866,18 @@ export function analyzeAllDissonances(sims, options = {}) {
         results[i].entryScore += entryAdj;
         results[i].exitScore += exitAdj;
         results[i].passingCharacterAdj = totalAdj;
+
+        if (!results[i].entry) results[i].entry = { details: [] };
+        if (!results[i].entry.details) results[i].entry.details = [];
+        if (!results[i].exit) results[i].exit = { details: [] };
+        if (!results[i].exit.details) results[i].exit.details = [];
+
+        if (entryMitigationDetails.length > 0) {
+          results[i].entry.details.push(...entryMitigationDetails);
+        }
+        if (exitMitigationDetails.length > 0) {
+          results[i].exit.details.push(...exitMitigationDetails);
+        }
         const label = bestPassing.isPassing ? 'passing motion' : 'partial passing';
         results[i].details.push(
           `Passing character (${label}): +${totalAdj.toFixed(2)} [${adjDetails.join(', ')}]`
@@ -1877,6 +1900,9 @@ export function analyzeAllDissonances(sims, options = {}) {
             results[i].exitScore += adj;
             results[i].passingCharacterAdj = (results[i].passingCharacterAdj || 0) + adj;
             const label = nextBestPassing.isPassing ? 'next passing' : 'next partial passing';
+            if (!results[i].exit) results[i].exit = { details: [] };
+            if (!results[i].exit.details) results[i].exit.details = [];
+            results[i].exit.details.push(`Passing mitigation (D→D exit): +${adj.toFixed(2)}`);
             results[i].details.push(
               `D→D penalty mitigated (${label}, ${nextBestPassing.mitigation.toFixed(2)}): +${adj.toFixed(2)}`
             );
