@@ -7,6 +7,47 @@ import {
   parseKeySignatureArrayToMap,
 } from './keySignature';
 
+
+function abcDurationSuffixFromQuarters(durationInQuarters, defaultNoteLength) {
+  const multiplier = (durationInQuarters / 4) / defaultNoteLength;
+  if (Math.abs(multiplier - 1) < 1e-9) return '';
+
+  const maxDenominator = 64;
+  let bestNumerator = null;
+  let bestDenominator = null;
+  let bestError = Infinity;
+
+  for (let d = 1; d <= maxDenominator; d++) {
+    const n = Math.round(multiplier * d);
+    const error = Math.abs(multiplier - n / d);
+    if (error < bestError) {
+      bestNumerator = n;
+      bestDenominator = d;
+      bestError = error;
+    }
+    if (error < 1e-9) break;
+  }
+
+  const gcd = (a, b) => {
+    let x = Math.abs(a);
+    let y = Math.abs(b);
+    while (y !== 0) {
+      const t = y;
+      y = x % y;
+      x = t;
+    }
+    return x || 1;
+  };
+
+  const divisor = gcd(bestNumerator, bestDenominator);
+  const numerator = bestNumerator / divisor;
+  const denominator = bestDenominator / divisor;
+
+  if (denominator === 1) return `${numerator}`;
+  if (numerator === 1) return `/${denominator}`;
+  return `${numerator}/${denominator}`;
+}
+
 /**
  * Validate ABC notation against time signature
  * Returns array of warnings about measure duration mismatches
@@ -217,45 +258,7 @@ export function parseABC(abcText, tonic, mode, defaultNoteLengthOverride = null,
   const notes = [];
   let currentOnset = 0;
 
-  const gcd = (a, b) => {
-    let x = Math.abs(a);
-    let y = Math.abs(b);
-    while (y !== 0) {
-      const t = y;
-      y = x % y;
-      x = t;
-    }
-    return x || 1;
-  };
-
-  const durationToABCSuffix = (durationInQuarters) => {
-    const multiplier = (durationInQuarters / 4) / defaultNoteLength;
-    if (Math.abs(multiplier - 1) < 1e-9) return '';
-
-    const maxDenominator = 64;
-    let bestNumerator = null;
-    let bestDenominator = null;
-    let bestError = Infinity;
-
-    for (let d = 1; d <= maxDenominator; d++) {
-      const n = Math.round(multiplier * d);
-      const error = Math.abs(multiplier - n / d);
-      if (error < bestError) {
-        bestNumerator = n;
-        bestDenominator = d;
-        bestError = error;
-      }
-      if (error < 1e-9) break;
-    }
-
-    const divisor = gcd(bestNumerator, bestDenominator);
-    const numerator = bestNumerator / divisor;
-    const denominator = bestDenominator / divisor;
-
-    if (denominator === 1) return `${numerator}`;
-    if (numerator === 1) return `/${denominator}`;
-    return `${numerator}/${denominator}`;
-  };
+  const durationToABCSuffix = (durationInQuarters) => abcDurationSuffixFromQuarters(durationInQuarters, defaultNoteLength);
 
   // Pattern matches bar lines, rests, OR notes
   // Rests are 'z' (audible rest) or 'x' (invisible rest) followed by optional duration
@@ -469,6 +472,9 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
 
   const tokens = [];
   let measCount = 0;
+  let previousEnd = 0;
+
+  const durationToABCSuffix = (durationInQuarters) => abcDurationSuffixFromQuarters(durationInQuarters, defaultNoteLength);
 
   for (let i = 0; i < subject.length; i++) {
     const n = subject[i];
@@ -491,7 +497,13 @@ export function generateAnswerABC(subject, keyInfo, answerData, defaultNoteLengt
       }
     }
 
+    const gapDuration = n.onset - previousEnd;
+    if (gapDuration > 1e-9) {
+      tokens.push(`z${durationToABCSuffix(gapDuration)}`);
+    }
+
     tokens.push(midiToABC(newPitch, answerKeySig) + (durMatch ? durMatch[0] : ''));
+    previousEnd = n.onset + n.duration;
   }
 
   tokens.push('|]');
@@ -568,6 +580,9 @@ export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNo
 
   const tokens = [];
   let measCount = 0;
+  let previousEnd = 0;
+
+  const durationToABCSuffix = (durationInQuarters) => abcDurationSuffixFromQuarters(durationInQuarters, defaultNoteLength);
 
   for (let i = 0; i < subject.length; i++) {
     const n = subject[i];
@@ -596,8 +611,14 @@ export function generateAnswerABCSameKey(subject, keyInfo, answerData, defaultNo
       }
     }
 
+    const gapDuration = n.onset - previousEnd;
+    if (gapDuration > 1e-9) {
+      tokens.push(`z${durationToABCSuffix(gapDuration)}`);
+    }
+
     // Write in subject key, using accidentals as needed
     tokens.push(midiToABC(newPitch, keySignature) + (durMatch ? durMatch[0] : ''));
+    previousEnd = n.onset + n.duration;
   }
 
   tokens.push('|]');

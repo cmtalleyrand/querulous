@@ -108,6 +108,53 @@ C/ D3/2`;
 
     expect(out).toContain('\nG/ A3/2');
   });
+
+  it('preserves rests in generateAnswerABC (timing + notation)', () => {
+    const abc = `K:C
+L:1/8
+C z2 D`;
+    const { notes } = parseABC(abc, 60, 'major');
+
+    const out = generateAnswerABC(
+      notes,
+      { tonic: 0, keySignature: [], mode: 'major' },
+      answerData,
+      1 / 8,
+      [4, 4],
+      [1, 8]
+    );
+
+    expect(out).toContain('\nG z2 A');
+
+    const parsedAnswer = parseABC(out, 67, 'major');
+    expect(parsedAnswer.notes).toHaveLength(2);
+    expect(parsedAnswer.notes[0].onset).toBe(0);
+    expect(parsedAnswer.notes[1].onset).toBe(1.5);
+  });
+
+  it('preserves rests in generateAnswerABCSameKey (timing + notation)', () => {
+    const abc = `K:C
+L:1/8
+C z2 D`;
+    const { notes } = parseABC(abc, 60, 'major');
+
+    const out = generateAnswerABCSameKey(
+      notes,
+      { key: 'C', keySignature: [], mode: 'major' },
+      answerData,
+      1 / 8,
+      [4, 4],
+      false,
+      [1, 8]
+    );
+
+    expect(out).toContain('\nG z2 A');
+
+    const parsedAnswer = parseABC(out, 60, 'major');
+    expect(parsedAnswer.notes).toHaveLength(2);
+    expect(parsedAnswer.notes[0].onset).toBe(0);
+    expect(parsedAnswer.notes[1].onset).toBe(1.5);
+  });
 });
 
 
