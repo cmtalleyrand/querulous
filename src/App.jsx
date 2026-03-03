@@ -47,6 +47,7 @@ import {
 } from './utils';
 import { VIZ_COLORS } from './utils/vizConstants';
 import { STRETTO_TRANSPOSITION_OPTIONS } from './utils/constants/transpositionOptions';
+import { getKeySignatureMap, keySignatureMapToLegacyArray } from './utils/keySignature';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
