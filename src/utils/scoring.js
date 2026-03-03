@@ -846,8 +846,8 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
       score: toDisplayScore((voiceInd.internal || 0) + (rhythmInt.internal || 0)),
       internal: (voiceInd.internal || 0) + (rhythmInt.internal || 0),
       details: [
-        ...((voiceInd.details || []).map((d) => ({ ...d, factor: `[Contour] ${d.factor}` }))),
-        ...((rhythmInt.details || []).map((d) => ({ ...d, factor: `[Rhythm] ${d.factor}` }))),
+        ...(voiceInd.details || []),
+        ...(rhythmInt.details || []),
       ],
     };
     scores.voiceIndependence = combinedVoiceInd;
