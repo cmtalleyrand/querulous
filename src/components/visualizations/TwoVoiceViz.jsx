@@ -319,11 +319,22 @@ export function TwoVoiceViz({
             pt.score = chain.score;
             pt.entryScore = chain.entryScore;
             pt.exitScore = chain.exitScore;
+            if (chain.entry?.details) {
+              pt.entry = {
+                ...pt.entry,
+                score: chain.entry.score,
+                details: chain.entry.details,
+              };
+            }
+            if (chain.exit?.details) {
+              pt.exit = {
+                ...pt.exit,
+                score: chain.exit.score,
+                details: chain.exit.details,
+              };
+            }
           }
           if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
-          const mitigLines = (chain.details || []).filter(d =>
-            typeof d === 'string' && (d.startsWith('Passing character') || d.startsWith('D→D penalty mitigated')));
-          if (mitigLines.length > 0) pt.mitigationDetails = mitigLines;
         }
       }
     }
@@ -507,6 +518,31 @@ export function TwoVoiceViz({
     if (abs >= 12) return `${dir}P8+`;
     return `${dir}${abs}st`;
   };
+
+  const normalizeDetailText = (detail = '') => detail
+    .replace(/\bV1\b/g, voice1Label)
+    .replace(/\bV2\b/g, voice2Label)
+    .replace('(no resolution)', '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const parseScoreDetail = (detail = '') => {
+    const cleaned = normalizeDetailText(detail);
+    const match = cleaned.match(/^(.*?):\s*([+-]\d+\.?\d*)(.*)?$/);
+    if (!match) return { text: cleaned };
+    return { label: match[1].trim(), value: match[2], suffix: (match[3] || '').trim() };
+  };
+
+
+
+  const sumParsedDetailValues = (details = []) => details.reduce((sum, d) => {
+    const parsed = parseScoreDetail(d);
+    if (!parsed.value) return sum;
+    const n = parseFloat(parsed.value);
+    return Number.isFinite(n) ? sum + n : sum;
+  }, 0);
+
+  const formatSigned = (value, digits = 2) => `${value >= 0 ? '+' : ''}${value.toFixed(digits)}`;
 
   return (
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -953,36 +989,52 @@ export function TwoVoiceViz({
               )}
 
               {/* Score breakdown */}
-              <div style={{ backgroundColor: '#f8fafc', borderRadius: '8px', padding: '14px', fontSize: '12px' }}>
+              <div data-testid="interval-score-breakdown" style={{ backgroundColor: '#f8fafc', borderRadius: '8px', padding: '14px', fontSize: '12px', fontFamily: "Inter, 'Avenir Next', 'Segoe UI', Roboto, sans-serif" }}>
+                {pt.chainStartOnset !== undefined && !pt.isConsonant && (
+                  <div data-testid="chain-score-banner" style={{ marginBottom: '10px', padding: '8px 10px', borderRadius: '6px', backgroundColor: '#eef2ff', border: '1px solid #c7d2fe' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
+                      <span style={{ color: '#4338ca', fontWeight: '700' }}>Chain score (whole chain)</span>
+                      <span style={{ color: pt.score >= 0 ? '#16a34a' : '#dc2626', fontWeight: '800' }}>{pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}</span>
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#6366f1' }}>Selected note in chain: #{(pt.chainPosition ?? 0) + 1} of {pt.chainLength || 1}</div>
+                  </div>
+                )}
                 <div style={{ fontWeight: '700', marginBottom: '12px', color: '#1e293b', fontSize: '14px',
                   borderBottom: '2px solid #cbd5e1', paddingBottom: '6px' }}>Score Breakdown</div>
 
-                {!pt.isConsonant && pt.entry && pt.exit && (
-                  <>
+                {!pt.isConsonant && pt.entry && pt.exit && (() => {
+                  const entryDetailSum = sumParsedDetailValues(pt.entry.details || []);
+                  const exitDetailSum = sumParsedDetailValues(pt.exit.details || []);
+                  const patternEntryBonus = (pt.patterns || []).reduce((sum, p) => sum + (p.entryBonus || 0), 0);
+                  const patternExitBonus = (pt.patterns || []).reduce((sum, p) => sum + (p.exitBonus || 0), 0);
+                  const entryExplained = entryDetailSum + patternEntryBonus;
+                  const exitExplained = exitDetailSum + patternExitBonus;
+                  const entryUnparsed = pt.entryScore - entryExplained;
+                  const exitUnparsed = pt.exitScore - exitExplained;
+                  return <>
                     <div style={{ marginBottom: '12px', backgroundColor: '#ede9fe',
                       borderLeft: '3px solid #6366f1', borderRadius: '4px', padding: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                        <span style={{ fontWeight: '700', color: '#6366f1', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <span style={{ fontWeight: '700', color: '#6366f1', fontSize: '12px', textTransform: 'none', letterSpacing: '0.1px' }}>
                           Entry Motion
                         </span>
                         <span style={{ fontWeight: '800',
                           color: pt.entry.score >= 0 ? '#16a34a' : '#dc2626',
                           backgroundColor: pt.entry.score >= 0 ? '#dcfce7' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
-                          Base: {pt.entry.score >= 0 ? '+' : ''}{pt.entry.score.toFixed(2)}
+                          Score: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(2)}
                         </span>
                       </div>
                       {(pt.entry.details || []).map((d, i) => {
-                        const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
+                        const parsed = parseScoreDetail(d);
                         return (
                           <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
                             paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                             <span style={{ color: '#6366f1', marginRight: '6px', fontWeight: '600' }}>•</span>
-                            {match ? (
-                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
+                            {parsed.value ? (
+                              <span>{parsed.label}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(parsed.value) >= 0 ? '#16a34a' : '#dc2626' }}>{parsed.value}</span>{parsed.suffix && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{parsed.suffix}</span>}</span>
                             ) : (
-                              <span>{text}</span>
+                              <span>{parsed.text}</span>
                             )}
                           </div>
                         );
@@ -993,7 +1045,7 @@ export function TwoVoiceViz({
                       <div style={{ marginBottom: '12px', backgroundColor: '#f3e8ff',
                         borderLeft: '3px solid #a855f7', borderRadius: '4px', padding: '10px' }}>
                         <div style={{ fontWeight: '700', color: '#a855f7', fontSize: '12px',
-                          textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                          textTransform: 'none', letterSpacing: '0.1px', marginBottom: '8px' }}>
                           Recognized Patterns
                         </div>
                         {pt.patterns.map((p, i) => (
@@ -1020,57 +1072,52 @@ export function TwoVoiceViz({
                     <div style={{ marginBottom: '12px', backgroundColor: '#d1fae5',
                       borderLeft: '3px solid #059669', borderRadius: '4px', padding: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                        <span style={{ fontWeight: '700', color: '#059669', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <span style={{ fontWeight: '700', color: '#059669', fontSize: '12px', textTransform: 'none', letterSpacing: '0.1px' }}>
                           Exit / Resolution
                         </span>
                         <span style={{ fontWeight: '800',
                           color: pt.exit.score >= 0 ? '#16a34a' : '#dc2626',
                           backgroundColor: pt.exit.score >= 0 ? '#dcfce7' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
-                          Base: {pt.exit.score >= 0 ? '+' : ''}{pt.exit.score.toFixed(2)}
+                          Score: {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(2)}
                         </span>
                       </div>
                       {(pt.exit.details || []).map((d, i) => {
-                        const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                        const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
+                        const parsed = parseScoreDetail(d);
                         return (
                           <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '2px',
                             paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
                             <span style={{ color: '#059669', marginRight: '6px', fontWeight: '600' }}>•</span>
-                            {match ? (
-                              <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
+                            {parsed.value ? (
+                              <span>{parsed.label}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(parsed.value) >= 0 ? '#16a34a' : '#dc2626' }}>{parsed.value}</span>{parsed.suffix && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{parsed.suffix}</span>}</span>
                             ) : (
-                              <span>{text}</span>
+                              <span>{parsed.text}</span>
                             )}
                           </div>
                         );
                       })}
                     </div>
 
-                    {pt.mitigationDetails?.length > 0 && (
-                      <div style={{ marginBottom: '12px', backgroundColor: '#fef9c3',
-                        borderLeft: '3px solid #ca8a04', borderRadius: '4px', padding: '10px' }}>
-                        <div style={{ fontWeight: '700', color: '#92400e', fontSize: '12px',
-                          textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
-                          Passing Character Adjustment
+
+                    <details style={{ marginBottom: '10px', backgroundColor: 'transparent', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 8px' }}>
+                      <summary style={{ cursor: 'pointer', fontSize: '11px', color: '#334155', fontWeight: '600', listStylePosition: 'inside' }}>
+                        Score math: {formatSigned(pt.entryScore)} + {formatSigned(pt.exitScore)} = {formatSigned(pt.score)}
+                      </summary>
+                      <div style={{ marginTop: '6px', display: 'grid', gap: '6px' }}>
+                        <div style={{ borderRadius: '4px', padding: '4px 6px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ fontSize: '10px', fontWeight: '700', color: '#4338ca', marginBottom: '2px' }}>Entry composition</div>
+                          <div style={{ fontSize: '10px', color: '#334155', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                            line items {formatSigned(entryDetailSum)} + pattern {formatSigned(patternEntryBonus)} + carryover {formatSigned(entryUnparsed)} = <span style={{ fontWeight: '800', color: pt.entryScore >= 0 ? '#15803d' : '#b91c1c' }}>{formatSigned(pt.entryScore)}</span>
+                          </div>
                         </div>
-                        {pt.mitigationDetails.map((d, i) => {
-                          const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
-                          const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
-                          return (
-                            <div key={i} style={{ fontSize: '11px', color: '#78350f', marginBottom: '2px',
-                              paddingLeft: '8px', display: 'flex', alignItems: 'flex-start' }}>
-                              <span style={{ color: '#ca8a04', marginRight: '6px', fontWeight: '600' }}>•</span>
-                              {match ? (
-                                <span>{match[1]}:&nbsp;<span style={{ fontWeight: '700', color: parseFloat(match[2]) >= 0 ? '#16a34a' : '#dc2626' }}>{match[2]}</span>{match[3] && <span style={{ color: '#92400e', fontSize: '10px', fontStyle: 'italic', marginLeft: '4px' }}>{match[3]}</span>}</span>
-                              ) : (
-                                <span>{text}</span>
-                              )}
-                            </div>
-                          );
-                        })}
+                        <div style={{ borderRadius: '4px', padding: '4px 6px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ fontSize: '10px', fontWeight: '700', color: '#0f766e', marginBottom: '2px' }}>Exit composition</div>
+                          <div style={{ fontSize: '10px', color: '#334155', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                            line items {formatSigned(exitDetailSum)} + pattern {formatSigned(patternExitBonus)} + carryover {formatSigned(exitUnparsed)} = <span style={{ fontWeight: '800', color: pt.exitScore >= 0 ? '#15803d' : '#b91c1c' }}>{formatSigned(pt.exitScore)}</span>
+                          </div>
+                        </div>
                       </div>
-                    )}
+                    </details>
 
                     <div style={{ backgroundColor: '#ffffff', border: '2px solid #e2e8f0', borderRadius: '6px', padding: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -1093,15 +1140,15 @@ export function TwoVoiceViz({
                         </span>
                       </div>
                     </div>
-                  </>
-                )}
+                  </>;
+                })()}
 
                 {pt.isConsonant && pt.category === 'consonant_resolution' && (
                   <>
                     <div style={{ backgroundColor: '#d1fae5', borderLeft: '3px solid #059669',
                       borderRadius: '4px', padding: '10px', marginBottom: '12px' }}>
                       <div style={{ fontWeight: '700', color: '#059669', fontSize: '12px',
-                        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Resolution Quality</div>
+                        textTransform: 'none', letterSpacing: '0.1px', marginBottom: '6px' }}>Resolution Quality</div>
                       {(pt.scoreDetails || []).map((d, i) => (
                         <div key={i} style={{ fontSize: '11px', color: '#475569', marginBottom: '4px', paddingLeft: '8px' }}>
                           {typeof d === 'object'
