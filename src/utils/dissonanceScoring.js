@@ -115,8 +115,8 @@ function isOnsetInSequence(onset, ctx) {
 /**
  * Calculate sub-subdivision threshold for short note detection.
  * 
- * For 4/4 meter: main beat = 1 quarter, subdivision = 8th note (0.5), triplet = ~0.167
- * For 6/8 meter: main beat = dotted quarter (1.5), subdivision = 8th (0.5), triplet = ~0.167
+ * For 4/4 meter: main beat = 1 quarter, subdivision = 8th note (0.5), triplet = ~0.333
+ * For 6/8 meter: main beat = dotted quarter (1.5), subdivision = 8th (0.5), triplet = ~0.333
  *
  * @param {Object} ctx - Analysis context with meter
  * @returns {number} Duration threshold in beats
@@ -348,7 +348,7 @@ function getIntervalMagnitude(semitones) {
   if (abs <= 4) return { type: 'skip', semitones: abs }; // m3, M3 (3-4 semitones)
   if (abs === 5 || abs === 7) return { type: 'perfect_leap', semitones: abs }; // P4, P5
   if (abs === 12) return { type: 'octave', semitones: abs }; // P8
-  return { type: 'large_leap', semitones: abs }; // 6th+ (excluding octave)
+  return { type: 'large_leap', semitones: abs }; // tritone, 6th+ (excluding octave)
 }
 
 /**
@@ -763,6 +763,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     // Resolution to another dissonance
     // Short note + off-beat: halve the penalty (two quick consecutive dissonances on off-beats not a big deal)
     const shortNoteInfo = getShortNoteInfo(currSim, ctx);
+    // should be removed, covered by passingness
     const isOffBeat = currSim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG;
     if (shortNoteInfo.isShort && isOffBeat) {
       score = -0.375; // Halved penalty
