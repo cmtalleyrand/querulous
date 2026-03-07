@@ -662,7 +662,7 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   const v2MelodicInterval = motion.v2Moved ? currSim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
 
   // Note entry leap types for reference (human-readable labels, not raw enum)
-  const _leapLabel = { skip: 'm3', perfect_leap: 'P4/P5', large_leap: '6th+', octave: 'P8' };
+  const _leapLabel = { skip: 'm3/M3', perfect_leap: 'P4/P5', large_leap: 'TT/6th/7th', octave: 'P8' };
   if (motion.v1Moved) {
     const mag = getIntervalMagnitude(v1MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
