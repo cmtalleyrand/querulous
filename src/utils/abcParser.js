@@ -100,7 +100,9 @@ export function extractABCHeaders(abcText) {
     mode = null,
     noteLength = null,
     noteLengthFraction = null, // Store as [numerator, denominator]
-    meter = null;
+    meter = null,
+    keySignatureModifiers = [],
+    keySignatureMap = null;
 
   for (const line of abcText.split('\n')) {
     const t = line.trim();
@@ -130,11 +132,17 @@ export function extractABCHeaders(abcText) {
 
       if (!tonicToken) continue;
 
-      const tonicMatch = tonicToken.match(/^([A-Ga-g][#b]?)(m)?$/);
+      // Accept compact forms like K:Cmin, K:Edor, K:F#mix in addition to K:C or K:Cm
+      const tonicMatch = tonicToken.match(/^([A-Ga-g][#b]?)(.*)$/);
       if (!tonicMatch) continue;
 
       key = tonicMatch[1].charAt(0).toUpperCase() + (tonicMatch[1].slice(1) || '');
-      mode = tonicMatch[2] ? 'natural_minor' : 'major';
+      const compactSuffix = tonicMatch[2].toLowerCase();
+      if (compactSuffix) {
+        mode = MODE_PARSER_TOKEN_TO_MODE[compactSuffix] ?? 'major';
+      } else {
+        mode = 'major';
+      }
 
       if (keyParts[0]) {
         const tokenMode = MODE_PARSER_TOKEN_TO_MODE[keyParts[0].toLowerCase()];
@@ -144,16 +152,14 @@ export function extractABCHeaders(abcText) {
         }
       }
 
-      const keySignatureModifiers = keyParts
+      keySignatureModifiers = keyParts
         .map(parseKeyHeaderAccidentalModifier)
         .filter(Boolean);
-      const keySignatureMap = getKeySignatureMap(key, mode, keySignatureModifiers);
-
-      return { key, mode, noteLength, noteLengthFraction, meter, keySignatureModifiers, keySignatureMap };
+      keySignatureMap = getKeySignatureMap(key, mode, keySignatureModifiers);
     }
   }
 
-  return { key, mode, noteLength, noteLengthFraction, meter, keySignatureModifiers: [], keySignatureMap: null };
+  return { key, mode, noteLength, noteLengthFraction, meter, keySignatureModifiers, keySignatureMap };
 }
 
 /**
