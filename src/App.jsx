@@ -33,16 +33,12 @@ import {
   testModulatoryRobustness,
   testSequentialPotential,
   calculateOverallScore,
-  MODE_DEFINITIONS,
-  ACCIDENTAL_OPTIONS,
-  NOTE_LETTER_OPTIONS,
-  MODE_HEADER_SUFFIX,
-  serializeKeySignatureModifiers,
   setP4Treatment,
   setMeter,
   setSequenceRanges,
   setSequenceBeatRanges,
 } from './utils';
+import { MODE_DEFINITIONS, MODE_HEADER_SUFFIX } from './utils/modes';
 import { NOTE_TO_MIDI, KEY_SIGNATURES } from './utils/constants/musicTheory';
 import {
   AVAILABLE_KEYS,
@@ -54,7 +50,13 @@ import {
 } from './utils/constants/uiOptions';
 import { TIME_SIGNATURE_OPTIONS } from './utils/constants/timeSignatures';
 import { VIZ_COLORS } from './utils/vizConstants';
-import { getKeySignatureMap, keySignatureMapToLegacyArray } from './utils/keySignature';
+import {
+  ACCIDENTAL_OPTIONS,
+  NOTE_LETTER_OPTIONS,
+  getKeySignatureMap,
+  keySignatureMapToLegacyArray,
+  serializeKeySignatureModifiers,
+} from './utils/keySignature';
 import { NoteEvent, ScaleDegree } from './types';
 
 /**
