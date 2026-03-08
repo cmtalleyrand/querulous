@@ -4,7 +4,7 @@
  */
 
 import { metricWeight } from './formatter';
-import { ANALYSIS_THRESHOLDS } from './constants';
+import { ANALYSIS_THRESHOLDS } from './constants/analysisThresholds';
 
 // Complete chord vocabulary with semitone intervals
 // Note: sus2/sus4 removed - suspensions are non-chord tones handled separately

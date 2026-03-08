@@ -1,4 +1,4 @@
-import { NOTE_TO_MIDI, KEY_SIGNATURES } from './constants';
+import { NOTE_TO_MIDI, KEY_SIGNATURES } from './constants/musicTheory';
 import { parseABC, generateAnswerABC } from './abcParser';
 import {
   findSimultaneities,

@@ -1,6 +1,3 @@
-// Constants
-export * from './constants';
-
 // Formatting utilities
 export { BeatFormatter, pitchName, metricWeight, metricPosition, metricSeverity, isDuringRest } from './formatter';
 

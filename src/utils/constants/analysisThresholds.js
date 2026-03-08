@@ -1,0 +1,88 @@
+/**
+ * Analysis thresholds and constants
+ * Centralized for consistency across analysis functions
+ */
+export const ANALYSIS_THRESHOLDS = {
+  // Melodic intervals
+  LEAP_THRESHOLD: 4,              // semitones - intervals > this are "leaps"
+  STEP_MAX: 2,                    // semitones - intervals <= this are "steps"
+  SKIP_MAX: 4,                    // semitones - intervals <= this are "skips" (3rds/4ths)
+
+  // Metric weight thresholds
+  STRONG_BEAT_WEIGHT: 0.5,        // metric weight >= this is "strong"
+  DOWNBEAT_WEIGHT: 1.0,           // metric weight for downbeats
+  OFF_BEAT_WEIGHT: 0.75,          // metric weight < this is "off-beat"
+
+  // Focal point detection
+  FOCAL_POINT_MIDDLE_START: 0.25, // relative position - climax must be after this
+  FOCAL_POINT_MIDDLE_END: 0.85,   // relative position - climax must be before this
+  FOCAL_POINT_MIN_RANGE: 5,       // semitones - minimum range for climax detection
+
+  // Short note detection (sub-subdivision level)
+  // Threshold = subdivision / 3 (triplet of subdivision)
+  // For 4/4: subdivision = 0.5, threshold ≈ 0.167
+  // For 6/8: subdivision = 0.33, threshold ≈ 0.111
+
+  // Sequence detection
+  SEQUENCE_MIN_NOTES: 3,          // minimum notes in a sequence unit
+  SEQUENCE_MIN_REPS: 2,           // minimum repetitions to qualify
+  SEQUENCE_OVERLAP_THRESHOLD: 0.5, // overlap ratio to filter duplicates
+
+  // Contour independence
+  MOTION_SIMILARITY_WINDOW: 0.25, // beats - time window for concurrent motion detection
+
+  // Parallel detection
+  PARALLEL_INTERVAL_CLASSES: [5, 8], // interval classes for parallel 5ths/8ves
+
+  // Dissonance scoring
+  P4_BONUS: 0.5,                  // P4 is less severe dissonance
+  CONSECUTIVE_DISSONANCE_PENALTY: -0.75,
+  CONSECUTIVE_DISSONANCE_PENALTY_SHORT: -0.375, // halved for short notes on off-beat
+
+  // Penalty multipliers
+  SEQUENCE_PENALTY_MULT: 0.25,    // 75% reduction for parallels in sequences
+  SHORT_NOTE_PENALTY_MULT: 0.5,   // 50% reduction for short notes (non-repeated)
+  ASYNC_MOTION_PENALTY_MULT: 0.5, // 50% reduction for asynchronous motion
+
+  // Harmonic analysis - salience calculation
+  PASSING_NOTE_THRESHOLD: 0.125,  // duration threshold for passing tones
+  MIN_SALIENCE: 0.025,            // minimum salience floor
+  SALIENCE_DECAY: 0.85,           // decay multiplier per beat distance
+
+  // Metric multipliers for salience
+  SALIENCE_DOWNBEAT_MULT: 1.2,    // downbeat (weight = 1.0)
+  SALIENCE_STRONG_BEAT_MULT: 1.0, // medium-strong beat (weight >= 0.75)
+  SALIENCE_OTHER_BEAT_MULT: 0.75, // other main beat (weight >= 0.5)
+  SALIENCE_OFF_BEAT_MULT: 0.5,    // off-beat (weight < 0.5)
+
+  // Chord member weights
+  ROOT_WEIGHT: 1.1,               // root is most important
+  THIRD_WEIGHT: 1.0,              // third defines quality
+  FIFTH_SEVENTH_WEIGHT: 0.8,      // fifth and seventh
+  SIXTH_AUGFIFTH_WEIGHT: 0.6,     // 6th, aug5th, etc.
+
+  // Chain management
+  CHAIN_BREAK_SALIENCE: 0.125,    // salience threshold for non-chord tone to break chain
+
+  // Chord candidate thresholds
+  NON_CHORD_TONE_SALIENCE_FLOOR: 0.05, // floor for non-chord tone penalty: max[(salience - this), 0]
+  MIN_NOTES_FOR_CHORD: 2,         // minimum notes required to consider a chord
+
+  // DP optimization
+  COMPLEXITY_PENALTY: 0.05,       // penalty per complexity level (prefer simpler chords)
+};
+
+/**
+ * Get adjusted thresholds for small note counts
+ * Motion independence ratios become less meaningful with few notes
+ */
+export function getAdjustedThresholds(noteCount) {
+  const base = { ...ANALYSIS_THRESHOLDS };
+
+  // Widen motion similarity window for short subjects
+  if (noteCount <= 8) {
+    base.MOTION_SIMILARITY_WINDOW = 0.5; // More tolerant
+  }
+
+  return base;
+}
