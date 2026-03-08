@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { TwoVoiceViz } from './TwoVoiceViz';
 
 vi.mock('../../utils/dissonanceScoring', () => ({
@@ -69,7 +69,7 @@ vi.mock('../../utils/dissonanceScoring', () => ({
         entryScore: -0.1,
         exitScore: 0,
         passingMotion: { isPassing: true, mitigation: 0.63 },
-        details: ['Passing character (passing motion): +0.50 [entry motion (0.63): +0.50, V1 resolution (0.63): +0.00]'],
+        details: ['Passing character (passing motion): +0.50 [entry motion (0.63): +0.50, D→D (own exit, 0.63): +0.50, V1 resolution (0.63): +0.00]'],
       },
       {
         onset: 2,
@@ -124,9 +124,12 @@ describe('TwoVoiceViz dissonance chain scoring panel', () => {
     fireEvent.click(clickableGroups[clickableGroups.length - 3]);
 
     expect(screen.getByTestId('chain-score-banner')).toBeInTheDocument();
+    const chainBanner = screen.getByTestId('chain-score-banner');
     expect(screen.getByText(/Chain score \(whole chain\)/i)).toBeInTheDocument();
+    expect(within(chainBanner).getByText('-0.45')).toBeInTheDocument();
 
     expect(screen.getByText(/Mitigation — entry motion/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mitigation — D→D \(own exit, 0.63\)/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Mitigation —/i).length).toBeGreaterThan(1);
 
     expect(screen.queryByText(/Passing Character Adjustment/i)).not.toBeInTheDocument();

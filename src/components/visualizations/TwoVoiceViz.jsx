@@ -525,13 +525,35 @@ export function TwoVoiceViz({
   const parseMitigationContributions = (mitigationDetails = []) => {
     const contributions = { entry: [], exit: [] };
 
+    const splitTopLevelItems = (text = '') => {
+      const parts = [];
+      let current = '';
+      let parenDepth = 0;
+
+      for (const char of text) {
+        if (char === '(') parenDepth += 1;
+        if (char === ')') parenDepth = Math.max(0, parenDepth - 1);
+
+        if (char === ',' && parenDepth === 0) {
+          if (current.trim()) parts.push(current.trim());
+          current = '';
+          continue;
+        }
+
+        current += char;
+      }
+
+      if (current.trim()) parts.push(current.trim());
+      return parts;
+    };
+
     mitigationDetails.forEach((line) => {
       const cleaned = normalizeDetailText(line);
 
       if (cleaned.startsWith('Passing character')) {
         const bracketMatch = cleaned.match(/\[(.*)\]/);
         if (!bracketMatch) return;
-        bracketMatch[1].split(',').map(part => part.trim()).forEach((part) => {
+        splitTopLevelItems(bracketMatch[1]).forEach((part) => {
           const parsed = parseScoreDetail(part);
           const target = (parsed.label || '').toLowerCase().includes('entry') ? 'entry' : 'exit';
           contributions[target].push(parsed);
@@ -830,6 +852,11 @@ export function TwoVoiceViz({
           isChainResolution: pt.isChainResolution, chainLength: pt.chainLength || 0,
         });
         const mitigationContrib = parseMitigationContributions(pt.mitigationDetails);
+        const chainScore = pt.chainStartOnset !== undefined
+          ? intervalPoints
+            .filter((p) => p.chainStartOnset === pt.chainStartOnset && !p.isConsonant && p.score !== undefined)
+            .reduce((sum, p) => sum + p.score, 0)
+          : pt.score;
         return (
           <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
             {/* Header */}
@@ -999,7 +1026,7 @@ export function TwoVoiceViz({
                   <div data-testid="chain-score-banner" style={{ marginBottom: '10px', padding: '8px 10px', borderRadius: '6px', backgroundColor: '#eef2ff', border: '1px solid #c7d2fe' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
                       <span style={{ color: '#4338ca', fontWeight: '700' }}>Chain score (whole chain)</span>
-                      <span style={{ color: pt.score >= 0 ? '#16a34a' : '#dc2626', fontWeight: '800' }}>{pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}</span>
+                      <span style={{ color: chainScore >= 0 ? '#16a34a' : '#dc2626', fontWeight: '800' }}>{chainScore >= 0 ? '+' : ''}{chainScore.toFixed(2)}</span>
                     </div>
                     <div style={{ fontSize: '10px', color: '#6366f1' }}>Selected note in chain: #{(pt.chainPosition ?? 0) + 1} of {pt.chainLength || 1}</div>
                   </div>
