@@ -10,7 +10,6 @@ import { generateGridLines, VIZ_COLORS } from '../../utils/vizConstants';
 export function InvertibilityViz({
   subject,       // Subject notes
   cs,            // Countersubject notes
-  formatter,
   originalIssues = [],
   invertedIssues = [],
   meter = [4, 4],

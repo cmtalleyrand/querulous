@@ -10,7 +10,6 @@ import { generateGridLines } from '../../utils/vizConstants';
 export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRange = null, highlightedItem = null, meter = [4, 4] }) {
   const [hoveredNote, setHoveredNote] = useState(null);
   const [selectedNote, setSelectedNote] = useState(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
   const all = voices.flatMap((v, vi) => v.notes.map((n, ni) => ({ ...n, voiceIndex: vi, noteIndex: ni, voiceLabel: v.label, voiceColor: v.color })));
   if (!all.length) return null;
@@ -80,10 +79,8 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
     }
   }
 
-  const handleMouseEnter = (note, event) => {
+  const handleMouseEnter = (note) => {
     setHoveredNote(note);
-    const rect = event.target.getBoundingClientRect();
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
   };
 
   const handleMouseLeave = () => {
@@ -240,7 +237,7 @@ export function PianoRoll({ voices, title, sequenceRanges = [], activeSequenceRa
                       0
                     }
                     style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
-                    onMouseEnter={(e) => handleMouseEnter(noteData, e)}
+                    onMouseEnter={() => handleMouseEnter(noteData)}
                     onMouseLeave={handleMouseLeave}
                     onClick={(e) => handleClick(noteData, e)}
                     onTouchStart={(e) => handleClick(noteData, e)}

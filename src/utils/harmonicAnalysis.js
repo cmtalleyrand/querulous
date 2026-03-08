@@ -358,17 +358,9 @@ function findChordCandidates(beatNotes) {
 }
 
 /**
- * Check if a chord can extend a chain (same root and type)
- */
-function canExtendChain(prevChord, currChord) {
-  if (!prevChord || !currChord) return false;
-  return prevChord.root === currChord.root && prevChord.type === currChord.type;
-}
-
-/**
  * Check if chain should break due to salient non-chord tone
  */
-function chainBrokenByNonChordTone(chord, beatNotes) {
+function chainBrokenByNonChordTone(chord) {
   const { CHAIN_BREAK_SALIENCE } = ANALYSIS_THRESHOLDS;
 
   for (const nct of chord.nonChordTones) {
@@ -384,7 +376,7 @@ function chainBrokenByNonChordTone(chord, beatNotes) {
  * State: best[beatIdx][chordKey] = { score, chainLength, path }
  * Includes audit trail for debugging chord determination
  */
-function findOptimalChordSequence(beats, tonic) {
+function findOptimalChordSequence(beats) {
   const { COMPLEXITY_PENALTY } = ANALYSIS_THRESHOLDS;
 
   const n = beats.length;
@@ -622,11 +614,10 @@ export function analyzeHarmonicImplication(notes, meter, tonic = 0, options = {}
   }
 
   // Run DP optimization
-  const optimalPath = findOptimalChordSequence(beats, tonic);
+  const optimalPath = findOptimalChordSequence(beats);
 
   // Build result with chain information
   const chords = [];
-  let currentChainStart = null;
 
   for (let i = 0; i < numBeats; i++) {
     const beat = beats[i];

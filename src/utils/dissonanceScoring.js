@@ -25,7 +25,7 @@ import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES } f
 // TODO: Migrate all callers to use createAnalysisContext pattern
 // ===========================================================================
 let _globalMeter = [4, 4];
-let _globalP4Treatment = false;
+let _globalP4Treatment = true;
 let _globalSequenceRanges = [];
 let _globalSequenceBeatRanges = [];
 
@@ -67,7 +67,7 @@ export function getSequenceBeatRanges() {
  * This replaces previous module-level mutable state.
  *
  * @param {Object} options
- * @param {boolean} [options.treatP4AsDissonant=false] - Force all P4s as dissonant
+ * @param {boolean} [options.treatP4AsDissonant] - Whether P4s are dissonant (defaults to global setting)
  * @param {number[]} [options.meter=[4,4]] - Time signature [numerator, denominator]
  * @param {Array} [options.sequenceBeatRanges=[]] - Array of {startBeat, endBeat} for penalty mitigation
  * @param {Array} [options.sequenceNoteRanges=[]] - Array of {start, end} note index ranges
@@ -75,7 +75,7 @@ export function getSequenceBeatRanges() {
  */
 export function createAnalysisContext(options = {}) {
   return {
-    treatP4AsDissonant: options.treatP4AsDissonant || false,
+    treatP4AsDissonant: options.treatP4AsDissonant ?? _globalP4Treatment,
     meter: options.meter || [4, 4],
     sequenceBeatRanges: options.sequenceBeatRanges || [],
     sequenceNoteRanges: options.sequenceNoteRanges || [],
