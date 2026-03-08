@@ -64,39 +64,27 @@ The user cares about the tool being **accurate** and **useful for working compos
 
 ---
 
-## Code Quality Expectations (Timeless Engineering Policy)
+## Code Quality Expectations
 
-These are repository-level engineering constraints and should be treated as stable policy.
+Based on existing code and feedback:
 
-1. **Document the "why"**: Comments should explain design rationale and invariants, not only implementation mechanics.
+1. **Document the "why"**: Comments should explain reasoning, not just what the code does.
 
-2. **Respect existing architecture**: Prefer extending established module boundaries and data flow patterns over introducing parallel approaches.
+2. **Respect existing architecture**: The codebase has clear patterns. Follow them rather than introducing new approaches.
 
-3. **Use layered verification**:
-   - For logic changes, execute automated checks with `npm test` and `npm run test:coverage` to validate unit/integration behavior.
-   - For visual or interaction changes, add targeted manual verification of the affected UI pathways.
+3. **Test manually**: No automated test suite currently. Test changes manually with various inputs. 
 
 4. **Build must pass**: Always run `npm run build` before declaring work complete.
 
 ---
 
-## Workflow
+## Getting Started on a New Session
 
-### Engineering Workflow (Timeless)
-
-1. **Read context documents**: Start with this file and `CODEBASE_OVERVIEW.md`.
-2. **Align with project roadmap**: Check `PROJECT_PLAN.md` for sequencing and constraints.
-3. **Implement within scoped request**: Resolve the requested behavior without unrelated feature expansion.
-4. **Verify in layers**:
-   - Run `npm test` and `npm run test:coverage` when logic paths are modified.
-   - Run targeted manual checks when visual behavior or interaction flow is modified.
-5. **Validate release readiness**: Run `npm run build` before handoff.
-
-### User Collaboration Notes (User-Specific)
-
-1. **Read user-authored comments carefully**: The user leaves implementation-relevant guidance in docs and code.
-2. **Clarify only when ambiguity blocks correctness**: Prefer execution over excessive back-and-forth, but do not guess on materially ambiguous requirements.
-3. **Honor scope discipline**: Deliver exactly the requested outcome unless explicit expansion is requested.
+1. **Read this document** and `CODEBASE_OVERVIEW.md` first
+2. **Check `PROJECT_PLAN.md`** for planned work
+3. **Read any comments** the user has left in code or docs
+4. **Ask clarifying questions** - if are uncertain on what the user wants.
+5. **Focus on the specific request** - don't expand scope
 
 ---
 
