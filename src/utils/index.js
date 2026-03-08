@@ -72,3 +72,28 @@ export {
 
 // Harmonic analysis
 export { analyzeHarmonicImplication } from './harmonicAnalysis';
+
+// Mode definitions/options
+export {
+  MODE_DEFINITIONS,
+  MODE_INTERVALS,
+  MODE_HEADER_SUFFIX,
+  AVAILABLE_MODES,
+  MODE_OPTIONS_BY_VALUE,
+  MODE_PARSER_TOKEN_TO_MODE,
+  MODE_TOKEN_REGEX_FRAGMENT,
+  validateModeCoverage,
+} from './modes';
+
+// Key-signature helpers/options
+export {
+  ACCIDENTAL_OPTIONS,
+  NOTE_LETTER_OPTIONS,
+  modeToKeySignatureToken,
+  parseKeySignatureArrayToMap,
+  applyKeySignatureModifiers,
+  keySignatureMapToLegacyArray,
+  getKeySignatureMap,
+  parseKeyHeaderAccidentalModifier,
+  serializeKeySignatureModifiers,
+} from './keySignature';

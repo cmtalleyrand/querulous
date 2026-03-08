@@ -33,6 +33,13 @@ import {
   testModulatoryRobustness,
   testSequentialPotential,
   calculateOverallScore,
+  MODE_DEFINITIONS,
+  ACCIDENTAL_OPTIONS,
+  NOTE_LETTER_OPTIONS,
+  getKeySignatureMap,
+  keySignatureMapToLegacyArray,
+  MODE_HEADER_SUFFIX,
+  serializeKeySignatureModifiers,
   setP4Treatment,
   setMeter,
   setSequenceRanges,
@@ -1815,18 +1822,10 @@ export default function App() {
 
                 {results.countersubject && (
                   <>
-                    <Section title="Rhythmic Complementarity" helpKey="rhythmicComplementarity" defaultCollapsed={true}>
+                    <Section title="Rhythmic Independence" helpKey="rhythmicComplementarity" defaultCollapsed={true}>
                       <DataRow
                         data={{
                           Overlap: `${Math.round(results.rhythmicComplementarity.overlapRatio * 100)}%`,
-                        }}
-                      />
-                      <ObservationList observations={results.rhythmicComplementarity.observations} />
-                    </Section>
-
-                    <Section title="Contour Independence" helpKey="contourIndependence" defaultCollapsed={true}>
-                      <DataRow
-                        data={{
                           Parallel: `${results.contourIndependence.parallelMotions} (${Math.round(results.contourIndependence.parallelRatio * 100)}%)`,
                           Similar: `${results.contourIndependence.similarMotions} (${Math.round(results.contourIndependence.similarRatio * 100)}%)`,
                           Contrary: `${results.contourIndependence.contraryMotions} (${Math.round(results.contourIndependence.contraryRatio * 100)}%)`,
@@ -1835,6 +1834,7 @@ export default function App() {
                       />
                       <ObservationList
                         observations={[
+                          ...results.rhythmicComplementarity.observations,
                           { type: 'info', description: results.contourIndependence.assessment },
                           ...results.contourIndependence.details.map((d) => ({
                             type: 'consideration',
@@ -1852,9 +1852,6 @@ export default function App() {
                     <Section title="CS2 vs Subject" defaultCollapsed={true}>
                       {results.cs2DoubleCounterpoint && (
                         <ObservationList observations={results.cs2DoubleCounterpoint.observations} />
-                      )}
-                      {results.cs2RhythmicComplementarity && (
-                        <ObservationList observations={results.cs2RhythmicComplementarity.observations} />
                       )}
                       {results.cs2ContourIndependence && (
                         <>

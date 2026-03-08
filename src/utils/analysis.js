@@ -828,8 +828,6 @@ export function testRhythmicVariety(subject, formatter) {
  * Main metric: Solo onset ratio - % of note onsets that occur in only one voice
  * Measures the "interlocking" quality. Desirable: 33-66%
  *
- * Secondary metric: Strong beat simultaneity - % of strong beats with both voices attacking
- * Measures structural lockstep. Punish >90%, reward <80%
  */
 export function testRhythmicComplementarity(subject, cs, meter) {
   if (!meter || !Array.isArray(meter) || meter.length < 2) {
@@ -850,33 +848,6 @@ export function testRhythmicComplementarity(subject, cs, meter) {
   // Solo onsets = onsets in only one voice
   const soloOnsetCount = allOnsets.size - sharedOnsets.length;
   const soloOnsetRatio = soloOnsetCount / allOnsets.size;
-
-  // Strong beat simultaneity
-  // Strong beats = downbeat (weight 1.0) and medium-strong beats (weight 0.75)
-  // Uses metricWeight function for proper handling of all time signatures
-  const isStrongBeat = (onset) => {
-    return metricWeight(onset, meter) >= 0.75;
-  };
-
-  // Find all strong beats that have ANY note onset
-  const strongBeatsWithOnsets = new Set();
-  for (const onset of allOnsets) {
-    if (isStrongBeat(onset)) {
-      strongBeatsWithOnsets.add(Math.round(onset * 100) / 100);
-    }
-  }
-
-  // Count strong beats where BOTH voices attack
-  let strongBeatsBothAttack = 0;
-  for (const beat of strongBeatsWithOnsets) {
-    if (sOnsets.has(beat) && cOnsets.has(beat)) {
-      strongBeatsBothAttack++;
-    }
-  }
-
-  const strongBeatSimultaneity = strongBeatsWithOnsets.size > 0
-    ? strongBeatsBothAttack / strongBeatsWithOnsets.size
-    : 0;
 
   const observations = [];
 
@@ -904,22 +875,8 @@ export function testRhythmicComplementarity(subject, cs, meter) {
     });
   }
 
-  // Secondary metric: strong beat simultaneity
-  if (strongBeatSimultaneity > 0.90) {
-    observations.push({
-      type: 'consideration',
-      description: `${Math.round(strongBeatSimultaneity * 100)}% strong beats have simultaneous attacks`,
-    });
-  } else if (strongBeatSimultaneity < 0.80) {
-    observations.push({
-      type: 'strength',
-      description: `${Math.round(strongBeatSimultaneity * 100)}% strong beat simultaneity—rhythmic independence`,
-    });
-  }
-
   return {
     soloOnsetRatio,
-    strongBeatSimultaneity,
     overlapRatio: 1 - soloOnsetRatio, // For backwards compatibility
     observations,
   };

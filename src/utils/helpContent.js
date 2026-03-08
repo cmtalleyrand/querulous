@@ -242,7 +242,7 @@ When a dissonance resolves to another dissonance instead of a consonance:
   },
 
   rhythmicComplementarity: {
-    title: 'Rhythmic Interplay',
+    title: 'Rhythmic Independence',
     brief: 'Degree of rhythmic independence between voices.',
     detailed: `This measures rhythmic independence between the voices.
 
@@ -251,7 +251,6 @@ Attack overlap: Percentage of note onsets that coincide between subject and coun
 • 30-60%: Moderate overlap
 • Over 60%: Homorhythmic—voices move together
 
-Strong-beat collisions: Simultaneous attacks on beats 1 or 3 (in 4/4). Some are normal; too many loses contrapuntal independence.
 
 Low overlap is generally better—it creates continuous motion where one voice fills the gaps of the other.`,
   },
@@ -398,11 +397,8 @@ VOICE COMBINATION (with countersubject):
   Baseline: inverted = original quality. Score based on inverted position quality,
   penalty if significantly worse than original. Not just counting issues.
 
-• Rhythmic Interplay (0.8) - rhythmic independence
-  Baseline: 50% attack overlap. +15 complementary, -15 homorhythmic.
-
-• Voice Independence (0.9) - contour differentiation
-  Baseline: average motion variety. +12 high contrary, -12 high parallel.
+• Rhythmic Independence (0.9) - combined attack-offset + contour differentiation
+  Baseline: moderate overlap and average motion variety. +15 complementary, +12 high contrary, -12 high parallel.
 
 • Answer vs Countersubject (1.0) - CS against dominant-level answer
   Baseline: acceptable counterpoint. Based on dissonance analysis vs the answer.
