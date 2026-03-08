@@ -36,8 +36,6 @@ import {
   MODE_DEFINITIONS,
   ACCIDENTAL_OPTIONS,
   NOTE_LETTER_OPTIONS,
-  getKeySignatureMap,
-  keySignatureMapToLegacyArray,
   MODE_HEADER_SUFFIX,
   serializeKeySignatureModifiers,
   setP4Treatment,
