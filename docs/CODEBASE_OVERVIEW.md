@@ -1,6 +1,6 @@
 # Codebase Overview - Fugue Subject Analyzer
 
-**Last validated against codebase:** 2026-02-24 (`src/`, `docs/`)
+**Last validated against codebase:** 2026-03-08 (`README.md`, `PROJECT_INTENT.md`, `docs/`, `src/`)
 
 This document provides technical orientation for developers continuing work on this project.
 
@@ -10,42 +10,31 @@ This document provides technical orientation for developers continuing work on t
 
 ```
 querulous/
-├── src/
-│   ├── App.jsx                 # Main application
-│   ├── main.jsx               # Entry point
-│   ├── components/
-│   │   ├── scoring/           # Score display components
-│   │   ├── ui/                # Reusable UI components
-│   │   └── visualizations/    # Core visualizations
-│   │       ├── UnifiedCounterpointViz.jsx
-│   │       ├── IntervalAnalysisViz.jsx
-│   │       ├── CounterpointComparisonViz.jsx
-│   │       ├── InvertibilityViz.jsx
-│   │       ├── TwoVoiceViz.jsx
-│   │       ├── PianoRoll.jsx
-│   │       └── IntervalTimeline.jsx
-│   ├── utils/
-│   │   ├── analysis.js        # Core analysis functions
-│   │   ├── dissonanceScoring.js # Dissonance evaluation
-│   │   ├── scoring.js         # Category scoring
-│   │   ├── harmonicAnalysis.js # Harmonic implication support
-│   │   ├── abcParser.js       # ABC notation parser
-│   │   ├── formatter.js       # Beat/pitch formatting
-│   │   ├── vizConstants.js    # Visualization constants
-│   │   ├── defaultAnalysis.js
-│   │   └── constants/thresholds.js
-│   └── types/
-│       └── music.js           # Type definitions
+├── README.md
+├── PROJECT_INTENT.md
 ├── docs/
+│   ├── CODEBASE_OVERVIEW.md
 │   ├── DEFINITIONS.md
-│   ├── SCORING_SYSTEM.md
-│   ├── SCORING_CRITICAL_APPRAISAL.md
 │   ├── HARMONIC_IMPLICATION_ALGORITHM.md
 │   ├── PROJECT_PLAN.md
-│   ├── CODEBASE_OVERVIEW.md
+│   ├── SCORING_CRITICAL_APPRAISAL.md
+│   ├── SCORING_SYSTEM.md
 │   └── WORKING_WITH_USER.md
-├── PROJECT_INTENT.md
-└── PENDING_FEEDBACK.md
+├── src/
+│   ├── App.jsx                 # Main application orchestration
+│   ├── App.test.jsx
+│   ├── ErrorBoundary.jsx
+│   ├── main.jsx                # Vite/React entry point
+│   ├── components/             # UI, scoring, and visualization components
+│   ├── styles/
+│   ├── test/
+│   ├── types/
+│   └── utils/
+├── public/
+├── index.html
+├── package.json
+├── package-lock.json
+└── vite.config.js
 ```
 
 ---
@@ -179,5 +168,6 @@ Use `src/utils/vizConstants.js` and then verify visual consumers in `src/compone
 
 ## Planning Artifact Status
 
+- `PENDING_FEEDBACK.md` is **not present** in this repository and should be treated as an archived reference.
 - `IMPLEMENTATION_PLAN.md` is **not present** in this repository and should be treated as an archived reference.
 - Legacy roadmap mentions of `StrettoViz.jsx` should be treated as archived; current visualization work should target existing files under `src/components/visualizations/`.
