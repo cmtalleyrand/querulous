@@ -8,5 +8,10 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.js',
+    coverage: {
+      provider: 'custom',
+      customProviderModule: './tools/vitest-custom-coverage-provider.js',
+      reporter: ['text', 'json-summary'],
+    },
   },
 });
