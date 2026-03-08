@@ -335,6 +335,7 @@ export function TwoVoiceViz({
             }
           }
           if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
+          if (chain.chainTotalScore !== undefined) pt.chainTotalScore = chain.chainTotalScore;
         }
       }
     }
@@ -994,9 +995,11 @@ export function TwoVoiceViz({
                   <div data-testid="chain-score-banner" style={{ marginBottom: '10px', padding: '8px 10px', borderRadius: '6px', backgroundColor: '#eef2ff', border: '1px solid #c7d2fe' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '4px' }}>
                       <span style={{ color: '#4338ca', fontWeight: '700' }}>Chain score (whole chain)</span>
-                      <span style={{ color: pt.score >= 0 ? '#16a34a' : '#dc2626', fontWeight: '800' }}>{pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}</span>
+                      <span style={{ color: (pt.chainTotalScore ?? pt.score) >= 0 ? '#16a34a' : '#dc2626', fontWeight: '800' }}>
+                        {(pt.chainTotalScore ?? pt.score) >= 0 ? '+' : ''}{(pt.chainTotalScore ?? pt.score).toFixed(2)}
+                      </span>
                     </div>
-                    <div style={{ fontSize: '10px', color: '#6366f1' }}>Selected note in chain: #{(pt.chainPosition ?? 0) + 1} of {pt.chainLength || 1}</div>
+                    <div style={{ fontSize: '10px', color: '#6366f1' }}>Simultaneity #{(pt.chainPosition ?? 0) + 1} of {pt.chainLength || 1} in chain</div>
                   </div>
                 )}
                 <div style={{ fontWeight: '700', marginBottom: '12px', color: '#1e293b', fontSize: '14px',
@@ -1012,6 +1015,33 @@ export function TwoVoiceViz({
                   const entryUnparsed = pt.entryScore - entryExplained;
                   const exitUnparsed = pt.exitScore - exitExplained;
                   return <>
+                    {/* This simultaneity's contribution — prominent */}
+                    <div style={{ backgroundColor: '#ffffff', border: '2px solid #334155', borderRadius: '6px', padding: '10px', marginBottom: '14px' }}>
+                      <div style={{ fontSize: '10px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                        This simultaneity
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <div style={{ flex: 1, textAlign: 'center', padding: '6px 4px', backgroundColor: '#ede9fe', borderRadius: '4px' }}>
+                          <div style={{ fontSize: '9px', color: '#6366f1', fontWeight: '600', marginBottom: '2px' }}>ENTRY</div>
+                          <div style={{ fontWeight: '800', color: pt.entryScore >= 0 ? '#16a34a' : '#dc2626', fontSize: '13px' }}>
+                            {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore?.toFixed(2)}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'center', padding: '6px 4px', backgroundColor: '#d1fae5', borderRadius: '4px' }}>
+                          <div style={{ fontSize: '9px', color: '#059669', fontWeight: '600', marginBottom: '2px' }}>EXIT</div>
+                          <div style={{ fontWeight: '800', color: pt.exitScore >= 0 ? '#16a34a' : '#dc2626', fontSize: '13px' }}>
+                            {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore?.toFixed(2)}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'center', padding: '6px 4px', backgroundColor: pt.score >= 0 ? '#f0fdf4' : '#fef2f2', borderRadius: '4px', borderLeft: `2px solid ${pt.score >= 0 ? '#16a34a' : '#dc2626'}` }}>
+                          <div style={{ fontSize: '9px', color: pt.score >= 0 ? '#15803d' : '#b91c1c', fontWeight: '600', marginBottom: '2px' }}>TOTAL</div>
+                          <div style={{ fontWeight: '800', color: pt.score >= 0 ? '#16a34a' : '#dc2626', fontSize: '15px' }}>
+                            {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <div style={{ marginBottom: '12px', backgroundColor: '#ede9fe',
                       borderLeft: '3px solid #6366f1', borderRadius: '4px', padding: '10px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -1022,7 +1052,7 @@ export function TwoVoiceViz({
                           color: pt.entry.score >= 0 ? '#16a34a' : '#dc2626',
                           backgroundColor: pt.entry.score >= 0 ? '#dcfce7' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
-                          Score: {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(2)}
+                          {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore.toFixed(2)}
                         </span>
                       </div>
                       {(pt.entry.details || []).map((d, i) => {
@@ -1048,24 +1078,35 @@ export function TwoVoiceViz({
                           textTransform: 'none', letterSpacing: '0.1px', marginBottom: '8px' }}>
                           Recognized Patterns
                         </div>
-                        {pt.patterns.map((p, i) => (
-                          <div key={i} style={{ marginBottom: '6px', backgroundColor: 'white', borderRadius: '4px', padding: '8px' }}>
-                            <div style={{ fontWeight: '600', color: '#7c3aed', fontSize: '11px', marginBottom: '4px' }}>
-                              {p.type.replace(/_/g, ' ').toUpperCase()}
+                        {pt.patterns.map((p, i) => {
+                          const hasBonus = (p.entryBonus || 0) !== 0 || (p.exitBonus || 0) !== 0;
+                          return (
+                            <div key={i} style={{ marginBottom: '6px', backgroundColor: 'white', borderRadius: '4px', padding: '8px' }}>
+                              <div style={{ fontWeight: '600', color: '#7c3aed', fontSize: '11px', marginBottom: '4px' }}>
+                                {p.type.replace(/_/g, ' ').toUpperCase()}
+                              </div>
+                              <div style={{ fontSize: '10px', color: '#64748b', marginBottom: hasBonus ? '4px' : 0, fontStyle: 'italic' }}>
+                                {p.description}
+                              </div>
+                              {hasBonus ? (
+                                <div style={{ display: 'flex', gap: '6px', fontSize: '10px', flexWrap: 'wrap' }}>
+                                  {(p.entryBonus || 0) !== 0 && (
+                                    <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '3px', fontWeight: '700' }}>
+                                      Entry: +{(p.entryBonus).toFixed(2)}
+                                    </span>
+                                  )}
+                                  {(p.exitBonus || 0) !== 0 && (
+                                    <span style={{ backgroundColor: '#d1fae5', color: '#059669', padding: '2px 6px', borderRadius: '3px', fontWeight: '600' }}>
+                                      Exit: +{(p.exitBonus).toFixed(2)}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>no score bonus</div>
+                              )}
                             </div>
-                            <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px', fontStyle: 'italic' }}>
-                              {p.description}
-                            </div>
-                            <div style={{ display: 'flex', gap: '6px', fontSize: '10px', flexWrap: 'wrap' }}>
-                              <span style={{ backgroundColor: '#dcfce7', color: '#16a34a', padding: '2px 6px', borderRadius: '3px', fontWeight: '700' }}>
-                                Entry: +{(p.entryBonus || 0).toFixed(2)}
-                              </span>
-                              <span style={{ backgroundColor: '#d1fae5', color: '#059669', padding: '2px 6px', borderRadius: '3px', fontWeight: '600' }}>
-                                Exit: +{(p.exitBonus || 0).toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
 
@@ -1079,7 +1120,7 @@ export function TwoVoiceViz({
                           color: pt.exit.score >= 0 ? '#16a34a' : '#dc2626',
                           backgroundColor: pt.exit.score >= 0 ? '#dcfce7' : '#fee2e2',
                           padding: '3px 8px', borderRadius: '4px', fontSize: '11px' }}>
-                          Score: {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(2)}
+                          {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore.toFixed(2)}
                         </span>
                       </div>
                       {(pt.exit.details || []).map((d, i) => {
@@ -1098,10 +1139,9 @@ export function TwoVoiceViz({
                       })}
                     </div>
 
-
-                    <details style={{ marginBottom: '10px', backgroundColor: 'transparent', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 8px' }}>
+                    <details style={{ backgroundColor: 'transparent', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '6px 8px' }}>
                       <summary style={{ cursor: 'pointer', fontSize: '11px', color: '#334155', fontWeight: '600', listStylePosition: 'inside' }}>
-                        Score math: {formatSigned(pt.entryScore)} + {formatSigned(pt.exitScore)} = {formatSigned(pt.score)}
+                        Score math: {formatSigned(pt.entryScore)} {pt.exitScore >= 0 ? '+' : '−'} {Math.abs(pt.exitScore).toFixed(2)} = {formatSigned(pt.score)}
                       </summary>
                       <div style={{ marginTop: '6px', display: 'grid', gap: '6px' }}>
                         <div style={{ borderRadius: '4px', padding: '4px 6px', border: '1px solid #e2e8f0' }}>
@@ -1118,28 +1158,6 @@ export function TwoVoiceViz({
                         </div>
                       </div>
                     </details>
-
-                    <div style={{ backgroundColor: '#ffffff', border: '2px solid #e2e8f0', borderRadius: '6px', padding: '10px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <span style={{ fontWeight: '600', color: '#64748b', fontSize: '11px' }}>Entry Score</span>
-                        <span style={{ fontWeight: '800', color: pt.entryScore >= 0 ? '#16a34a' : '#dc2626', fontSize: '13px' }}>
-                          {pt.entryScore >= 0 ? '+' : ''}{pt.entryScore?.toFixed(2)}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <span style={{ fontWeight: '600', color: '#64748b', fontSize: '11px' }}>Exit Score</span>
-                        <span style={{ fontWeight: '800', color: pt.exitScore >= 0 ? '#16a34a' : '#dc2626', fontSize: '13px' }}>
-                          {pt.exitScore >= 0 ? '+' : ''}{pt.exitScore?.toFixed(2)}
-                        </span>
-                      </div>
-                      <div style={{ borderTop: '2px solid #e2e8f0', paddingTop: '6px', marginTop: '6px',
-                        display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '13px' }}>TOTAL</span>
-                        <span style={{ fontWeight: '800', color: pt.score >= 0 ? '#16a34a' : '#dc2626', fontSize: '16px' }}>
-                          {pt.score >= 0 ? '+' : ''}{pt.score.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
                   </>;
                 })()}
 

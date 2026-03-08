@@ -971,7 +971,14 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
   // SUSPENSION/RETARDATION: Oblique entry (one voice held), step resolution by the held voice.
   // Weak-beat versions (formerly often classified as anticipation) are treated as
   // weak suspensions/retardations with reduced bonus.
-  if (entryInfo.motion.type === 'oblique') {
+  // Suspension requires immediate resolution to a consonance — if the next simultaneity is
+  // also dissonant this is a consecutive dissonance chain, not a suspension.
+  const nextIsDissonant = nextSim && (() => {
+    if (!nextSim.interval.isConsonant()) return true;
+    if (nextSim.interval.class === 4 && isP4DissonantInContext(nextSim, ctx)) return true;
+    return false;
+  })();
+  if (entryInfo.motion.type === 'oblique' && !nextIsDissonant) {
     const heldVoice = !entryInfo.motion.v1Moved ? 1 : (!entryInfo.motion.v2Moved ? 2 : null);
     if (heldVoice) {
       const resolution = heldVoice === 1 ? exitInfo.v1Resolution : exitInfo.v2Resolution;
@@ -1890,6 +1897,19 @@ export function analyzeAllDissonances(sims, options = {}) {
           }
         }
       }
+    }
+  }
+
+  // Compute chain total scores (post-mitigation sum across each consecutive group).
+  // All members of the same chain share the same chainTotalScore.
+  // Single-dissonance "chains" get chainTotalScore equal to their own score.
+  for (const r of results) {
+    if (!r.isConsonant) r.chainTotalScore = r.score; // default for isolated dissonances
+  }
+  for (const group of consecutiveGroups) {
+    const total = group.reduce((sum, { index }) => sum + (results[index].score || 0), 0);
+    for (const { index } of group) {
+      results[index].chainTotalScore = total;
     }
   }
 
