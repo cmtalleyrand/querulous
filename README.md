@@ -18,10 +18,10 @@ A React-based web application for analyzing fugue subjects and countersubjects f
 
 The application features a comprehensive scoring dashboard that provides:
 
-- **Overall Viability Score**: A weighted aggregate score (0-100) with rating
-- **Category Breakdowns**: Individual scores for each analysis category
-- **Visual Score Bars**: Progress bars with color-coded ratings (Excellent/Good/Fair/Needs Work)
-- **Detailed Factors**: Expandable breakdown showing how each score was calculated
+- **Overall Viability Score**: A weighted aggregate on the base-zero scale, displayed with signed values (`+`/`-`) and a rating (`Strong/Good/Fair/Weak`)
+- **Grouped Category Breakdowns**: Detailed category panels organized as Counterpoint Quality, Rhythmic Independence, and Stretto
+- **Visual Score Gauges/Bars**: Category cards and gauge visuals that map negative values below baseline and positive values above baseline
+- **Detailed Factors**: Expandable per-category factor lists split into strengths, issues, and neutral factors
 - **Strengths & Improvements**: Summary cards highlighting what's working and what needs attention
 - **Actionable Suggestions**: Specific recommendations for improving low-scoring areas
 
@@ -117,27 +117,30 @@ src/
 
 ## Scoring System
 
+All scoring uses a **base-zero internal scale**. A value of `0` is the neutral baseline; positive values indicate improving contrapuntal viability, and negative values indicate degradation. The displayed category and overall values are these base-zero scores (not remapped to a 0–100 scale).
+
 ### Score Categories
 
 | Category | Weight | Description |
 |----------|--------|-------------|
-| Harmonic Implication | 1.0 | Opening/closing degrees, dominant arrivals |
-| Rhythmic Variety | 0.8 | Note value diversity |
-| Stretto Viability | 1.0 | Clean overlapping entries |
-| Tonal Answer | 0.9 | Junction quality |
-| Double Counterpoint | 1.0 | Invertibility (with CS) |
-| Rhythmic Complementarity | 0.8 | Attack point offset (with CS) |
-| Contour Independence | 0.9 | Voice profile independence (with CS) |
-| Modulatory Robustness | 1.0 | CS against answer (with CS) |
+| Subject Rhythmic Character | 0.8 | Distinctiveness and variety of rhythmic profile |
+| Stretto Potential | 1.0 | Counterpoint quality under overlapping entries |
+| Invertible Counterpoint *(with countersubject)* | 1.0 | Subject/CS quality under inversion |
+| Rhythmic Independence *(with countersubject)* | 0.9 | Combined contour independence + rhythmic interplay |
+| CS vs Answer Quality *(with countersubject)* | 1.0 | Counterpoint quality when the CS is paired with the tonal answer |
 
 ### Rating Thresholds
 
 | Score | Rating |
 |-------|--------|
-| 85-100 | Excellent |
-| 70-84 | Good |
-| 50-69 | Fair |
-| 0-49 | Needs Work |
+| `>= 15` | Strong |
+| `>= 5` and `< 15` | Good |
+| `>= 0` and `< 5` | Fair |
+| `< 0` | Weak |
+
+### Weighted Aggregation Note
+
+The overall viability score is computed as a **weighted arithmetic mean of internal base-zero category scores** (using category weights), then rounded for display. This preserves direct comparability between category-level and overall values.
 
 ## Technologies
 
