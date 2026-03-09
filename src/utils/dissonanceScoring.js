@@ -662,17 +662,17 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   const v2MelodicInterval = motion.v2Moved ? currSim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
 
   // Note entry leap types for reference (human-readable labels, not raw enum)
-  const _leapLabel = { skip: 'skip (3rd)', perfect_leap: 'P4/P5 leap', large_leap: 'large leap', octave: 'octave leap' };
+  const _leapLabel = { skip: 'm3/M3', perfect_leap: 'P4/P5', large_leap: 'TT/6th/7th', octave: 'P8' };
   if (motion.v1Moved) {
     const mag = getIntervalMagnitude(v1MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
-      details.push(`V1 entered by ${_leapLabel[mag.type] || mag.type} (${Math.abs(v1MelodicInterval)} st)`);
+      details.push(`V1 entered by ${_leapLabel[mag.type] || mag.type}`);
     }
   }
   if (motion.v2Moved) {
     const mag = getIntervalMagnitude(v2MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
-      details.push(`V2 entered by ${_leapLabel[mag.type] || mag.type} (${Math.abs(v2MelodicInterval)} st)`);
+      details.push(`V2 entered by ${_leapLabel[mag.type] || mag.type}`);
     }
   }
 
@@ -991,7 +991,14 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
   // SUSPENSION/RETARDATION: Oblique entry (one voice held), step resolution by the held voice.
   // Weak-beat versions (formerly often classified as anticipation) are treated as
   // weak suspensions/retardations with reduced bonus.
-  if (entryInfo.motion.type === 'oblique') {
+  // Suspension requires immediate consonant resolution — a dissonance followed by another
+  // dissonance is a consecutive chain, not a suspension.
+  const nextIsDissonant = nextSim && (() => {
+    if (!nextSim.interval.isConsonant()) return true;
+    if (nextSim.interval.class === 4 && isP4DissonantInContext(nextSim, ctx)) return true;
+    return false;
+  })();
+  if (entryInfo.motion.type === 'oblique' && !nextIsDissonant) {
     const heldVoice = !entryInfo.motion.v1Moved ? 1 : (!entryInfo.motion.v2Moved ? 2 : null);
     if (heldVoice) {
       const resolution = heldVoice === 1 ? exitInfo.v1Resolution : exitInfo.v2Resolution;
@@ -1218,7 +1225,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
         const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
         if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented passing tone' });
         bonus += accentedBonus;
-        patterns.push({ type: 'passing', bonus: accentedBonus, voice: 1, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
+        patterns.push({ type: 'passing', bonus: accentedBonus, entryBonus: accentedBonus, exitBonus: 0, voice: 1, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
       }
     }
     // Check V2 passing
@@ -1230,7 +1237,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
         const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
         if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented passing tone' });
         bonus += accentedBonus;
-        patterns.push({ type: 'passing', bonus: accentedBonus, voice: 2, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
+        patterns.push({ type: 'passing', bonus: accentedBonus, entryBonus: accentedBonus, exitBonus: 0, voice: 2, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
       }
     }
 
@@ -1245,7 +1252,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
           const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
           if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented neighbor tone' });
           bonus += accentedBonus;
-          patterns.push({ type: 'neighbor', bonus: accentedBonus, voice: 1, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
+          patterns.push({ type: 'neighbor', bonus: accentedBonus, entryBonus: accentedBonus, exitBonus: 0, voice: 1, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
         }
       }
       // Check V2
@@ -1257,7 +1264,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
           const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
           if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented neighbor tone' });
           bonus += accentedBonus;
-          patterns.push({ type: 'neighbor', bonus: accentedBonus, voice: 2, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
+          patterns.push({ type: 'neighbor', bonus: accentedBonus, entryBonus: accentedBonus, exitBonus: 0, voice: 2, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
         }
       }
     }
@@ -1497,7 +1504,7 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
 
   // Cross-reference: show exit resolution penalty in the Entry section so users can
   // see that the entry leap is what drives the penalty (it's a combined entry+exit issue).
-  const _xl = { skip: 'skip (3rd)', perfect_leap: 'P4/P5 leap', large_leap: 'large leap', octave: 'octave leap' };
+  const _xl = { skip: 'm3/M3', perfect_leap: 'P4/P5', large_leap: 'TT/6th/7th', octave: 'P8' };
   // Keep this finite check as a defensive guard for null/unset resolution components
   // on unresolved endpoints and any future malformed intermediate states.
   if (Number.isFinite(exitInfo.v1ResolutionComponent) && exitInfo.v1ResolutionComponent !== 0 && entryInfo.v1MelodicInterval !== 0) {
@@ -1510,6 +1517,9 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
     const c = exitInfo.v2ResolutionComponent;
     entryInfo.details.push(`V2 ${_xl[mag.type] || mag.type} → exit: ${c >= 0 ? '+' : ''}${c.toFixed(2)}`);
   }
+
+  // P4 is inherently less severe — show the bonus in entry details so the math is transparent
+  if (p4Bonus > 0) entryInfo.details.push(`P4 interval: +${p4Bonus.toFixed(2)}`);
 
   // Calculate ENTRY score: entry motion + entry-allocated pattern bonuses + P4 bonus
   const entryBonusTotal = (patternInfo.entryBonuses || []).reduce((sum, b) => sum + b.amount, 0);
@@ -1742,6 +1752,20 @@ export function analyzeAllDissonances(sims, options = {}) {
     consecutiveGroups.push([...currentGroup]);
   }
 
+  // Compute chainTotalScore for each consecutive chain group.
+  // All members of the same chain share the same value (sum of all members' scores).
+  // Standalone dissonances always use their own current score.
+  const markChainTotals = () => {
+    for (const r of results) {
+      if (!r.isConsonant) r.chainTotalScore = r.score;
+    }
+    for (const group of consecutiveGroups) {
+      const total = group.reduce((sum, { index }) => sum + (results[index].score || 0), 0);
+      for (const { index } of group) results[index].chainTotalScore = total;
+    }
+  };
+  markChainTotals();
+
   // Pass 1: Compute and store passingness for ALL dissonances (not just consecutive ones).
   // Done before applying any mitigations so that chain entries can reference the
   // already-computed passingness of their successor (needed for rule c below).
@@ -1813,31 +1837,35 @@ export function analyzeAllDissonances(sims, options = {}) {
 
       let entryAdj = 0;
       let exitAdj = 0;
-      const adjDetails = [];
+      const entryMitigationDetails = [];
+      const exitMitigationDetails = [];
 
       // (a/b) Between-voice entry motion component
       if (entryMotionComp < 0 && bestPassing.mitigation > 0) {
         const mitigated = Math.min(0, entryMotionComp + bestPassing.mitigation);
-        entryAdj += mitigated - entryMotionComp;
-        adjDetails.push(`entry motion (${bestPassing.mitigation.toFixed(2)}): +${(mitigated - entryMotionComp).toFixed(2)}`);
+        const adj = mitigated - entryMotionComp;
+        entryAdj += adj;
+        entryMitigationDetails.push(`Passing character: +${adj.toFixed(2)}`);
       } else if (entryMotionComp > 0 && bestPassing.mitigation > 0) {
         const reduction = Math.min(entryMotionComp, Math.min(0.8, bestPassing.mitigation / 2.5));
         entryAdj -= reduction;
-        adjDetails.push(`entry reward reduction: -${reduction.toFixed(2)}`);
+        entryMitigationDetails.push(`Passing character (entry reward reduced): -${reduction.toFixed(2)}`);
       }
 
       // (a) V1 single-voice exit motion penalties
       if (v1ResComp < 0 && v1Passing.mitigation > 0) {
         const mitigated = Math.min(0, v1ResComp + v1Passing.mitigation);
-        exitAdj += mitigated - v1ResComp;
-        adjDetails.push(`V1 resolution (${v1Passing.mitigation.toFixed(2)}): +${(mitigated - v1ResComp).toFixed(2)}`);
+        const adj = mitigated - v1ResComp;
+        exitAdj += adj;
+        exitMitigationDetails.push(`Passing character (V1 resolution): +${adj.toFixed(2)}`);
       }
 
       // (a) V2 single-voice exit motion penalties
       if (v2ResComp < 0 && v2Passing.mitigation > 0) {
         const mitigated = Math.min(0, v2ResComp + v2Passing.mitigation);
-        exitAdj += mitigated - v2ResComp;
-        adjDetails.push(`V2 resolution (${v2Passing.mitigation.toFixed(2)}): +${(mitigated - v2ResComp).toFixed(2)}`);
+        const adj = mitigated - v2ResComp;
+        exitAdj += adj;
+        exitMitigationDetails.push(`Passing character (V2 resolution): +${adj.toFixed(2)}`);
       }
 
       // (c) D→D penalty — only for consecutive members (middle of 3+ chains)
@@ -1845,8 +1873,9 @@ export function analyzeAllDissonances(sims, options = {}) {
         const ddComp = results[i].exit?.baseExitComponent || 0;
         if (ddComp < 0 && bestPassing.mitigation > 0) {
           const mitigated = Math.min(0, ddComp + bestPassing.mitigation);
-          exitAdj += mitigated - ddComp;
-          adjDetails.push(`D→D (own exit, ${bestPassing.mitigation.toFixed(2)}): +${(mitigated - ddComp).toFixed(2)}`);
+          const adj = mitigated - ddComp;
+          exitAdj += adj;
+          exitMitigationDetails.push(`Passing character (D→D exit): +${adj.toFixed(2)}`);
         }
       }
 
@@ -1856,11 +1885,9 @@ export function analyzeAllDissonances(sims, options = {}) {
         results[i].entryScore += entryAdj;
         results[i].exitScore += exitAdj;
         results[i].passingCharacterAdj = totalAdj;
-        const label = bestPassing.isPassing ? 'passing motion' : 'partial passing';
-        results[i].details.push(
-          `Passing character (${label}): +${totalAdj.toFixed(2)} [${adjDetails.join(', ')}]`
-        );
       }
+      if (entryMitigationDetails.length > 0) results[i].entryMitigationDetails = entryMitigationDetails;
+      if (exitMitigationDetails.length > 0) results[i].exitMitigationDetails = exitMitigationDetails;
 
     } else if (results[i].isChainEntry && results[i].chainLength > 1) {
       // (c) The chain entry's D→D exit penalty (-0.75) is mitigated by the passingness
@@ -1877,15 +1904,17 @@ export function analyzeAllDissonances(sims, options = {}) {
             results[i].score += adj;
             results[i].exitScore += adj;
             results[i].passingCharacterAdj = (results[i].passingCharacterAdj || 0) + adj;
-            const label = nextBestPassing.isPassing ? 'next passing' : 'next partial passing';
-            results[i].details.push(
-              `D→D penalty mitigated (${label}, ${nextBestPassing.mitigation.toFixed(2)}): +${adj.toFixed(2)}`
-            );
+            const exitMit = results[i].exitMitigationDetails || [];
+            exitMit.push(`Passing character (D→D, following note): +${adj.toFixed(2)}`);
+            results[i].exitMitigationDetails = exitMit;
           }
         }
       }
     }
   }
+
+  // Recompute chain totals now that pass 2 has updated individual scores.
+  markChainTotals();
 
   // Duration-weighted average across ALL intervals (same formula as TwoVoiceViz badge).
   // Consonances are scored 0.2–0.5 by type; dissonances use their actual score.
