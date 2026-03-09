@@ -295,48 +295,45 @@ export function checkParallelPerfects(sims, formatter) {
   const violations = [];
   const checked = new Set();
 
-  for (let i = 0; i < uniqueSims.length; i++) {
+  for (let i = 0; i < uniqueSims.length - 1; i++) {
     const curr = uniqueSims[i];
     // Only check perfect 5ths and octaves (unisons are class 1 for octaves reduced mod 12)
     if (![1, 5].includes(curr.interval.class)) continue;
     // Must be consonant (not a dissonance like augmented/diminished)
     if (!curr.interval.isConsonant()) continue;
 
-    // Find the IMMEDIATELY next simultaneity where BOTH voices have moved
-    for (let j = i + 1; j < uniqueSims.length; j++) {
-      const next = uniqueSims[j];
+    // Compare only with the immediate next contrapuntal state.
+    // If either voice changes alone in between, the original perfect interval
+    // is no longer contiguous with the later one and cannot form a parallel perfect.
+    const next = uniqueSims[i + 1];
 
-      const v1Moved = next.voice1Note !== curr.voice1Note;
-      const v2Moved = next.voice2Note !== curr.voice2Note;
-      if (!v1Moved || !v2Moved) continue;
+    const v1Moved = next.voice1Note !== curr.voice1Note;
+    const v2Moved = next.voice2Note !== curr.voice2Note;
+    if (!v1Moved || !v2Moved) continue;
 
-      // Found the next simultaneity where both voices moved
+    // BOTH intervals must be perfect 5ths or octaves (class 1 or 5)
+    // AND both must be consonant (perfect quality, not augmented/diminished)
+    if (![1, 5].includes(next.interval.class)) continue;
+    if (!next.interval.isConsonant()) continue;
 
-      // BOTH intervals must be perfect 5ths or octaves (class 1 or 5)
-      // AND both must be consonant (perfect quality, not augmented/diminished)
-      if (![1, 5].includes(next.interval.class)) break;
-      if (!next.interval.isConsonant()) break;
+    // Both must be the same interval class (5th to 5th, or 8ve to 8ve)
+    if (next.interval.class !== curr.interval.class) continue;
 
-      // Both must be the same interval class (5th to 5th, or 8ve to 8ve)
-      if (next.interval.class !== curr.interval.class) break;
+    const d1 = Math.sign(next.voice1Note.pitch - curr.voice1Note.pitch);
+    const d2 = Math.sign(next.voice2Note.pitch - curr.voice2Note.pitch);
 
-      const d1 = Math.sign(next.voice1Note.pitch - curr.voice1Note.pitch);
-      const d2 = Math.sign(next.voice2Note.pitch - curr.voice2Note.pitch);
-
-      // Parallel motion = same direction
-      if (d1 === d2 && d1 !== 0) {
-        const checkKey = `${curr.voice1Note.pitch}-${curr.voice2Note.pitch}-${next.voice1Note.pitch}-${next.voice2Note.pitch}`;
-        if (!checked.has(checkKey)) {
-          checked.add(checkKey);
-          const names = { 1: '8ves', 5: '5ths' };
-          const dir = d1 > 0 ? '↑' : '↓';
-          violations.push({
-            onset: curr.onset,
-            description: `Parallel ${names[curr.interval.class]}: ${pitchName(curr.voice1Note.pitch)}-${pitchName(curr.voice2Note.pitch)} ${dir} ${pitchName(next.voice1Note.pitch)}-${pitchName(next.voice2Note.pitch)} (${formatter.formatBeat(curr.onset)} to ${formatter.formatBeat(next.onset)})`,
-          });
-        }
+    // Parallel motion = same direction
+    if (d1 === d2 && d1 !== 0) {
+      const checkKey = `${curr.voice1Note.pitch}-${curr.voice2Note.pitch}-${next.voice1Note.pitch}-${next.voice2Note.pitch}`;
+      if (!checked.has(checkKey)) {
+        checked.add(checkKey);
+        const names = { 1: '8ves', 5: '5ths' };
+        const dir = d1 > 0 ? '↑' : '↓';
+        violations.push({
+          onset: curr.onset,
+          description: `Parallel ${names[curr.interval.class]}: ${pitchName(curr.voice1Note.pitch)}-${pitchName(curr.voice2Note.pitch)} ${dir} ${pitchName(next.voice1Note.pitch)}-${pitchName(next.voice2Note.pitch)} (${formatter.formatBeat(curr.onset)} to ${formatter.formatBeat(next.onset)})`,
+        });
       }
-      break;
     }
   }
 
