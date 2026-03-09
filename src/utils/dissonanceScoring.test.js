@@ -79,3 +79,19 @@ describe('dissonance rest-resolution messaging', () => {
     expect(exitDetails).not.toContain('Invalid resolution (both voices rested then moved');
   });
 });
+
+describe('dissonance exit voice-resolution scoring', () => {
+  it('preserves per-voice non-step exit leap penalty reason and component delta', () => {
+    const sims = [
+      new Simultaneity(0, makeNote(64, 0, 1), makeNote(60, 0, 1), 1),
+      new Simultaneity(1, makeNote(65, 1, 1), makeNote(60, 1, 1), 0.5),
+      new Simultaneity(2, makeNote(64, 2, 1), makeNote(57, 2, 1), 1),
+    ];
+
+    const result = scoreDissonance(sims[1], sims, 1, [], { treatP4AsDissonant: true });
+
+    expect(result.exit.details).toContain('V2 leaves dissonance by melodic skip: -0.50');
+    expect(result.exit.v2ResolutionComponent).toBe(-0.5);
+    expect(result.exit.v1ResolutionComponent).toBe(0);
+  });
+});
