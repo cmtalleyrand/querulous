@@ -144,4 +144,33 @@ describe('TwoVoiceViz dissonance chain scoring panel', () => {
 
     expect(screen.queryByText(/Passing Character Adjustment/i)).not.toBeInTheDocument();
   });
+
+  it('resolves issue clicks to the rendered quarter-beat bucket before selecting/highlighting', () => {
+    Element.prototype.scrollTo = vi.fn();
+    const v1 = [
+      { pitch: 60, onset: 0, duration: 1 },
+      { pitch: 62, onset: 1, duration: 1 },
+      { pitch: 64, onset: 2, duration: 1 },
+      { pitch: 65, onset: 3, duration: 1 },
+    ];
+    const v2 = [
+      { pitch: 59, onset: 0, duration: 1 },
+      { pitch: 61, onset: 1, duration: 1 },
+      { pitch: 63, onset: 2, duration: 1 },
+      { pitch: 65, onset: 3, duration: 1 },
+    ];
+
+    render(
+      <TwoVoiceViz
+        voice1={v1}
+        voice2={v2}
+        meter={[4, 4]}
+        issues={[{ onset: 1.01, description: 'External issue in same visual bucket' }]}
+      />
+    );
+
+    fireEvent.click(screen.getByText('External issue in same visual bucket'));
+
+    expect(screen.getByText(/^Beat 2$/)).toBeInTheDocument();
+  });
 });
