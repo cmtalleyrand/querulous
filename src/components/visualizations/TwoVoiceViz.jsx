@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback, Fragment } from 'react';
-import { pitchName, metricWeight } from '../../utils/formatter';
-import { Simultaneity } from '../../types';
+import { pitchName } from '../../utils/formatter';
 import { scoreDissonance, analyzeAllDissonances } from '../../utils/dissonanceScoring';
+import { findSimultaneities } from '../../utils/analysis';
 import {
   generateGridLines,
   VIZ_COLORS,
@@ -50,24 +50,7 @@ export function TwoVoiceViz({
   const analysis = useMemo(() => {
     if (!voice1?.length || !voice2?.length) return null;
 
-    const findSims = (v1, v2) => {
-      const sims = [];
-      for (const n1 of v1) {
-        const s1 = n1.onset;
-        const e1 = n1.onset + n1.duration;
-        for (const n2 of v2) {
-          const s2 = n2.onset;
-          const e2 = n2.onset + n2.duration;
-          if (s1 < e2 && s2 < e1) {
-            const start = Math.max(s1, s2);
-            sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
-          }
-        }
-      }
-      return sims.sort((a, b) => a.onset - b.onset);
-    };
-
-    const sims = findSims(voice1, voice2);
+    const sims = findSimultaneities(voice1, voice2, meter);
 
     const [numerator, denominator] = meter;
     const isCompound = (numerator % 3 === 0 && numerator > 3 && denominator === 8);
