@@ -838,9 +838,9 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   let v2ResolutionComponent = 0;
 
   const v1Exit = scoreVoiceExitResolution({
-    voiceId: 1,
-    currSim,
-    nextSim,
+    voiceLabel: 'V1',
+    currVoiceNote: currSim.voice1Note,
+    nextVoiceNote: nextSim.voice1Note,
     entryInterval: entryInfo?.v1MelodicInterval || 0,
     moved: motion.v1Moved,
     inSequence: v1InSequence,
@@ -851,9 +851,9 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   details.push(...v1Exit.detailLines);
 
   const v2Exit = scoreVoiceExitResolution({
-    voiceId: 2,
-    currSim,
-    nextSim,
+    voiceLabel: 'V2',
+    currVoiceNote: currSim.voice2Note,
+    nextVoiceNote: nextSim.voice2Note,
     entryInterval: entryInfo?.v2MelodicInterval || 0,
     moved: motion.v2Moved,
     inSequence: v2InSequence,
@@ -878,7 +878,14 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   };
 }
 
-function scoreVoiceExitResolution({ voiceId, currSim, nextSim, entryInterval, moved, inSequence }) {
+function scoreVoiceExitResolution({
+  voiceLabel,
+  currVoiceNote,
+  nextVoiceNote,
+  entryInterval,
+  moved,
+  inSequence,
+}) {
   if (!moved) {
     return {
       resolution: null,
@@ -888,8 +895,7 @@ function scoreVoiceExitResolution({ voiceId, currSim, nextSim, entryInterval, mo
     };
   }
 
-  const voiceKey = voiceId === 1 ? 'voice1Note' : 'voice2Note';
-  const exitInterval = nextSim[voiceKey].pitch - currSim[voiceKey].pitch;
+  const exitInterval = nextVoiceNote.pitch - currVoiceNote.pitch;
   const exitMag = getIntervalMagnitude(exitInterval);
   const resolution = {
     interval: Math.abs(exitInterval),
@@ -915,7 +921,7 @@ function scoreVoiceExitResolution({ voiceId, currSim, nextSim, entryInterval, mo
     if (penaltyInfo.penalty !== 0) {
       scoreDelta += penaltyInfo.penalty;
       resolutionComponentDelta += penaltyInfo.penalty;
-      detailLines.push(`V${voiceId} ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
+      detailLines.push(`${voiceLabel} ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
     }
 
     // Leap continuation penalty: large leaps (but not skips) should be followed by opposite direction
@@ -924,7 +930,7 @@ function scoreVoiceExitResolution({ voiceId, currSim, nextSim, entryInterval, mo
         resolution.direction !== 0 && resolution.direction === entryDir) {
       scoreDelta -= 0.25;
       resolutionComponentDelta -= 0.25;
-      detailLines.push(`V${voiceId} melodic leap not followed by opposite motion: -0.25`);
+      detailLines.push(`${voiceLabel} melodic leap not followed by opposite motion: -0.25`);
     }
   } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
     // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
@@ -932,13 +938,13 @@ function scoreVoiceExitResolution({ voiceId, currSim, nextSim, entryInterval, mo
     let reason = '';
     if (exitMag.type === 'skip') {
       penalty = -0.5;
-      reason = `V${voiceId} leaves dissonance by melodic skip`;
+      reason = `${voiceLabel} leaves dissonance by melodic skip`;
     } else if (exitMag.type === 'perfect_leap') {
       penalty = -0.5;
-      reason = `V${voiceId} leaves dissonance by melodic P4/P5`;
+      reason = `${voiceLabel} leaves dissonance by melodic P4/P5`;
     } else {
       penalty = -1.5;
-      reason = `V${voiceId} leaves dissonance by large melodic leap`;
+      reason = `${voiceLabel} leaves dissonance by large melodic leap`;
     }
     // Apply sequence mitigation
     if (inSequence) {
