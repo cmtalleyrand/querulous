@@ -1225,7 +1225,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
         const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
         if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented passing tone' });
         bonus += accentedBonus;
-        patterns.push({ type: 'passing', bonus: accentedBonus, voice: 1, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
+        patterns.push({ type: 'passing', bonus: accentedBonus, entryBonus: accentedBonus, exitBonus: 0, voice: 1, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
       }
     }
     // Check V2 passing
@@ -1237,7 +1237,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
         const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
         if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented passing tone' });
         bonus += accentedBonus;
-        patterns.push({ type: 'passing', bonus: accentedBonus, voice: 2, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
+        patterns.push({ type: 'passing', bonus: accentedBonus, entryBonus: accentedBonus, exitBonus: 0, voice: 2, description: accentedBonus > 0 ? 'Accented passing tone (stepwise through)' : 'Passing tone (stepwise through)' });
       }
     }
 
@@ -1252,7 +1252,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
           const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
           if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented neighbor tone' });
           bonus += accentedBonus;
-          patterns.push({ type: 'neighbor', bonus: accentedBonus, voice: 1, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
+          patterns.push({ type: 'neighbor', bonus: accentedBonus, entryBonus: accentedBonus, exitBonus: 0, voice: 1, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
         }
       }
       // Check V2
@@ -1264,7 +1264,7 @@ function checkPatterns(prevSim, currSim, nextSim, entryInfo, exitInfo, ctx) {
           const accentedBonus = isStrongBeat(currSim.onset, ctx) ? 0.25 : 0;
           if (accentedBonus > 0) entryBonuses.push({ amount: accentedBonus, reason: 'accented neighbor tone' });
           bonus += accentedBonus;
-          patterns.push({ type: 'neighbor', bonus: accentedBonus, voice: 2, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
+          patterns.push({ type: 'neighbor', bonus: accentedBonus, entryBonus: accentedBonus, exitBonus: 0, voice: 2, description: accentedBonus > 0 ? 'Accented neighbor tone (step out and back)' : 'Neighbor tone (step out and back)' });
         }
       }
     }
@@ -1517,6 +1517,9 @@ function _scoreDissonance(currSim, allSims, index, intervalHistory, ctx) {
     const c = exitInfo.v2ResolutionComponent;
     entryInfo.details.push(`V2 ${_xl[mag.type] || mag.type} → exit: ${c >= 0 ? '+' : ''}${c.toFixed(2)}`);
   }
+
+  // P4 is inherently less severe — show the bonus in entry details so the math is transparent
+  if (p4Bonus > 0) entryInfo.details.push(`P4 interval: +${p4Bonus.toFixed(2)}`);
 
   // Calculate ENTRY score: entry motion + entry-allocated pattern bonuses + P4 bonus
   const entryBonusTotal = (patternInfo.entryBonuses || []).reduce((sum, b) => sum + b.amount, 0);
