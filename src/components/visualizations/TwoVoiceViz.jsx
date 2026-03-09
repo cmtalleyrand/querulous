@@ -319,6 +319,7 @@ export function TwoVoiceViz({
             pt.score = chain.score;
             pt.entryScore = chain.entryScore;
             pt.exitScore = chain.exitScore;
+            pt.chainTotalScore = chain.chainTotalScore;
           }
           if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
           if (chain.entryMitigationDetails?.length > 0) pt.entryMitigationDetails = chain.entryMitigationDetails;
@@ -967,7 +968,7 @@ export function TwoVoiceViz({
                   borderBottom: '2px solid #cbd5e1', paddingBottom: '6px' }}>Score Breakdown</div>
 
                 {!pt.isConsonant && pt.entry && pt.exit && (() => {
-                  const renderDetailLine = (d, accentColor) => {
+                  const renderDetailLine = (d) => {
                     const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
                     const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
                     return match ? (
