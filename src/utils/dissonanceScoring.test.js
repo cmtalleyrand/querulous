@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAnalysisContext, setP4Treatment } from './dissonanceScoring';
+import { analyzeAllDissonances, createAnalysisContext, setP4Treatment } from './dissonanceScoring';
 import { NoteEvent, ScaleDegree, Simultaneity } from '../types/music';
 import { scoreDissonance } from './dissonanceScoring';
 
@@ -80,18 +80,43 @@ describe('dissonance rest-resolution messaging', () => {
   });
 });
 
-describe('dissonance exit voice-resolution scoring', () => {
-  it('preserves per-voice non-step exit leap penalty reason and component delta', () => {
-    const sims = [
+
+describe('analyzeAllDissonances passing-sequence exit bonus', () => {
+  function makeThreeSimPassage({ middleDuration = 1, middleOnset = 1 }) {
+    return [
       new Simultaneity(0, makeNote(64, 0, 1), makeNote(60, 0, 1), 1),
-      new Simultaneity(1, makeNote(65, 1, 1), makeNote(60, 1, 1), 0.5),
-      new Simultaneity(2, makeNote(64, 2, 1), makeNote(57, 2, 1), 1),
+      new Simultaneity(middleOnset, makeNote(62, middleOnset, middleDuration), makeNote(60, middleOnset, middleDuration), 0.5),
+      new Simultaneity(2, makeNote(64, 2, 1), makeNote(60, 2, 1), 1),
     ];
+  }
 
-    const result = scoreDissonance(sims[1], sims, 1, [], { treatP4AsDissonant: true });
+  it('adds +0.25 only when both passing motion and sequence membership hold', () => {
+    const passingNoSequence = analyzeAllDissonances(makeThreeSimPassage({ middleDuration: 0.125, middleOnset: 1 }), {
+      treatP4AsDissonant: true,
+      sequenceBeatRanges: [],
+    }).all[1];
 
-    expect(result.exit.details).toContain('V2 leaves dissonance by melodic skip: -0.50');
-    expect(result.exit.v2ResolutionComponent).toBe(-0.5);
-    expect(result.exit.v1ResolutionComponent).toBe(0);
+    const passingWithSequence = analyzeAllDissonances(makeThreeSimPassage({ middleDuration: 0.125, middleOnset: 1 }), {
+      treatP4AsDissonant: true,
+      sequenceBeatRanges: [{ startBeat: 1, endBeat: 1 }],
+    }).all[1];
+
+    const nonPassingNoSequence = analyzeAllDissonances(makeThreeSimPassage({ middleDuration: 1, middleOnset: 1 }), {
+      treatP4AsDissonant: true,
+      sequenceBeatRanges: [],
+    }).all[1];
+
+    const nonPassingWithSequence = analyzeAllDissonances(makeThreeSimPassage({ middleDuration: 1, middleOnset: 1 }), {
+      treatP4AsDissonant: true,
+      sequenceBeatRanges: [{ startBeat: 1, endBeat: 1 }],
+    }).all[1];
+
+    expect(passingWithSequence.score - passingNoSequence.score).toBeCloseTo(0.25, 5);
+    expect(passingWithSequence.exitScore - passingNoSequence.exitScore).toBeCloseTo(0.25, 5);
+    expect((passingWithSequence.patterns || []).some((pattern) => pattern.type === 'passing_sequence_exit' && pattern.exitBonus === 0.25)).toBe(true);
+
+    expect((passingNoSequence.patterns || []).some((pattern) => pattern.type === 'passing_sequence_exit')).toBe(false);
+    expect(nonPassingWithSequence.score).toBeCloseTo(nonPassingNoSequence.score, 5);
+    expect((nonPassingWithSequence.patterns || []).some((pattern) => pattern.type === 'passing_sequence_exit')).toBe(false);
   });
 });
