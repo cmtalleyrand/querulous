@@ -10,6 +10,7 @@ import {
 } from '../../utils/vizConstants';
 import { CounterpointScoreDisplay } from '../ui/CounterpointScoreDisplay';
 import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES, TWO_VOICE_SCORING } from '../../utils/constants/thresholds';
+import { mergeChainAnalysisIntoIntervalPoints, normalizeOnsetKey } from '../../utils/chainMerge';
 
 /**
  * TwoVoiceViz — unified two-voice counterpoint visualization.
@@ -298,34 +299,7 @@ export function TwoVoiceViz({
     // Chain analysis: entry / consecutive / resolution
     const chainAnalysis = analyzeAllDissonances(sims, scoringOptions);
     if (chainAnalysis?.all) {
-      const chainByOnset = new Map();
-      for (const r of chainAnalysis.all) chainByOnset.set(Math.round(r.onset * 4) / 4, r);
-      for (const pt of intervalPoints) {
-        const chain = chainByOnset.get(Math.round(pt.onset * 4) / 4);
-        if (chain) {
-          pt.isChainEntry = chain.isChainEntry || false;
-          pt.isConsecutiveDissonance = chain.isConsecutiveDissonance || false;
-          pt.chainPosition = chain.chainPosition;
-          pt.chainLength = chain.chainLength || 0;
-          pt.chainStartOnset = chain.chainStartOnset;
-          pt.chainEndOnset = chain.chainEndOnset;
-          pt.chainUnresolved = chain.chainUnresolved || false;
-          pt.isChainResolution = chain.isChainResolution || false;
-          pt.consecutiveMitigationCount = chain.consecutiveMitigationCount || 0;
-          pt.consecutiveMitigation = chain.consecutiveMitigation || 0;
-          pt.passingMotion = chain.passingMotion || null;
-          // Copy back post-mitigation scores so the detail panel reflects actual mitigated values
-          if (!pt.isConsonant && chain.score !== undefined) {
-            pt.score = chain.score;
-            pt.entryScore = chain.entryScore;
-            pt.exitScore = chain.exitScore;
-            pt.chainTotalScore = chain.chainTotalScore;
-          }
-          if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
-          if (chain.entryMitigationDetails?.length > 0) pt.entryMitigationDetails = chain.entryMitigationDetails;
-          if (chain.exitMitigationDetails?.length > 0) pt.exitMitigationDetails = chain.exitMitigationDetails;
-        }
-      }
+      mergeChainAnalysisIntoIntervalPoints(intervalPoints, chainAnalysis.all);
     }
 
     const allPitches = [...voice1.map(n => n.pitch), ...voice2.map(n => n.pitch)];
@@ -430,7 +404,7 @@ export function TwoVoiceViz({
     }
   }, [analysis, previousIssueCount]);
 
-  const getOnsetKey = (onset) => Math.round(onset * 4) / 4; // local quarter-note snapping for UI selection consistency
+  const getOnsetKey = normalizeOnsetKey;
 
   const handleIntervalClick = useCallback((pt, event) => {
     if (event) { event.preventDefault(); event.stopPropagation(); }

@@ -4,6 +4,7 @@ import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
 import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis';
 import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants/analysisThresholds';
 import { METRIC_STRENGTH_CUTOFFS } from './constants/thresholds';
+import { mergeChainAnalysisIntoIntervalPoints } from './chainMerge';
 
 /**
  * Classify a dissonance according to species counterpoint practice
@@ -1114,30 +1115,7 @@ export function testStrettoViability(subject, formatter, minOverlap = 0.5, incre
 
     // Merge chain info from dissonanceAnalysis into intervalPoints
     if (dissonanceAnalysis?.all) {
-      const chainByOnset = new Map();
-      for (const r of dissonanceAnalysis.all) {
-        chainByOnset.set(Math.round(r.onset * 4) / 4, r);
-      }
-      for (const pt of intervalPoints) {
-        const chain = chainByOnset.get(Math.round(pt.onset * 4) / 4);
-        if (chain) {
-          pt.isChainEntry = chain.isChainEntry || false;
-          pt.isConsecutiveDissonance = chain.isConsecutiveDissonance || false;
-          pt.chainPosition = chain.chainPosition;
-          pt.chainLength = chain.chainLength || 0;
-          pt.chainStartOnset = chain.chainStartOnset;
-          pt.chainEndOnset = chain.chainEndOnset;
-          pt.chainUnresolved = chain.chainUnresolved || false;
-          pt.isChainResolution = chain.isChainResolution || false;
-          pt.consecutiveMitigationCount = chain.consecutiveMitigationCount || 0;
-          pt.consecutiveMitigation = chain.consecutiveMitigation || 0;
-          pt.passingMotion = chain.passingMotion || null;
-          pt.isPassing = chain.isPassing || false;
-          pt.isRepeated = chain.isRepeated || false;
-          pt.isResolved = chain.isResolved !== false;
-          pt.isParallel = chain.isParallel || false;
-        }
-      }
+      mergeChainAnalysisIntoIntervalPoints(intervalPoints, dissonanceAnalysis.all);
     }
 
     // Calculate quality rating based on weighted severity (not just count)
