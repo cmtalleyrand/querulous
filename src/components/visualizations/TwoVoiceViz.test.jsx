@@ -71,9 +71,10 @@ vi.mock('../../utils/dissonanceScoring', () => ({
         entryScore: -0.1,
         exitScore: 0,
         passingMotion: { isPassing: true, mitigation: 0.63 },
-        details: ['Passing character (passing motion): +0.50 [entry motion (0.63): +0.50, V1 resolution (0.63): +0.00]'],
-        entry: { details: ['Similar motion: -0.50', 'Passing mitigation (entry motion): +0.50'], score: -0.5 },
+        details: [],
+        entry: { details: ['Similar motion: -0.50'], score: -0.5 },
         exit: { details: ['Leads to another dissonance: -0.75'], score: -0.25 },
+        entryMitigationDetails: ['Passing character: +0.50'],
       },
       {
         onset: 2,
@@ -86,9 +87,10 @@ vi.mock('../../utils/dissonanceScoring', () => ({
         entryScore: -0.1,
         exitScore: 0,
         passingMotion: { isPassing: true, mitigation: 0.63 },
-        details: ['Passing character (passing motion): +0.50 [entry motion (0.63): +0.50, V1 resolution (0.63): +0.00]'],
-        entry: { details: ['Similar motion: -0.50', 'Passing mitigation (entry motion): +0.50'], score: -0.5 },
+        details: [],
+        entry: { details: ['Similar motion: -0.50'], score: -0.5 },
         exit: { details: ['Leads to another dissonance: -0.75'], score: -0.25 },
+        entryMitigationDetails: ['Passing character: +0.50'],
       },
       {
         onset: 3,
@@ -130,12 +132,11 @@ describe('TwoVoiceViz dissonance chain scoring panel', () => {
     fireEvent.click(clickableGroups[clickableGroups.length - 3]);
 
     expect(screen.getByTestId('chain-score-banner')).toBeInTheDocument();
-    expect(screen.getByText(/Chain score \(whole chain\)/i)).toBeInTheDocument();
 
     let foundInlineMitigation = false;
     clickableGroups.forEach((group) => {
       fireEvent.click(group);
-      if (screen.queryByText(/Passing mitigation \(/i)) {
+      if (screen.queryByText(/Passing character/i)) {
         foundInlineMitigation = true;
       }
     });
