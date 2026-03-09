@@ -840,124 +840,31 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
   let v1ResolutionComponent = 0;
   let v2ResolutionComponent = 0;
 
-  if (motion.v1Moved) {
-    const exitInterval = nextSim.voice1Note.pitch - currSim.voice1Note.pitch;
-    const exitMag = getIntervalMagnitude(exitInterval);
-    v1Resolution = {
-      interval: Math.abs(exitInterval),
-      direction: Math.sign(exitInterval),
-      magnitude: exitMag,
-      inSequence: v1InSequence,
-    };
+  const v1Exit = scoreVoiceExitResolution({
+    voiceId: 1,
+    currSim,
+    nextSim,
+    entryInterval: entryInfo?.v1MelodicInterval || 0,
+    moved: motion.v1Moved,
+    inSequence: v1InSequence,
+  });
+  v1Resolution = v1Exit.resolution;
+  score += v1Exit.scoreDelta;
+  v1ResolutionComponent += v1Exit.resolutionComponentDelta;
+  details.push(...v1Exit.detailLines);
 
-    // Calculate proportional penalty based on how entry leap is resolved
-    if (entryInfo && entryInfo.v1MelodicInterval !== 0) {
-      const entryDir = Math.sign(entryInfo.v1MelodicInterval);
-      const entryMag = getIntervalMagnitude(entryInfo.v1MelodicInterval);
-      const penaltyInfo = calculateResolutionPenalty(
-        Math.abs(entryInfo.v1MelodicInterval),
-        Math.abs(exitInterval),
-        v1Resolution.direction,
-        entryDir,
-        v1InSequence
-      );
-      if (penaltyInfo.penalty !== 0) {
-        score += penaltyInfo.penalty;
-        v1ResolutionComponent += penaltyInfo.penalty;
-        details.push(`V1 ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
-      }
-
-      // Leap continuation penalty: large leaps (but not skips) should be followed by opposite direction
-      // Applies to perfect_leap (P4/P5) and large_leap (6th+), not skip (3rd)
-      if ((entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap' || entryMag.type === 'octave') &&
-          v1Resolution.direction !== 0 && v1Resolution.direction === entryDir) {
-        score -= 0.25;
-        v1ResolutionComponent -= 0.25;
-        details.push('V1 melodic leap not followed by opposite motion: -0.25');
-      }
-    } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
-      // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
-      let penalty = 0;
-      let reason = '';
-      if (exitMag.type === 'skip') {
-        penalty = -0.5;
-        reason = 'V1 leaves dissonance by melodic skip';
-      } else if (exitMag.type === 'perfect_leap') {
-        penalty = -0.5;
-        reason = 'V1 leaves dissonance by melodic P4/P5';
-      } else {
-        penalty = -1.5;
-        reason = 'V1 leaves dissonance by large melodic leap';
-      }
-      // Apply sequence mitigation
-      if (v1InSequence) {
-        penalty *= PENALTY_MULTIPLIERS.QUARTER;
-        reason += ' (mitigated: in sequence)';
-      }
-      score += penalty;
-      v1ResolutionComponent += penalty;
-      details.push(`${reason}: ${penalty.toFixed(2)}`);
-    }
-  }
-
-  if (motion.v2Moved) {
-    const exitInterval = nextSim.voice2Note.pitch - currSim.voice2Note.pitch;
-    const exitMag = getIntervalMagnitude(exitInterval);
-    v2Resolution = {
-      interval: Math.abs(exitInterval),
-      direction: Math.sign(exitInterval),
-      magnitude: exitMag,
-      inSequence: v2InSequence,
-    };
-
-    // Calculate proportional penalty based on how entry leap is resolved
-    if (entryInfo && entryInfo.v2MelodicInterval !== 0) {
-      const entryDir = Math.sign(entryInfo.v2MelodicInterval);
-      const entryMag = getIntervalMagnitude(entryInfo.v2MelodicInterval);
-      const penaltyInfo = calculateResolutionPenalty(
-        Math.abs(entryInfo.v2MelodicInterval),
-        Math.abs(exitInterval),
-        v2Resolution.direction,
-        entryDir,
-        v2InSequence
-      );
-      if (penaltyInfo.penalty !== 0) {
-        score += penaltyInfo.penalty;
-        v2ResolutionComponent += penaltyInfo.penalty;
-        details.push(`V2 ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
-      }
-
-      // Leap continuation penalty: large leaps (but not skips) should be followed by opposite direction
-      if ((entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap' || entryMag.type === 'octave') &&
-          v2Resolution.direction !== 0 && v2Resolution.direction === entryDir) {
-        score -= 0.25;
-        v2ResolutionComponent -= 0.25;
-        details.push('V2 melodic leap not followed by opposite motion: -0.25');
-      }
-    } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
-      // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
-      let penalty = 0;
-      let reason = '';
-      if (exitMag.type === 'skip') {
-        penalty = -0.5;
-        reason = 'V2 leaves dissonance by melodic skip';
-      } else if (exitMag.type === 'perfect_leap') {
-        penalty = -0.5;
-        reason = 'V2 leaves dissonance by melodic P4/P5';
-      } else {
-        penalty = -1.5;
-        reason = 'V2 leaves dissonance by large melodic leap';
-      }
-      // Apply sequence mitigation
-      if (v2InSequence) {
-        penalty *= PENALTY_MULTIPLIERS.QUARTER;
-        reason += ' (mitigated: in sequence)';
-      }
-      score += penalty;
-      v2ResolutionComponent += penalty;
-      details.push(`${reason}: ${penalty.toFixed(2)}`);
-    }
-  }
+  const v2Exit = scoreVoiceExitResolution({
+    voiceId: 2,
+    currSim,
+    nextSim,
+    entryInterval: entryInfo?.v2MelodicInterval || 0,
+    moved: motion.v2Moved,
+    inSequence: v2InSequence,
+  });
+  v2Resolution = v2Exit.resolution;
+  score += v2Exit.scoreDelta;
+  v2ResolutionComponent += v2Exit.resolutionComponentDelta;
+  details.push(...v2Exit.detailLines);
 
   // Already handled at function start - no redundant check needed
 
@@ -971,6 +878,86 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     baseExitComponent,       // D→D penalty or consonance reward — for passingness rule (c)
     v1ResolutionComponent,   // V1-individual motion penalties — for passingness rule (a)
     v2ResolutionComponent,   // V2-individual motion penalties — for passingness rule (a)
+  };
+}
+
+function scoreVoiceExitResolution({ voiceId, currSim, nextSim, entryInterval, moved, inSequence }) {
+  if (!moved) {
+    return {
+      resolution: null,
+      scoreDelta: 0,
+      resolutionComponentDelta: 0,
+      detailLines: [],
+    };
+  }
+
+  const voiceKey = voiceId === 1 ? 'voice1Note' : 'voice2Note';
+  const exitInterval = nextSim[voiceKey].pitch - currSim[voiceKey].pitch;
+  const exitMag = getIntervalMagnitude(exitInterval);
+  const resolution = {
+    interval: Math.abs(exitInterval),
+    direction: Math.sign(exitInterval),
+    magnitude: exitMag,
+    inSequence,
+  };
+
+  let scoreDelta = 0;
+  let resolutionComponentDelta = 0;
+  const detailLines = [];
+
+  if (entryInterval !== 0) {
+    const entryDir = Math.sign(entryInterval);
+    const entryMag = getIntervalMagnitude(entryInterval);
+    const penaltyInfo = calculateResolutionPenalty(
+      Math.abs(entryInterval),
+      Math.abs(exitInterval),
+      resolution.direction,
+      entryDir,
+      inSequence
+    );
+    if (penaltyInfo.penalty !== 0) {
+      scoreDelta += penaltyInfo.penalty;
+      resolutionComponentDelta += penaltyInfo.penalty;
+      detailLines.push(`V${voiceId} ${penaltyInfo.reason}: ${penaltyInfo.penalty.toFixed(2)}`);
+    }
+
+    // Leap continuation penalty: large leaps (but not skips) should be followed by opposite direction
+    // Applies to perfect_leap (P4/P5) and large_leap (6th+), not skip (3rd)
+    if ((entryMag.type === 'perfect_leap' || entryMag.type === 'large_leap' || entryMag.type === 'octave') &&
+        resolution.direction !== 0 && resolution.direction === entryDir) {
+      scoreDelta -= 0.25;
+      resolutionComponentDelta -= 0.25;
+      detailLines.push(`V${voiceId} melodic leap not followed by opposite motion: -0.25`);
+    }
+  } else if (exitMag.type !== 'step' && exitMag.type !== 'unison') {
+    // No entry leap but exit is a leap - apply standard penalties (with sequence mitigation)
+    let penalty = 0;
+    let reason = '';
+    if (exitMag.type === 'skip') {
+      penalty = -0.5;
+      reason = `V${voiceId} leaves dissonance by melodic skip`;
+    } else if (exitMag.type === 'perfect_leap') {
+      penalty = -0.5;
+      reason = `V${voiceId} leaves dissonance by melodic P4/P5`;
+    } else {
+      penalty = -1.5;
+      reason = `V${voiceId} leaves dissonance by large melodic leap`;
+    }
+    // Apply sequence mitigation
+    if (inSequence) {
+      penalty *= PENALTY_MULTIPLIERS.QUARTER;
+      reason += ' (mitigated: in sequence)';
+    }
+    scoreDelta += penalty;
+    resolutionComponentDelta += penalty;
+    detailLines.push(`${reason}: ${penalty.toFixed(2)}`);
+  }
+
+  return {
+    resolution,
+    scoreDelta,
+    resolutionComponentDelta,
+    detailLines,
   };
 }
 
