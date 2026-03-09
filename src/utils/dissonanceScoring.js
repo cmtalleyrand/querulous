@@ -1753,13 +1753,12 @@ export function analyzeAllDissonances(sims, options = {}) {
   }
 
   // Compute chainTotalScore for each consecutive chain group.
-  // All members of the same chain share the same value (sum of all members' scores post-mitigation).
-  // Computed before Pass 2 so the value reflects pre-mitigation scores; will be recomputed after.
-  // Single dissonances get chainTotalScore = their own score.
-  for (const r of results) {
-    if (!r.isConsonant) r.chainTotalScore = r.score;
-  }
+  // All members of the same chain share the same value (sum of all members' scores).
+  // Standalone dissonances always use their own current score.
   const markChainTotals = () => {
+    for (const r of results) {
+      if (!r.isConsonant) r.chainTotalScore = r.score;
+    }
     for (const group of consecutiveGroups) {
       const total = group.reduce((sum, { index }) => sum + (results[index].score || 0), 0);
       for (const { index } of group) results[index].chainTotalScore = total;
