@@ -155,33 +155,30 @@ function getShortNoteInfo(sim, ctx) {
 }
 
 /**
- * Score "passingness" of a dissonance for a given voice.
- * Determines if a dissonant note qualifies as passing motion per user spec.
+ * Passing-motion policy (canonical reference for scorePassingMotion + analyzeAllDissonances passes).
  *
- * Requirements to be eligible:
- * - MUST be an eighth note or shorter
- * - ALWAYS passing if 32nd note or shorter and not repeated
- * - If on strong/medium beat, MUST be shorter than an eighth
+ * 1) Eligibility:
+ *    - Evaluate only dissonances with duration <= eighth note.
+ *    - On strong beats, an exact eighth note is ineligible.
+ *    - A non-repeated 32nd note (or shorter) is forced passing.
  *
- * Scoring factors:
- * - eighth note: -1
- * - between 8th and 16th (e.g. triplet 8th, dotted 16th): -0.5
- * - longer than previous note: -0.5
- * - from rest of eighth or longer: -0.5
- * - shorter than previous note: +0.25
- * - on the beat: -0.5
- * - off the primary subdivision: +0.5
- * - by leap: -0.5
- * - by step: +0.75
- * - oblique motion: +0.5
- * - in same direction as previous move: +0.5
- * - returning to previous note: +0.5
- * - recovering from leap: +0.25
- * - repeating same interval class (step/skip/perfect leap): +0.25
- * - in sequence: +1
+ * 2) Passingness computation:
+ *    - passingness is additive from rhythmic, metric, melodic, and sequence mitigation cues.
+ *    - isPassing := (passingness >= 1).
  *
- * Penalty mitigation = min(1, max(sum of passingness / 2, 0))
- * If passingness >= 1 → is passing motion
+ * 3) Mitigation mapping:
+ *    - mitigation := max(0, passingness / 2).
+ *    - Pass orchestration in analyzeAllDissonances is two-phase:
+ *      (a) compute/store per-voice and best passingness;
+ *      (b) apply mitigation to eligible signed score components.
+ *
+ * 4) Affected vs unaffected score components in phase (b):
+ *    - Affected: entry motion component, per-voice exit resolution penalties,
+ *      D→D base exit component (including chain-entry remap to successor passingness).
+ *    - Unaffected: strong-beat metric penalty, consonance resolution reward,
+ *      abandonment/rest penalties, pattern bonuses.
+ *
+ * Nearby comments should reference this block instead of duplicating policy prose.
  *
  * @param {Simultaneity} currSim - Current simultaneity
  * @param {Simultaneity|null} prevSim - Previous simultaneity
@@ -199,18 +196,18 @@ function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, pre
   // Get note duration (shorter of the two voices for this simultaneity)
   const noteDuration = Math.min(currSim.voice1Note.duration, currSim.voice2Note.duration);
 
-  // Eligibility check: must be eighth note (0.5) or shorter
+  // Eligibility: see canonical passing-motion policy block above.
   if (noteDuration > 0.5 + 0.01) {
     return { passingness: 0, isPassing: false, mitigation: 0, details: ['Duration > eighth note: not eligible'] };
   }
 
-  // If on strong or medium beat, must be shorter than eighth
+  // Strong-beat eighths are not eligible.
   const beatStrength = metricWeight(currSim.onset, ctx.meter);
   if (beatStrength >= METRIC_STRENGTH_CUTOFFS.STRONG && noteDuration >= 0.5 - 0.01) {
     return { passingness: 0, isPassing: false, mitigation: 0, details: ['Strong beat + eighth note: not eligible'] };
   }
 
-  // Always passing if 32nd note or shorter (0.125) and not repeated pitch
+  // Forced passing case: non-repeated 32nd note (or shorter).
   const is32ndOrShorter = noteDuration <= 0.125 + 0.01;
   const isRepeatedPitch = voiceMelodicInterval === 0;
   if (is32ndOrShorter && !isRepeatedPitch) {
@@ -326,7 +323,7 @@ function scorePassingMotion(currSim, prevSim, nextSim, voiceMelodicInterval, pre
     }
   }
 
-  // In sequence
+  // Sequence mitigation cue.
   if (isOnsetInSequence(currSim.onset, ctx)) {
     passingness += 1;
     details.push('In sequence: +1');
@@ -1753,9 +1750,8 @@ export function analyzeAllDissonances(sims, options = {}) {
   };
   markChainTotals();
 
-  // Pass 1: Compute and store passingness for ALL dissonances (not just consecutive ones).
-  // Done before applying any mitigations so that chain entries can reference the
-  // already-computed passingness of their successor (needed for rule c below).
+  // Pass 1 (see canonical passing-motion policy block near scorePassingMotion):
+  // compute/store passingness for all dissonances before mitigation application.
   for (let i = 0; i < results.length; i++) {
     if (!results[i].isConsonant) {
       const sim = sims[i];
@@ -1775,12 +1771,12 @@ export function analyzeAllDissonances(sims, options = {}) {
       const v2Passing = scorePassingMotion(sim, prevSim, nextSim, v2Interval, prevV2Interval, null, entryMotion, ctx);
       const bestPassing = v1Passing.passingness >= v2Passing.passingness ? v1Passing : v2Passing;
 
-      // Store all three so the mitigation pass can use per-voice values
+      // Store best + per-voice passingness for pass-2 mitigation mapping.
       results[i].passingMotion = bestPassing;
       results[i].v1PassingMotion = v1Passing;
       results[i].v2PassingMotion = v2Passing;
 
-      // Consecutive-only bookkeeping (chain mitigation count, stretto viability flag)
+      // Consecutive-only bookkeeping for sequence mitigation/stretto diagnostics.
       if (results[i].isConsecutiveDissonance) {
         let mitigationCount = 0;
         if (bestPassing.isPassing) mitigationCount++;
@@ -1795,22 +1791,8 @@ export function analyzeAllDissonances(sims, options = {}) {
     }
   }
 
-  // Pass 2: Apply passingness mitigations per score component.
-  //
-  // Each component gets the mitigation appropriate to its voice(s) and sign:
-  // (a) Between-voice motion PENALTIES (parallel, similar entry): mitigate with bestPassing,
-  //     cap at 0 (never flip to reward)
-  // (b) Between-voice motion REWARDS (oblique, contrary entry): reduce by min(0.8, mit/2.5),
-  //     floor at 0 (never flip to penalty)
-  // (a) V1 single-voice motion PENALTIES (V1 exit resolution): mitigate with v1Passing
-  // (a) V2 single-voice motion PENALTIES (V2 exit resolution): mitigate with v2Passing
-  // (c) D→D base exit penalty on a consecutive member (middle of 3+ chain):
-  //     mitigate with bestPassing, cap at 0 (potentially complete)
-  // (c) D→D base exit penalty on the chain ENTRY: the -0.75 lives here, not on the
-  //     non-entry member; mitigate using the next (consecutive) member's bestPassing
-  //
-  // NOT touched: strong-beat meter penalty, consonance resolution reward,
-  //              abandonment/rest penalties, pattern bonuses
+  // Pass 2 (see canonical passing-motion policy block): apply mitigation to affected
+  // components only, preserving unaffected components unchanged.
   for (let i = 0; i < results.length; i++) {
     if (!results[i].isConsonant && results[i].passingMotion) {
       const bestPassing = results[i].passingMotion;
@@ -1827,7 +1809,7 @@ export function analyzeAllDissonances(sims, options = {}) {
       const entryMitigationDetails = [];
       const exitMitigationDetails = [];
 
-      // (a/b) Between-voice entry motion component
+      // Entry motion component (policy-driven sign-sensitive mapping).
       if (entryMotionComp < 0 && bestPassing.mitigation > 0) {
         const mitigated = Math.min(0, entryMotionComp + bestPassing.mitigation);
         const adj = mitigated - entryMotionComp;
@@ -1839,7 +1821,7 @@ export function analyzeAllDissonances(sims, options = {}) {
         entryMitigationDetails.push(`Passing character (entry reward reduced): -${reduction.toFixed(2)}`);
       }
 
-      // (a) V1 single-voice exit motion penalties
+      // V1 per-voice exit resolution penalty component.
       if (v1ResComp < 0 && v1Passing.mitigation > 0) {
         const mitigated = Math.min(0, v1ResComp + v1Passing.mitigation);
         const adj = mitigated - v1ResComp;
@@ -1847,7 +1829,7 @@ export function analyzeAllDissonances(sims, options = {}) {
         exitMitigationDetails.push(`Passing character (V1 resolution): +${adj.toFixed(2)}`);
       }
 
-      // (a) V2 single-voice exit motion penalties
+      // V2 per-voice exit resolution penalty component.
       if (v2ResComp < 0 && v2Passing.mitigation > 0) {
         const mitigated = Math.min(0, v2ResComp + v2Passing.mitigation);
         const adj = mitigated - v2ResComp;
@@ -1855,7 +1837,7 @@ export function analyzeAllDissonances(sims, options = {}) {
         exitMitigationDetails.push(`Passing character (V2 resolution): +${adj.toFixed(2)}`);
       }
 
-      // (c) D→D penalty — only for consecutive members (middle of 3+ chains)
+      // D→D base exit component on consecutive members.
       if (results[i].isConsecutiveDissonance) {
         const ddComp = results[i].exit?.baseExitComponent || 0;
         if (ddComp < 0 && bestPassing.mitigation > 0) {
@@ -1877,9 +1859,7 @@ export function analyzeAllDissonances(sims, options = {}) {
       if (exitMitigationDetails.length > 0) results[i].exitMitigationDetails = exitMitigationDetails;
 
     } else if (results[i].isChainEntry && results[i].chainLength > 1) {
-      // (c) The chain entry's D→D exit penalty (-0.75) is mitigated by the passingness
-      // of the immediately following consecutive member (i+1 in results, since consecutive
-      // dissonances are always adjacent simultaneities).
+      // Chain-entry D→D component is remapped to successor passingness (per policy).
       const nextIdx = i + 1;
       if (nextIdx < results.length && results[nextIdx].isConsecutiveDissonance && results[nextIdx].passingMotion) {
         const nextBestPassing = results[nextIdx].passingMotion;
