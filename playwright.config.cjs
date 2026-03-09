@@ -5,7 +5,7 @@ module.exports = defineConfig({
   testDir: './e2e',
   timeout: 30000,
   use: {
-    baseURL: 'http://localhost:5174/querulous/',
+    baseURL: 'http://localhost:5173/querulous/',
     headless: true,
     viewport: { width: 1280, height: 900 },
     screenshot: 'on',
