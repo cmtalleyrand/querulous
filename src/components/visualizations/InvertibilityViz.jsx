@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { pitchName, metricWeight } from '../../utils/formatter';
-import { Simultaneity } from '../../types';
+import { pitchName } from '../../utils/formatter';
 import { generateGridLines, VIZ_COLORS } from '../../utils/vizConstants';
+import { findSimultaneities } from '../../utils/analysis';
 
 /**
  * Invertibility Visualization
@@ -22,29 +22,12 @@ export function InvertibilityViz({
   const analysis = useMemo(() => {
     if (!subject?.length || !cs?.length) return null;
 
-    const findSims = (v1, v2) => {
-      const sims = [];
-      for (const n1 of v1) {
-        const s1 = n1.onset;
-        const e1 = n1.onset + n1.duration;
-        for (const n2 of v2) {
-          const s2 = n2.onset;
-          const e2 = n2.onset + n2.duration;
-          if (s1 < e2 && s2 < e1) {
-            const start = Math.max(s1, s2);
-            sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
-          }
-        }
-      }
-      return sims.sort((a, b) => a.onset - b.onset);
-    };
-
     // Original: CS above
-    const origSims = findSims(subject, cs);
+    const origSims = findSimultaneities(subject, cs, meter);
 
     // Inverted: CS shifted down 12 semitones (below subject)
     const csInverted = cs.map(n => ({ ...n, pitch: n.pitch - 12 }));
-    const invSims = findSims(subject, csInverted);
+    const invSims = findSimultaneities(subject, csInverted, meter);
 
     // Find intervals that change problematically
     const problemOnsets = new Set();

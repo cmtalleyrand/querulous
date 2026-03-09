@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
-import { pitchName, metricWeight } from '../../utils/formatter';
-import { Simultaneity } from '../../types';
+import { pitchName } from '../../utils/formatter';
 import { scoreDissonance } from '../../utils/dissonanceScoring';
+import { findSimultaneities } from '../../utils/analysis';
 import { generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
 import { COUNTERPOINT_VIZ_TRANSPOSITION_OPTIONS } from '../../utils/constants/transpositionOptions';
 
@@ -70,24 +70,7 @@ export function UnifiedCounterpointViz({
       pitch: n.pitch + transposition,
     }));
 
-    const findSims = (v1, v2) => {
-      const sims = [];
-      for (const n1 of v1) {
-        const s1 = n1.onset;
-        const e1 = n1.onset + n1.duration;
-        for (const n2 of v2) {
-          const s2 = n2.onset;
-          const e2 = n2.onset + n2.duration;
-          if (s1 < e2 && s2 < e1) {
-            const start = Math.max(s1, s2);
-            sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
-          }
-        }
-      }
-      return sims.sort((a, b) => a.onset - b.onset);
-    };
-
-    const sims = findSims(voice1, transposedVoice2);
+    const sims = findSimultaneities(voice1, transposedVoice2, meter);
 
     const intervalHistory = [];
     const intervalPoints = [];

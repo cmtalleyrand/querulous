@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { pitchName, metricWeight, metricPosition } from '../../utils/formatter';
-import { Simultaneity } from '../../types';
+import { pitchName, metricPosition } from '../../utils/formatter';
 import { scoreDissonance } from '../../utils/dissonanceScoring';
+import { findSimultaneities } from '../../utils/analysis';
 import { generateGridLines, VIZ_COLORS, getIntervalStyle } from '../../utils/vizConstants';
 import { METRIC_STRENGTH_CUTOFFS, SCORE_BAND_BOUNDARIES } from '../../utils/constants/thresholds';
 
@@ -85,20 +85,7 @@ export function IntervalAnalysisViz({
     const v2 = voice2.notes;
 
     // Find all simultaneities
-    const sims = [];
-    for (const n1 of v1) {
-      const s1 = n1.onset;
-      const e1 = n1.onset + n1.duration;
-      for (const n2 of v2) {
-        const s2 = n2.onset;
-        const e2 = n2.onset + n2.duration;
-        if (s1 < e2 && s2 < e1) {
-          const start = Math.max(s1, s2);
-          sims.push(new Simultaneity(start, n1, n2, metricWeight(start, meter)));
-        }
-      }
-    }
-    sims.sort((a, b) => a.onset - b.onset);
+    const sims = findSimultaneities(v1, v2, meter);
 
     // Deduplicate and build interval points with scoring
     const beatSnapshots = new Map();

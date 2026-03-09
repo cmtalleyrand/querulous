@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TwoVoiceViz } from './TwoVoiceViz';
+import { scoreDissonance } from '../../utils/dissonanceScoring';
 
 vi.mock('../../utils/dissonanceScoring', () => ({
   scoreDissonance: vi.fn((sim, _sims, i) => {
@@ -105,6 +106,34 @@ vi.mock('../../utils/dissonanceScoring', () => ({
 }));
 
 describe('TwoVoiceViz dissonance chain scoring panel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+
+  it('preserves interval-point count for overlapping notes separated by rests', () => {
+    Element.prototype.scrollTo = vi.fn();
+    const v1 = [
+      { pitch: 60, onset: 0, duration: 0.75 },
+      { pitch: 62, onset: 1.5, duration: 1 },
+    ];
+    const v2 = [
+      { pitch: 67, onset: 0.5, duration: 1 },
+      { pitch: 65, onset: 1.5, duration: 1.5 },
+    ];
+
+    render(
+      <TwoVoiceViz
+        voice1={v1}
+        voice2={v2}
+        meter={[4, 4]}
+      />
+    );
+
+    const scoredOnsets = new Set(vi.mocked(scoreDissonance).mock.calls.map(([sim]) => sim.onset));
+    expect(scoredOnsets.size).toBe(2);
+    expect([...scoredOnsets].sort((a, b) => a - b)).toEqual([0.5, 1.5]);
+  });
   it('shows chain score and mitigation integrated into entry/exit sections', () => {
     Element.prototype.scrollTo = vi.fn();
     const v1 = [
