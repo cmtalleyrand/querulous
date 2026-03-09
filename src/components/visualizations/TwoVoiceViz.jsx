@@ -10,6 +10,7 @@ import {
 } from '../../utils/vizConstants';
 import { CounterpointScoreDisplay } from '../ui/CounterpointScoreDisplay';
 import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES, TWO_VOICE_SCORING } from '../../utils/constants/thresholds';
+import { mergeChainAnalysisIntoIntervalPoints, normalizeOnsetKey } from '../../utils/chainMerge';
 
 /**
  * TwoVoiceViz — unified two-voice counterpoint visualization.
@@ -281,34 +282,7 @@ export function TwoVoiceViz({
     // Chain analysis: entry / consecutive / resolution
     const chainAnalysis = analyzeAllDissonances(sims, scoringOptions);
     if (chainAnalysis?.all) {
-      const chainByOnset = new Map();
-      for (const r of chainAnalysis.all) chainByOnset.set(Math.round(r.onset * 4) / 4, r);
-      for (const pt of intervalPoints) {
-        const chain = chainByOnset.get(Math.round(pt.onset * 4) / 4);
-        if (chain) {
-          pt.isChainEntry = chain.isChainEntry || false;
-          pt.isConsecutiveDissonance = chain.isConsecutiveDissonance || false;
-          pt.chainPosition = chain.chainPosition;
-          pt.chainLength = chain.chainLength || 0;
-          pt.chainStartOnset = chain.chainStartOnset;
-          pt.chainEndOnset = chain.chainEndOnset;
-          pt.chainUnresolved = chain.chainUnresolved || false;
-          pt.isChainResolution = chain.isChainResolution || false;
-          pt.consecutiveMitigationCount = chain.consecutiveMitigationCount || 0;
-          pt.consecutiveMitigation = chain.consecutiveMitigation || 0;
-          pt.passingMotion = chain.passingMotion || null;
-          // Copy back post-mitigation scores so the detail panel reflects actual mitigated values
-          if (!pt.isConsonant && chain.score !== undefined) {
-            pt.score = chain.score;
-            pt.entryScore = chain.entryScore;
-            pt.exitScore = chain.exitScore;
-            pt.chainTotalScore = chain.chainTotalScore;
-          }
-          if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
-          if (chain.entryMitigationDetails?.length > 0) pt.entryMitigationDetails = chain.entryMitigationDetails;
-          if (chain.exitMitigationDetails?.length > 0) pt.exitMitigationDetails = chain.exitMitigationDetails;
-        }
-      }
+      mergeChainAnalysisIntoIntervalPoints(intervalPoints, chainAnalysis.all);
     }
 
     const allPitches = [...voice1.map(n => n.pitch), ...voice2.map(n => n.pitch)];
@@ -413,7 +387,28 @@ export function TwoVoiceViz({
     }
   }, [analysis, previousIssueCount]);
 
-  const getOnsetKey = (onset) => Math.round(onset * 4) / 4; // local quarter-note snapping for UI selection consistency
+  const getRenderedBucketKey = useCallback((onset) => Math.round(onset * 4) / 4, []);
+
+  const getOnsetKey = normalizeOnsetKey;
+
+  const resolveIssueToRenderedPoint = useCallback((issueLike) => {
+    if (!analysis?.intervalPoints?.length || !issueLike) return null;
+
+    const targetBucket = getRenderedBucketKey(issueLike.onset);
+    let candidate = null;
+    let minDistance = Infinity;
+
+    for (const pt of analysis.intervalPoints) {
+      if (getRenderedBucketKey(pt.onset) !== targetBucket) continue;
+      const distance = Math.abs(pt.onset - issueLike.onset);
+      if (distance < minDistance) {
+        minDistance = distance;
+        candidate = pt;
+      }
+    }
+
+    return candidate;
+  }, [analysis, getRenderedBucketKey]);
 
   const handleIntervalClick = useCallback((pt, event) => {
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -438,13 +433,17 @@ export function TwoVoiceViz({
 
   const handleIssueClick = useCallback((issue, event) => {
     if (event) event.preventDefault();
-    setSelectedInterval(issue);
-    setHighlightedOnset(getOnsetKey(issue.onset));
+    const resolvedPoint = resolveIssueToRenderedPoint(issue) || issue;
+
+    setSelectedInterval(resolvedPoint);
+    setHighlightedOnset(getOnsetKey(resolvedPoint.onset));
+    setHighlightedChain(resolvedPoint.chainStartOnset !== undefined ? resolvedPoint.chainStartOnset : null);
+
     if (containerRef.current) {
       const sc = containerRef.current.querySelector('[data-scroll-container]');
-      if (sc) sc.scrollTo({ left: Math.max(0, 60 + issue.onset * 70 - sc.clientWidth / 2), behavior: 'smooth' });
+      if (sc) sc.scrollTo({ left: Math.max(0, 60 + resolvedPoint.onset * 70 - sc.clientWidth / 2), behavior: 'smooth' });
     }
-  }, []);
+  }, [getOnsetKey, resolveIssueToRenderedPoint]);
 
   const isNoteInSequence = useCallback((noteIndex, isV1) => {
     const seqInfo = isV1 ? sequences.v1 : sequences.v2;
@@ -1128,7 +1127,9 @@ export function TwoVoiceViz({
             <div key={i} onClick={(e) => handleIssueClick(issue, e)} style={{
               padding: '10px 14px', fontSize: '13px', cursor: 'pointer',
               borderBottom: i < issues.length - 1 ? `1px solid ${VIZ_COLORS.issueBackground}` : 'none',
-              backgroundColor: selectedInterval?.onset === issue.onset ? '#fef2f2' : 'transparent',
+              backgroundColor: (selectedInterval && getRenderedBucketKey(selectedInterval.onset) === getRenderedBucketKey(issue.onset))
+                ? '#fef2f2'
+                : 'transparent',
               display: 'flex', alignItems: 'center', gap: '8px',
             }}>
               <span style={{ color: VIZ_COLORS.dissonantProblematic, fontWeight: '600' }}>
@@ -1257,8 +1258,7 @@ export function TwoVoiceViz({
           }}
           formatter={formatter}
           onIssueClick={(issue) => {
-            const pt = analysis.intervalPoints.find(p => Math.abs(p.onset - issue.onset) < 0.01);
-            handleIssueClick(pt || issue);
+            handleIssueClick(issue);
           }}
           title="Dissonance Score Breakdown"
         />
