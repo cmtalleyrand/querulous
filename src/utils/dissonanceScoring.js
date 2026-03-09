@@ -1688,20 +1688,10 @@ export function analyzeAllDissonances(sims, options = {}) {
   const dissonances = results.filter(r => !r.isConsonant);
   const repetitiveConsonances = consonances.filter(r => r.category === 'consonant_repetitive');
 
-  // Track pattern types
+  // Track dissonance type frequencies.
   const typeCounts = {};
-  const allPatterns = []; // Collect all detected patterns for display
   for (const d of dissonances) {
     typeCounts[d.type] = (typeCounts[d.type] || 0) + 1;
-    if (d.patterns && d.patterns.length > 0) {
-      for (const p of d.patterns) {
-        allPatterns.push({
-          ...p,
-          onset: d.onset,
-          interval: d.interval,
-        });
-      }
-    }
   }
 
   // Track consecutive dissonance groups (D → D → D sequences)
@@ -1840,6 +1830,25 @@ export function analyzeAllDissonances(sims, options = {}) {
       const entryMitigationDetails = [];
       const exitMitigationDetails = [];
 
+      // PASSING_SEQUENCE_EXIT pattern (computed in pass 2 because passingness is resolved in pass 1).
+      if (bestPassing.isPassing === true && isOnsetInSequence(results[i].onset, ctx) === true) {
+        const passingSequenceBonus = 0.25;
+        results[i].score += passingSequenceBonus;
+        results[i].exitScore += passingSequenceBonus;
+
+        const existingPatterns = results[i].patterns || [];
+        if (!existingPatterns.some((p) => p.type === 'passing_sequence_exit')) {
+          existingPatterns.push({
+            type: 'passing_sequence_exit',
+            bonus: passingSequenceBonus,
+            entryBonus: 0,
+            exitBonus: passingSequenceBonus,
+            description: 'Passing sequence exit bonus',
+          });
+          results[i].patterns = existingPatterns;
+        }
+      }
+
       // (a/b) Between-voice entry motion component
       if (entryMotionComp < 0 && bestPassing.mitigation > 0) {
         const mitigated = Math.min(0, entryMotionComp + bestPassing.mitigation);
@@ -1915,6 +1924,20 @@ export function analyzeAllDissonances(sims, options = {}) {
 
   // Recompute chain totals now that pass 2 has updated individual scores.
   markChainTotals();
+
+
+  const allPatterns = []; // Collect all recognized patterns for display (including pass-2 patterns)
+  for (const d of dissonances) {
+    if (d.patterns && d.patterns.length > 0) {
+      for (const p of d.patterns) {
+        allPatterns.push({
+          ...p,
+          onset: d.onset,
+          interval: d.interval,
+        });
+      }
+    }
+  }
 
   // Duration-weighted average across ALL intervals (same formula as TwoVoiceViz badge).
   // Consonances are scored 0.2–0.5 by type; dissonances use their actual score.
