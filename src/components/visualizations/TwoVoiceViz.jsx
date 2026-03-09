@@ -968,7 +968,7 @@ export function TwoVoiceViz({
                   borderBottom: '2px solid #cbd5e1', paddingBottom: '6px' }}>Score Breakdown</div>
 
                 {!pt.isConsonant && pt.entry && pt.exit && (() => {
-                  const renderDetailLine = (d, accentColor) => {
+                  const renderDetailLine = (d) => {
                     const text = d.replace(/\bV1\b/g, voice1Label).replace(/\bV2\b/g, voice2Label);
                     const match = text.match(/^(.*): ([+-]\d+\.?\d*)(.*)?$/);
                     return match ? (
