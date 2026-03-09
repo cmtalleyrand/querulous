@@ -319,6 +319,7 @@ export function TwoVoiceViz({
             pt.score = chain.score;
             pt.entryScore = chain.entryScore;
             pt.exitScore = chain.exitScore;
+            pt.chainTotalScore = chain.chainTotalScore;
           }
           if (chain.passingCharacterAdj !== undefined) pt.passingCharacterAdj = chain.passingCharacterAdj;
           if (chain.entryMitigationDetails?.length > 0) pt.entryMitigationDetails = chain.entryMitigationDetails;
