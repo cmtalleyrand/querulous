@@ -94,4 +94,24 @@ describe('dissonance exit voice-resolution scoring', () => {
     expect(result.exit.v2ResolutionComponent).toBe(-0.5);
     expect(result.exit.v1ResolutionComponent).toBe(0);
   });
+  it('is symmetric under voice reassignment for equivalent interval/motion patterns', () => {
+    const baseSims = [
+      new Simultaneity(0, makeNote(64, 0, 1), makeNote(60, 0, 1), 1),
+      new Simultaneity(1, makeNote(65, 1, 1), makeNote(60, 1, 1), 0.5),
+      new Simultaneity(2, makeNote(64, 2, 1), makeNote(57, 2, 1), 1),
+    ];
+
+    const swappedSims = [
+      new Simultaneity(0, makeNote(60, 0, 1), makeNote(64, 0, 1), 1),
+      new Simultaneity(1, makeNote(60, 1, 1), makeNote(65, 1, 1), 0.5),
+      new Simultaneity(2, makeNote(57, 2, 1), makeNote(64, 2, 1), 1),
+    ];
+
+    const base = scoreDissonance(baseSims[1], baseSims, 1, [], { treatP4AsDissonant: true });
+    const swapped = scoreDissonance(swappedSims[1], swappedSims, 1, [], { treatP4AsDissonant: true });
+
+    expect(Math.abs(base.exit.v1ResolutionComponent ?? 0)).toBe(Math.abs(swapped.exit.v2ResolutionComponent ?? 0));
+    expect(Math.abs(base.exit.v2ResolutionComponent ?? 0)).toBe(Math.abs(swapped.exit.v1ResolutionComponent ?? 0));
+  });
+
 });
