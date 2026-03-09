@@ -662,17 +662,17 @@ function scoreEntry(prevSim, currSim, restContext = null, ctx) {
   const v2MelodicInterval = motion.v2Moved ? currSim.voice2Note.pitch - prevSim.voice2Note.pitch : 0;
 
   // Note entry leap types for reference (human-readable labels, not raw enum)
-  const _leapLabel = { skip: 'skip (3rd)', perfect_leap: 'P4/P5 leap', large_leap: 'large leap', octave: 'octave leap' };
+  const _leapLabel = { skip: 'm3', perfect_leap: 'P4/P5', large_leap: '6th+', octave: 'P8' };
   if (motion.v1Moved) {
     const mag = getIntervalMagnitude(v1MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
-      details.push(`V1 entered by ${_leapLabel[mag.type] || mag.type} (${Math.abs(v1MelodicInterval)} st)`);
+      details.push(`V1 entered by ${_leapLabel[mag.type] || mag.type}`);
     }
   }
   if (motion.v2Moved) {
     const mag = getIntervalMagnitude(v2MelodicInterval);
     if (mag.type !== 'step' && mag.type !== 'unison') {
-      details.push(`V2 entered by ${_leapLabel[mag.type] || mag.type} (${Math.abs(v2MelodicInterval)} st)`);
+      details.push(`V2 entered by ${_leapLabel[mag.type] || mag.type}`);
     }
   }
 
@@ -772,7 +772,7 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     } else {
       score = -0.75;
       baseExitComponent = -0.75;
-      details.push('Leads to another dissonance (no resolution): -0.75');
+      details.push('Leads to another dissonance: -0.75');
     }
   }
 
