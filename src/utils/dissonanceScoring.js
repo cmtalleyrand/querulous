@@ -113,48 +113,6 @@ function isOnsetInSequence(onset, ctx) {
 }
 
 /**
- * Calculate sub-subdivision threshold for short note detection.
- * 
- * For 4/4 meter: main beat = 1 quarter, subdivision = 8th note (0.5), triplet = ~0.333
- * For 6/8 meter: main beat = dotted quarter (1.5), subdivision = 8th (0.5), triplet = ~0.333
- *
- * @param {Object} ctx - Analysis context with meter
- * @returns {number} Duration threshold in beats
- */
-function getShortNoteThreshold(ctx) {
-  const [numerator, denominator] = ctx.meter || [4, 4];
-
-  // Determine if compound meter (6/8, 9/8, 12/8)
-  const isCompound = (numerator % 3 === 0 && numerator > 3 && denominator === 8);
-
-  // In simple meter: subdivision = half a beat
-  // In compound meter: subdivision = 1/3 of the dotted-quarter beat
-  const subdivision = isCompound ? (1 / 3) : 0.5;
-
-  // Triplet of subdivision
-  return subdivision / 3;
-}
-
-/**
- * // Out of date - part of passigness now
- *
- * @param {Simultaneity} sim - The simultaneity to check
- * @param {Object} ctx - Analysis context
- * @returns {{isShort: boolean, duration: number, threshold: number}}
- */
-function getShortNoteInfo(sim, ctx) {
-  // Use the shorter of the two notes' durations
-  const minDuration = Math.min(sim.voice1Note.duration, sim.voice2Note.duration);
-  const threshold = getShortNoteThreshold(ctx);
-
-  return {
-    isShort: minDuration <= threshold,
-    duration: minDuration,
-    threshold,
-  };
-}
-
-/**
  * Passing-motion policy (canonical reference for scorePassingMotion + analyzeAllDissonances passes).
  *
  * 1) Eligibility:
@@ -170,13 +128,14 @@ function getShortNoteInfo(sim, ctx) {
  *    - mitigation := max(0, passingness / 2).
  *    - Pass orchestration in analyzeAllDissonances is two-phase:
  *      (a) compute/store per-voice and best passingness;
- *      (b) apply mitigation to eligible signed score components.
+ *      (b) apply mitigation to eligible signed score components when mitigation > 0.
  *
  * 4) Affected vs unaffected score components in phase (b):
  *    - Affected: entry motion component, per-voice exit resolution penalties,
- *      D→D base exit component (including chain-entry remap to successor passingness).
+ *      D→D base exit component (including chain-entry remap to successor passingness),
+ *      passing-sequence exit bonus.
  *    - Unaffected: strong-beat metric penalty, consonance resolution reward,
- *      abandonment/rest penalties, pattern bonuses.
+ *      abandonment/rest penalties, other pattern bonuses.
  *
  * Nearby comments should reference this block instead of duplicating policy prose.
  *
@@ -757,20 +716,11 @@ function scoreExit(currSim, nextSim, entryInfo, restContext = null, ctx) {
     baseExitComponent = 0.5;
     details.push('Resolves to consonance: +0.5');
   } else {
-    // Resolution to another dissonance
-    // Short note + off-beat: halve the penalty (two quick consecutive dissonances on off-beats not a big deal)
-    const shortNoteInfo = getShortNoteInfo(currSim, ctx);
-    // should be removed, covered by passingness
-    const isOffBeat = currSim.metricWeight < METRIC_STRENGTH_CUTOFFS.STRONG;
-    if (shortNoteInfo.isShort && isOffBeat) {
-      score = -0.375; // Halved penalty
-      baseExitComponent = -0.375;
-      details.push('Leads to another dissonance: -0.375 (short note on off-beat - halved)');
-    } else {
-      score = -0.75;
-      baseExitComponent = -0.75;
-      details.push('Leads to another dissonance (no resolution): -0.75');
-    }
+    // Resolution to another dissonance: fixed base D→D penalty.
+    // Passingness mitigation (if eligible) is applied later in analyzeAllDissonances pass 2.
+    score = -0.75;
+    baseExitComponent = -0.75;
+    details.push('Leads to another dissonance (no resolution): -0.75');
   }
 
   // Check for resolution by abandonment (one voice drops out)

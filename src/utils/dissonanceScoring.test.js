@@ -140,3 +140,52 @@ describe('analyzeAllDissonances passing-sequence exit bonus', () => {
   });
 
 });
+
+describe('passingness assignment and D→D base penalty policy', () => {
+  it('assigns passingMotion for dissonances even when they are non-passing', () => {
+    const nonPassing = analyzeAllDissonances([
+      new Simultaneity(0, makeNote(64, 0, 1), makeNote(60, 0, 1), 1),
+      new Simultaneity(1, makeNote(62, 1, 1), makeNote(60, 1, 1), 0.5),
+      new Simultaneity(2, makeNote(64, 2, 1), makeNote(60, 2, 1), 1),
+    ], { treatP4AsDissonant: true }).all[1];
+
+    expect(nonPassing.passingMotion).toBeTruthy();
+    expect(nonPassing.passingMotion.isPassing).toBe(false);
+    expect(nonPassing.passingMotion.mitigation).toBe(0);
+  });
+
+  it('keeps D→D base penalty at -0.75 before passingness mitigation', () => {
+    const sims = [
+      new Simultaneity(0, makeNote(64, 0, 1), makeNote(60, 0, 1), 1),
+      new Simultaneity(0.5, makeNote(62, 0.5, 0.125), makeNote(60, 0.5, 0.125), 0.25),
+      new Simultaneity(1, makeNote(65, 1, 1), makeNote(60, 1, 1), 1),
+    ];
+
+    const result = scoreDissonance(sims[1], sims, 1, [], { treatP4AsDissonant: true });
+    expect(result.exit.baseExitComponent).toBeCloseTo(-0.75, 5);
+    expect(result.exit.details.join(' | ')).toContain('Leads to another dissonance (no resolution): -0.75');
+  });
+
+  it('applies mitigation when passingness is positive even if isPassing is false', () => {
+    const base = analyzeAllDissonances([
+      new Simultaneity(0, makeNote(64, 0, 1), makeNote(60, 0, 1), 1),
+      new Simultaneity(1, makeNote(65, 1, 1), makeNote(60, 1, 1), 0.5),
+      new Simultaneity(2, makeNote(64, 2, 1), makeNote(60, 2, 1), 1),
+    ], { treatP4AsDissonant: true }).all[1];
+
+    const partial = analyzeAllDissonances([
+      new Simultaneity(0, makeNote(64, 0, 1), makeNote(60, 0, 1), 1),
+      new Simultaneity(1.5, makeNote(65, 1.5, 0.5), makeNote(60, 1.5, 0.5), 0.25),
+      new Simultaneity(2, makeNote(64, 2, 1), makeNote(60, 2, 1), 1),
+    ], { treatP4AsDissonant: true }).all[1];
+
+    expect(partial.passingMotion).toBeTruthy();
+    expect(partial.passingMotion.isPassing).toBe(false);
+    expect(partial.passingMotion.passingness).toBeGreaterThan(0);
+    expect(partial.passingMotion.passingness).toBeLessThan(1);
+    expect(partial.passingMotion.mitigation).toBeGreaterThan(0);
+    expect(Math.abs(partial.passingCharacterAdj || 0)).toBeGreaterThan(0);
+    expect((partial.entryMitigationDetails || []).length + (partial.exitMitigationDetails || []).length).toBeGreaterThan(0);
+    expect(partial.score).not.toBeCloseTo(base.score, 5);
+  });
+});

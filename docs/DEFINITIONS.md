@@ -266,25 +266,24 @@ How melodic intervals (within a single voice) are categorized by size.
 
 ---
 
-## Short Note
+## Short Note (legacy term)
 
-A note whose duration is below the sub-subdivision threshold (subdivision / 3). Short notes receive reduced penalties:
+Short-note/off-beat reductions are no longer a separate scoring subsystem in dissonance scoring.
+The legacy heuristic has been consolidated into `passingness`, which now governs mitigation for
+eligible passing dissonances.
 
-- Consecutive dissonance penalty: halved if on off-beat
-- Motion/parallel penalties: halved if the interval is NOT repeated
-- Repetition penalties: halved
-
-Thresholds by meter:
-- 4/4: subdivision = 0.5 (eighth), threshold ~ 0.167 (triplet eighth)
-- 6/8: subdivision = 0.333, threshold ~ 0.111
-
-**Code**: `dissonanceScoring.js:getShortNoteInfo()`, `getShortNoteThreshold()`.
+**Code**: `dissonanceScoring.js:scorePassingMotion()`, `analyzeAllDissonances()` pass 1/2.
 
 ---
 
 ## Passingness / Passing Character
 
-A measure of how ornamental or fleeting a dissonant note is. High passingness reduces (mitigates) penalties that would otherwise apply to a note's entry motion and exit resolution. It does **not** affect pattern bonuses, consonance resolution rewards, or the strong-beat metric penalty.
+A measure of how ornamental or fleeting a dissonant note is. Passingness is computed for each dissonance.
+Any positive passingness contributes proportional mitigation (`mitigation = passingness / 2`, floored at 0).
+
+Passingness-driven mitigation targets entry/exit penalty components, D→D base exit components, and the
+passing-sequence exit bonus gate. It does **not** modify the strong-beat metric penalty, consonance
+resolution rewards, abandonment/rest penalties, or non-passing pattern bonuses.
 
 ### Passingness Score
 
@@ -296,7 +295,11 @@ A continuous value computed per voice by `scorePassingMotion()`. The voice with 
 
 | Factor | Points | Condition |
 |--------|--------|-----------|
-| Base (short note) | +0.5 | Duration ≤ eighth note (always first) |
+| Eighth-note duration | -1.0 | Duration ≈ eighth note |
+| Between 8th and 16th | -0.5 | Duration in `(0.25, 0.5)` |
+| Shorter than previous note | +0.25 | Current duration < previous duration |
+| Longer than previous note | -0.5 | Current duration > previous duration |
+| Rest before dissonance | -0.5 | Rest ≥ eighth before entry |
 | Off-beat position | +0.5 | `metricWeight < 0.5` (off the primary subdivision) |
 | Step entry | +0.75 | Melodic interval 1-2 semitones into this note |
 | Oblique entry | +0.5 | One voice moves by step while the other holds |
@@ -320,9 +323,9 @@ Example: passingness 1.75 → mitigation 0.875. A similar-motion penalty of -0.5
 
 ### Standalone vs Consecutive Dissonances
 
-Passingness applies to **all dissonances**, not just those in a D→D chain:
+Passingness is computed for **all dissonances**, not just those in a D→D chain:
 
-- **Standalone dissonance**: A single dissonant note surrounded by consonances. Before this revision, passingness was never computed for these. Now it is — so a CS playing a quick offbeat 16th note in oblique motion can receive passingness ≈ 1.75 and have its entry/exit penalties substantially mitigated.
+- **Standalone dissonance**: A single dissonant note surrounded by consonances. It receives pass-2 mitigation only when `isPassing = true`.
 - **Consecutive dissonance**: Part of a D→D chain. Passingness additionally mitigates the -0.75 base D→D exit penalty.
 
 **Code**: `dissonanceScoring.js:scorePassingMotion()`, Pass 1 and Pass 2 in `analyzeAllDissonances()`.
@@ -473,8 +476,9 @@ When a dissonance (D) moves to a consonance (C):
 
 ### Resolution to dissonance (D -> D)
 When a dissonance leads to another dissonance. This creates a **dissonance chain** (see below).
-- Normal: -0.75 (stored as `baseExitComponent`)
-- Short note on off-beat: -0.375 (halved)
+- Base penalty: -0.75 (stored as `baseExitComponent`)
+
+There is no standalone short-note/off-beat halving at this stage; mitigation is handled by passingness in pass 2.
 
 The chain entry (`isChainEntry`) bears this penalty for moving into the chain. Each consecutive member (`isConsecutiveDissonance`) also bears it for moving to the next dissonance. This penalty can be mitigated by passingness (see **Per-Voice Mitigation**).
 
