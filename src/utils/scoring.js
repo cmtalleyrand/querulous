@@ -1,5 +1,3 @@
-import { SYNCOPATION } from './constants/thresholds';
-
 /**
  * Scoring utilities for fugue analysis
  *
@@ -253,23 +251,23 @@ export function calculateRhythmicCharacterScore(result) {
   let internal = 0; // Base-zero score
   const details = [];
 
-  // Unique durations: baseline is 2, score relative to that (per-voice; caller averages across voices)
+  // Unique durations: baseline is 2, score relative to that
   const uniqueCount = result.uniqueDurations || 1;
   if (uniqueCount >= 5) {
-    internal += 7.5;
-    details.push({ factor: `${uniqueCount} different note values (strong variety)`, impact: +7.5 });
+    internal += 15;
+    details.push({ factor: `${uniqueCount} different note values (strong variety)`, impact: +15 });
   } else if (uniqueCount >= 4) {
-    internal += 5;
-    details.push({ factor: `${uniqueCount} different note values (good variety)`, impact: +5 });
+    internal += 10;
+    details.push({ factor: `${uniqueCount} different note values (good variety)`, impact: +10 });
   } else if (uniqueCount >= 3) {
-    internal += 2.5;
-    details.push({ factor: `${uniqueCount} different note values`, impact: +2.5 });
+    internal += 5;
+    details.push({ factor: `${uniqueCount} different note values`, impact: +5 });
   } else if (uniqueCount === 2) {
     // Baseline - no adjustment
     details.push({ factor: `${uniqueCount} different note values (minimal)`, impact: 0 });
   } else {
-    internal -= 2.5;
-    details.push({ factor: 'Uniform rhythm (single note value)', impact: -2.5 });
+    internal -= 15;
+    details.push({ factor: 'Uniform rhythm (single note value)', impact: -15 });
   }
 
   // Rhythmic contrast
