@@ -88,6 +88,7 @@ export function runDefaultAnalysis(overrides = {}) {
   results.answerABC = generateAnswerABC(subject, keyInfo, results.tonalAnswer, defaultNoteLength, input.meter);
 
   if (shiftedCs?.length) {
+    results.rhythmicVarietyCs = testRhythmicVariety(shiftedCs, formatter);
     results.sequences.countersubject = testSequentialPotential(shiftedCs, formatter);
     results.doubleCounterpoint = testDoubleCounterpoint(subject, shiftedCs, formatter);
     results.rhythmicComplementarity = testRhythmicComplementarity(subject, shiftedCs, input.meter);

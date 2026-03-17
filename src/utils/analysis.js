@@ -726,6 +726,39 @@ export function testRhythmicVariety(subject, formatter) {
     }
   }
 
+  // Rhythmic motive detection: sliding window lengths 2–4, non-overlapping matches
+  const roundedDurs = durs.map((d) => Math.round(d * 1000) / 1000);
+  let longestMotive = null;
+  let longestCount = 0;
+  for (let len = 4; len >= 2; len--) {
+    if (len >= roundedDurs.length) continue;
+    for (let start = 0; start <= roundedDurs.length - len; start++) {
+      const candidate = roundedDurs.slice(start, start + len).join(',');
+      let count = 0;
+      let pos = 0;
+      while (pos <= roundedDurs.length - len) {
+        if (roundedDurs.slice(pos, pos + len).join(',') === candidate) {
+          count++;
+          pos += len;
+        } else {
+          pos++;
+        }
+      }
+      if (count >= 2 && (longestMotive === null || len > longestMotive.length || (len === longestMotive.length && count > longestCount))) {
+        longestMotive = roundedDurs.slice(start, start + len);
+        longestCount = count;
+      }
+    }
+    if (longestMotive?.length === len) break;
+  }
+  if (longestMotive) {
+    const motiveNames = longestMotive.map((d) => formatter.formatDuration(d));
+    observations.push({
+      type: 'strength',
+      description: `Recognizable rhythmic motive: [${motiveNames.join(', ')}] (${longestCount}×)`,
+    });
+  }
+
   // Melodic interval variety analysis
   // Good variety = any combination involving a step (step+step, step+skip, step+leap)
   // OR combinations of skips (3-4 semitones) and perfect leaps (5, 7, 12 semitones)
