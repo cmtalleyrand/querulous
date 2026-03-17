@@ -57,7 +57,6 @@ ABC notation string
 
 ## Technical Constraints
 
-- **ESLint 8.x pinned** — Use `.eslintrc.cjs` (legacy CommonJS format). Do not upgrade to ESLint 9+ flat config.
 - **Vite base path** — `/querulous/` is set in `vite.config.js`; all asset/routing references must account for this.
 - **No TypeScript** — JSDoc types are used in some places but not enforced.
 - **No prop-types** — ESLint rule is disabled.

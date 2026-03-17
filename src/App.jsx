@@ -39,13 +39,12 @@ import {
   setSequenceBeatRanges,
 } from './utils';
 import { MODE_DEFINITIONS, MODE_HEADER_SUFFIX } from './utils/modes';
-import { NOTE_TO_MIDI, KEY_SIGNATURES } from './utils/constants/musicTheory';
+import { NOTE_TO_MIDI } from './utils/constants/musicTheory';
 import {
   AVAILABLE_KEYS,
   AVAILABLE_MODES,
   NOTE_LENGTH_OPTIONS,
   STRETTO_STEP_OPTIONS,
-  STRETTO_TRANSPOSITION_OPTIONS,
   CS_POSITION_OPTIONS,
 } from './utils/constants/uiOptions';
 import { TIME_SIGNATURE_OPTIONS } from './utils/constants/timeSignatures';
