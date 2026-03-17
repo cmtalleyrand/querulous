@@ -1,3 +1,5 @@
+import { SYNCOPATION } from './constants/thresholds';
+
 /**
  * Scoring utilities for fugue analysis
  *
@@ -242,23 +244,23 @@ export function calculateRhythmicCharacterScore(result) {
   let internal = 0; // Base-zero score
   const details = [];
 
-  // Unique durations: baseline is 2, score relative to that
+  // Unique durations: baseline is 2, score relative to that (per-voice; caller averages across voices)
   const uniqueCount = result.uniqueDurations || 1;
   if (uniqueCount >= 5) {
-    internal += 15;
-    details.push({ factor: `${uniqueCount} different note values (strong variety)`, impact: +15 });
+    internal += 7.5;
+    details.push({ factor: `${uniqueCount} different note values (strong variety)`, impact: +7.5 });
   } else if (uniqueCount >= 4) {
-    internal += 10;
-    details.push({ factor: `${uniqueCount} different note values (good variety)`, impact: +10 });
-  } else if (uniqueCount >= 3) {
     internal += 5;
-    details.push({ factor: `${uniqueCount} different note values`, impact: +5 });
+    details.push({ factor: `${uniqueCount} different note values (good variety)`, impact: +5 });
+  } else if (uniqueCount >= 3) {
+    internal += 2.5;
+    details.push({ factor: `${uniqueCount} different note values`, impact: +2.5 });
   } else if (uniqueCount === 2) {
     // Baseline - no adjustment
     details.push({ factor: `${uniqueCount} different note values (minimal)`, impact: 0 });
   } else {
-    internal -= 15;
-    details.push({ factor: 'Uniform rhythm (single note value)', impact: -15 });
+    internal -= 2.5;
+    details.push({ factor: 'Uniform rhythm (single note value)', impact: -2.5 });
   }
 
   // Rhythmic contrast
@@ -268,13 +270,25 @@ export function calculateRhythmicCharacterScore(result) {
     details.push({ factor: 'Good rhythmic contrast', impact: +10 });
   }
 
-  // Check for rhythmic patterns
-  const hasPattern = result.observations?.some((o) =>
-    o.description?.includes('pattern') || o.description?.includes('motive')
+  // Check for rhythmic motive
+  const hasMotive = result.observations?.some((o) =>
+    o.description?.includes('motive') || o.description?.includes('pattern')
   );
-  if (hasPattern) {
+  if (hasMotive) {
     internal += 5;
-    details.push({ factor: 'Recognizable rhythmic pattern', impact: +5 });
+    details.push({ factor: 'Recognizable rhythmic motive', impact: +5 });
+  }
+
+  // Syncopation sigmoid (plateau shape)
+  const r = result.offBeatRatio ?? 0;
+  if (r > 0) {
+    const { MAX, FLOOR, LOW, HIGH, K } = SYNCOPATION;
+    const sig = (x) => 1 / (1 + Math.exp(-x));
+    const syncScore = MAX * sig(K * (r - LOW)) * (1 - sig(K * (r - HIGH)))
+      - FLOOR * sig(K * (r - HIGH));
+    const rounded = Math.round(syncScore * 10) / 10;
+    internal += rounded;
+    details.push({ factor: `Syncopation (${Math.round(r * 100)}% off-beat)`, impact: rounded });
   }
 
   return {
@@ -824,7 +838,22 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
   scores.answerCompatibility = answerComp;
   scores.tonalAnswer = answerComp;
 
-  const rhythmChar = calculateRhythmicCharacterScore(results.rhythmicVariety);
+  const rhythmCharSubject = calculateRhythmicCharacterScore(results.rhythmicVariety);
+  let rhythmChar;
+  if (results.rhythmicVarietyCs) {
+    const rhythmCharCs = calculateRhythmicCharacterScore(results.rhythmicVarietyCs);
+    const avgInternal = (rhythmCharSubject.internal + rhythmCharCs.internal) / 2;
+    rhythmChar = {
+      score: toDisplayScore(avgInternal),
+      internal: avgInternal,
+      details: [
+        ...rhythmCharSubject.details.map((d) => ({ ...d, factor: `S: ${d.factor}` })),
+        ...rhythmCharCs.details.map((d) => ({ ...d, factor: `CS: ${d.factor}` })),
+      ],
+    };
+  } else {
+    rhythmChar = rhythmCharSubject;
+  }
   scores.rhythmicCharacter = rhythmChar;
   scores.rhythmicVariety = rhythmChar;
 
