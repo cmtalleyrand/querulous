@@ -142,6 +142,26 @@ export const SCORE_THRESHOLDS = {
 };
 
 /**
+ * Parameterization for the rhythmic syncopation plateau function.
+ *
+ * Function form:
+ *   MAX * sigmoid(K * (r - LOW)) * (1 - sigmoid(K * (r - HIGH)))
+ *     - FLOOR * sigmoid(K * (r - HIGH))
+ *
+ * Rationale:
+ * - Rewards moderate off-beat activity (roughly LOW..HIGH)
+ * - Avoids over-rewarding heavily displaced rhythms
+ * - Introduces a soft penalty once ratio exceeds HIGH
+ */
+const SYNCOPATION = {
+  MAX: 10,
+  FLOOR: 5,
+  LOW: 0.2,
+  HIGH: 0.6,
+  K: 20,
+};
+
+/**
  * Get a rating label for a base-zero score
  */
 export function getScoreRating(score) {
