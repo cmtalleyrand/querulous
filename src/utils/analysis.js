@@ -1387,6 +1387,7 @@ export function testDoubleCounterpoint(subject, cs, formatter) {
       if (d.metricWeight >= 0.75) {
         issues.push({
           config: name,
+          onset: d.onset,
           description: `Unprepared ${d.interval} on strong beat at ${formatter.formatBeat(d.onset)}`,
         });
       }

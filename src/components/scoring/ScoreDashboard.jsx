@@ -23,14 +23,20 @@ export function ScoreDashboard({
   const { strengths, improvements } = getScoreSummary(scoreResult);
 
   // Requested order:
-  // 1) Answer vs Countersubject
-  // 2) Subject vs Countersubject
-  // 3) Rhythm + Interplay area (includes subject rhythmic character)
+  // 1) Subject profile (melodic + rhythmic character)
+  // 2) Answer vs Countersubject / Subject vs Countersubject (pair quality)
+  // 3) Rhythmic independence (voice interaction)
   // 4) Stretto
   const categoryGroups = {
+    subjectProfile: {
+      title: 'Subject Profile',
+      subtitle: 'Inherent qualities of the subject (and countersubject) melody',
+      color: '#26a69a',
+      categories: ['rhythmicCharacter', 'melodicVariety'],
+    },
     pairQuality: {
       title: 'Counterpoint Quality',
-      subtitle: 'Direct pair quality first: answer vs countersubject, then subject vs countersubject',
+      subtitle: 'Direct pair quality: answer vs countersubject, then subject vs countersubject',
       color: '#81c784',
       categories: hasCountersubject
         ? ['transpositionStability', 'invertibility']
@@ -38,11 +44,11 @@ export function ScoreDashboard({
     },
     interplayRhythm: {
       title: 'Rhythmic Independence',
-      subtitle: 'Combined rhythmic offset and contour independence, plus subject rhythmic character',
+      subtitle: 'Combined rhythmic offset and contour independence between voices',
       color: '#5c6bc0',
       categories: hasCountersubject
-        ? ['voiceIndependence', 'rhythmicCharacter']
-        : ['rhythmicCharacter'],
+        ? ['voiceIndependence']
+        : [],
     },
     fugal: {
       title: 'Stretto',

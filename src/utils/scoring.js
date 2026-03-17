@@ -43,12 +43,21 @@ export function toInternalScore(displayScore) {
 export const SCORE_CATEGORIES = {
   // === MELODIC GROUP: Subject line quality ===
   rhythmicCharacter: {
-    name: 'Subject Rhythmic Character',
+    name: 'Rhythmic Character',
     description: 'Distinctiveness and variety of rhythmic profile',
     group: 'melodic',
     weight: 0.8,
     baseline: 'Minimal rhythmic variety',
-    factors: ['+5 per unique duration', '+10 good contrast', '-10 uniform rhythm'],
+    factors: ['+2.5–7.5 unique durations (per voice, averaged)', '+10 good contrast', '+5 motive', 'sigmoid syncopation'],
+  },
+
+  melodicVariety: {
+    name: 'Melodic Variety',
+    description: 'Diversity of melodic intervals (steps, skips, leaps)',
+    group: 'melodic',
+    weight: 0.6,
+    baseline: 'Mixed intervals present',
+    factors: ['+10 steps + skips/leaps', '+7.5 skip/leap combinations', '+5 three distinct sizes', '-5 monotonous'],
   },
 
   // === FUGAL GROUP: Contrapuntal potential ===
@@ -270,13 +279,13 @@ export function calculateRhythmicCharacterScore(result) {
     details.push({ factor: 'Good rhythmic contrast', impact: +10 });
   }
 
-  // Check for rhythmic motive
-  const hasMotive = result.observations?.some((o) =>
+  // Rhythmic motive: show actual motive from observation
+  const motiveObs = result.observations?.find((o) =>
     o.description?.includes('motive') || o.description?.includes('pattern')
   );
-  if (hasMotive) {
+  if (motiveObs) {
     internal += 5;
-    details.push({ factor: 'Recognizable rhythmic motive', impact: +5 });
+    details.push({ factor: motiveObs.description, impact: +5 });
   }
 
   // Syncopation sigmoid (plateau shape)
@@ -296,6 +305,34 @@ export function calculateRhythmicCharacterScore(result) {
     internal,
     details,
   };
+}
+
+/**
+ * Calculate Melodic Variety score from rhythmic variety analysis result (per-voice; caller averages)
+ * Uses the melodicVarietyScore field and its associated observations.
+ */
+export function calculateMelodicVarietyScore(result) {
+  if (!result || result.error) return { score: 0, internal: 0, details: [] };
+
+  const s = result.melodicVarietyScore ?? 0;
+  const internal = s * 5; // 2→+10, 1.5→+7.5, 1→+5, 0→0, -1→-5
+  const details = [];
+
+  const obs = result.observations?.find((o) =>
+    o.description?.toLowerCase().includes('melodic variety') ||
+    o.description?.toLowerCase().includes('melodic interval') ||
+    o.description?.toLowerCase().includes('monotonous') ||
+    o.description?.toLowerCase().includes('distinct interval')
+  );
+  if (obs) {
+    details.push({ factor: obs.description, impact: internal });
+  } else if (internal !== 0) {
+    details.push({ factor: 'Melodic interval variety', impact: internal });
+  } else {
+    details.push({ factor: 'Mixed intervals (baseline)', impact: 0 });
+  }
+
+  return { score: toDisplayScore(internal), internal, details };
 }
 
 /**
@@ -839,23 +876,36 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
   scores.tonalAnswer = answerComp;
 
   const rhythmCharSubject = calculateRhythmicCharacterScore(results.rhythmicVariety);
-  let rhythmChar;
+  const melodicVarSubject = calculateMelodicVarietyScore(results.rhythmicVariety);
+  let rhythmChar, melodicVar;
   if (results.rhythmicVarietyCs) {
     const rhythmCharCs = calculateRhythmicCharacterScore(results.rhythmicVarietyCs);
-    const avgInternal = (rhythmCharSubject.internal + rhythmCharCs.internal) / 2;
+    const melodicVarCs = calculateMelodicVarietyScore(results.rhythmicVarietyCs);
+    const rcAvg = (rhythmCharSubject.internal + rhythmCharCs.internal) / 2;
+    const mvAvg = (melodicVarSubject.internal + melodicVarCs.internal) / 2;
     rhythmChar = {
-      score: toDisplayScore(avgInternal),
-      internal: avgInternal,
+      score: toDisplayScore(rcAvg),
+      internal: rcAvg,
       details: [
-        ...rhythmCharSubject.details.map((d) => ({ ...d, factor: `S: ${d.factor}` })),
-        ...rhythmCharCs.details.map((d) => ({ ...d, factor: `CS: ${d.factor}` })),
+        ...rhythmCharSubject.details.map((d) => ({ ...d, factor: `Subject: ${d.factor}`, impact: Math.round(d.impact / 2 * 10) / 10 })),
+        ...rhythmCharCs.details.map((d) => ({ ...d, factor: `CS1: ${d.factor}`, impact: Math.round(d.impact / 2 * 10) / 10 })),
+      ],
+    };
+    melodicVar = {
+      score: toDisplayScore(mvAvg),
+      internal: mvAvg,
+      details: [
+        ...melodicVarSubject.details.map((d) => ({ ...d, factor: `Subject: ${d.factor}`, impact: Math.round(d.impact / 2 * 10) / 10 })),
+        ...melodicVarCs.details.map((d) => ({ ...d, factor: `CS1: ${d.factor}`, impact: Math.round(d.impact / 2 * 10) / 10 })),
       ],
     };
   } else {
     rhythmChar = rhythmCharSubject;
+    melodicVar = melodicVarSubject;
   }
   scores.rhythmicCharacter = rhythmChar;
   scores.rhythmicVariety = rhythmChar;
+  scores.melodicVariety = melodicVar;
 
   // === Fugal group ===
   const strettoPot = calculateStrettoPotentialScore(results.stretto, subjectDuration);
@@ -893,7 +943,7 @@ export function calculateOverallScore(results, hasCountersubject, subjectInfo = 
   let weightedInternalSum = 0;
 
   // Categories used for scoring
-  const scoringKeys = ['rhythmicCharacter', 'strettoPotential'];
+  const scoringKeys = ['rhythmicCharacter', 'melodicVariety', 'strettoPotential'];
   if (hasCountersubject) {
     scoringKeys.push('invertibility', 'voiceIndependence', 'transpositionStability');
   }
