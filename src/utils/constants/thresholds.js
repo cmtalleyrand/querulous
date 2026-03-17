@@ -11,6 +11,14 @@ export const SCORE_BAND_BOUNDARIES = {
   DISSONANT_GOOD_MIN: 1.0,
 };
 
+export const SYNCOPATION = {
+  MAX: 8,      // peak reward
+  FLOOR: 4,    // max penalty
+  LOW: 0.2,    // left inflection (plateau starts)
+  HIGH: 0.65,  // right inflection (plateau ends)
+  K: 20,       // steepness of transitions
+};
+
 export const PENALTY_MULTIPLIERS = {
   HALF: 0.5,
   QUARTER: 0.25,
