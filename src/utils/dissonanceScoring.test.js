@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeAllDissonances, createAnalysisContext, setP4Treatment } from './dissonanceScoring';
-import { NoteEvent, ScaleDegree, Simultaneity } from '../types/music';
-import { scoreDissonance } from './dissonanceScoring';
+import { analyzeAllDissonances, createAnalysisContext, setP4Treatment } from './dissonanceScoring.js';
+import { NoteEvent, ScaleDegree, Simultaneity } from '../types/music.js';
+import { scoreDissonance } from './dissonanceScoring.js';
 
 describe('dissonanceScoring P4 defaults', () => {
   it('defaults context to treating P4 as dissonant', () => {

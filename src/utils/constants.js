@@ -2,7 +2,7 @@ export {
   NOTE_TO_MIDI,
   KEY_SIGNATURES,
   MODE_INTERVALS,
-} from './constants/musicTheory';
+} from './constants/musicTheory.js';
 
 export {
   AVAILABLE_KEYS,
@@ -11,8 +11,8 @@ export {
   STRETTO_STEP_OPTIONS,
   STRETTO_TRANSPOSITION_OPTIONS,
   CS_POSITION_OPTIONS,
-} from './constants/uiOptions';
+} from './constants/uiOptions.js';
 
-export { TIME_SIGNATURE_OPTIONS } from './constants/timeSignatures';
+export { TIME_SIGNATURE_OPTIONS } from './constants/timeSignatures.js';
 
-export { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants/analysisThresholds';
+export { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants/analysisThresholds.js';

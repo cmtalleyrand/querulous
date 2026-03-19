@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateRhythmicCharacterScore } from './scoring';
+import { calculateRhythmicCharacterScore } from './scoring.js';
 
 describe('calculateRhythmicCharacterScore', () => {
   it('applies syncopation scoring without throwing when offBeatRatio is present', () => {

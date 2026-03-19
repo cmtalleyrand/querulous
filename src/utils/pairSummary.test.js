@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAvailablePairSummaries, buildPairSummary } from './pairSummary';
+import { buildAvailablePairSummaries, buildPairSummary, extractParallelPerfectIssues } from './pairSummary.js';
 
 describe('buildPairSummary', () => {
   it('computes the direct pair summary with the shared weighted formula', () => {
@@ -22,7 +22,7 @@ describe('buildPairSummary', () => {
         },
       },
       summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
-      violationAccessor: (pairResult) => (pairResult.original?.issues || []).filter((issue) => issue.type === 'parallel'),
+      violationAccessor: (pairResult) => extractParallelPerfectIssues(pairResult.original?.issues),
       allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
     });
 
@@ -37,6 +37,39 @@ describe('buildPairSummary', () => {
       parallelPerfectPenalty: 2,
       finalPairScore: -1.6,
     });
+  });
+
+
+
+  it('detects parallel-perfect penalties from the persisted issue descriptions', () => {
+    const pairSummary = buildPairSummary({
+      label: 'Answer vs CS1',
+      meter: [4, 4],
+      analysisResult: {
+        original: {
+          issues: [
+            {
+              onset: 0,
+              description: 'Parallel 5ths: C4-G3 ↑ D4-A3 (M1.B1 to M1.B2)',
+              config: 'original',
+            },
+          ],
+          detailedScoring: {
+            all: [{ onset: 0, isConsonant: false, score: 1 }],
+            summary: {
+              overallAvgScore: 1,
+              averageScore: 1,
+            },
+          },
+        },
+      },
+      summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
+      violationAccessor: (pairResult) => extractParallelPerfectIssues(pairResult.original?.issues),
+      allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
+    });
+
+    expect(pairSummary.parallelPerfectPenalty).toBe(2);
+    expect(pairSummary.finalPairScore).toBe(-1);
   });
 
   it('omits unavailable pairs whose analysis payload reports an error', () => {

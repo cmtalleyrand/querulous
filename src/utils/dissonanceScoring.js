@@ -17,8 +17,8 @@
  *   dissonant_bad:         Poorly handled dissonance (red)
  */
 
-import { pitchName, metricWeight } from './formatter';
-import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES } from './constants/thresholds';
+import { pitchName, metricWeight } from './formatter.js';
+import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES } from './constants/thresholds.js';
 
 // ===========================================================================
 // Global state for backward compatibility

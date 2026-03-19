@@ -1,4 +1,4 @@
-import { KEY_SIGNATURES } from './constants';
+import { KEY_SIGNATURES } from './constants.js';
 
 export const ACCIDENTAL_OPTIONS = [
   { value: '__', label: '♭♭ (double flat)', semitones: -2 },

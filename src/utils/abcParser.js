@@ -1,11 +1,11 @@
-import { ScaleDegree, NoteEvent } from '../types';
-import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants/musicTheory';
-import { MODE_PARSER_TOKEN_TO_MODE } from './modes';
+import { ScaleDegree, NoteEvent } from '../types/index.js';
+import { NOTE_TO_MIDI, KEY_SIGNATURES, MODE_INTERVALS } from './constants/musicTheory.js';
+import { MODE_PARSER_TOKEN_TO_MODE } from './modes.js';
 import {
   getKeySignatureMap,
   parseKeyHeaderAccidentalModifier,
   parseKeySignatureArrayToMap,
-} from './keySignature';
+} from './keySignature.js';
 
 
 function abcDurationSuffixFromQuarters(durationInQuarters, defaultNoteLength) {

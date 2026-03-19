@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapChainRecordOntoIntervalPoint, mergeChainAnalysisIntoIntervalPoints, normalizeOnsetKey } from './chainMerge';
+import { mapChainRecordOntoIntervalPoint, mergeChainAnalysisIntoIntervalPoints, normalizeOnsetKey } from './chainMerge.js';
 
 describe('chainMerge utilities', () => {
   it('normalizes onsets to 1/480 quarter-note tick resolution', () => {

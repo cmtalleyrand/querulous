@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { checkParallelPerfects, findSimultaneities } from './analysis';
-import { NoteEvent, ScaleDegree } from '../types/music';
+import { checkParallelPerfects, findSimultaneities } from './analysis.js';
+import { NoteEvent, ScaleDegree } from '../types/music.js';
 
 const meter = [4, 4];
 const formatter = {

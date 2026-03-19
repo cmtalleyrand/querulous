@@ -5,8 +5,8 @@ import {
   MODE_OPTIONS_BY_VALUE,
   MODE_PARSER_TOKEN_TO_MODE,
   validateModeCoverage,
-} from './modes';
-import { extractABCHeaders } from './abcParser';
+} from './modes.js';
+import { extractABCHeaders } from './abcParser.js';
 
 describe('mode coverage guardrails', () => {
   it('ensures parser-supported mode tokens map to valid mode definitions/options', () => {

@@ -1,4 +1,6 @@
-import { metricWeight } from './formatter';
+import { metricWeight } from './formatter.js';
+
+const PARALLEL_PERFECT_DESCRIPTION_PATTERN = /^Parallel (?:5ths|8ves):/;
 
 const PAIR_SCORE_WEIGHTS = Object.freeze({
   allIntervalDurationWeightedMean: 0.4,
@@ -13,6 +15,18 @@ const roundToTenth = (value) => {
   }
   return Math.round(numericValue * 10) / 10;
 };
+
+
+export function extractParallelPerfectIssues(issues = []) {
+  if (!Array.isArray(issues)) {
+    return [];
+  }
+
+  return issues.filter((issue) => (
+    issue?.type === 'parallel'
+    || PARALLEL_PERFECT_DESCRIPTION_PATTERN.test(issue?.description || '')
+  ));
+}
 
 const getParallelPerfectPenalty = (analysisResult, violationAccessor = null) => {
   if (!analysisResult || analysisResult.error) {

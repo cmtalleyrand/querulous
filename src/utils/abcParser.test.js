@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractABCHeaders, generateAnswerABC, generateAnswerABCSameKey, parseABC } from './abcParser';
+import { extractABCHeaders, generateAnswerABC, generateAnswerABCSameKey, parseABC } from './abcParser.js';
 
 describe('parseABC ties', () => {
   it('merges tied notes into a single NoteEvent duration', () => {

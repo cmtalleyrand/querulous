@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runDefaultAnalysis } from './defaultAnalysis';
+import { runDefaultAnalysis } from './defaultAnalysis.js';
 
 describe('runDefaultAnalysis', () => {
   it('runs baseline analysis and returns a scored result', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Interval } from './music';
+import { Interval } from './music.js';
 
 describe('Interval tritone behavior', () => {
   it('labels six semitones as TT', () => {

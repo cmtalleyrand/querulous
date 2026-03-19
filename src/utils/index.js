@@ -1,5 +1,5 @@
 // Formatting utilities
-export { BeatFormatter, pitchName, metricWeight, metricPosition, metricSeverity, isDuringRest } from './formatter';
+export { BeatFormatter, pitchName, metricWeight, metricPosition, metricSeverity, isDuringRest } from './formatter.js';
 
 // ABC parsing and generation
 export {
@@ -11,7 +11,7 @@ export {
   generateAnswerABCSameKey,
   formatSubjectABC,
   validateABCTiming,
-} from './abcParser';
+} from './abcParser.js';
 
 // Analysis functions
 export {
@@ -30,7 +30,7 @@ export {
   testModulatoryRobustness,
   detectSequences,
   testSequentialPotential,
-} from './analysis';
+} from './analysis.js';
 
 // Scoring functions
 export {
@@ -49,10 +49,10 @@ export {
   calculateModulatoryRobustnessScore,
   calculateOverallScore,
   getScoreSummary,
-} from './scoring';
+} from './scoring.js';
 
 // Help content
-export { HELP_CONTENT, getHelpContent, getHelpTopics } from './helpContent';
+export { HELP_CONTENT, getHelpContent, getHelpTopics } from './helpContent.js';
 
 // Dissonance scoring system
 export {
@@ -68,10 +68,10 @@ export {
   getSequenceRanges,
   setSequenceBeatRanges,
   getSequenceBeatRanges,
-} from './dissonanceScoring';
+} from './dissonanceScoring.js';
 
 // Harmonic analysis
-export { analyzeHarmonicImplication } from './harmonicAnalysis';
+export { analyzeHarmonicImplication } from './harmonicAnalysis.js';
 
 // Mode definitions/options
 export {
@@ -83,7 +83,7 @@ export {
   MODE_PARSER_TOKEN_TO_MODE,
   MODE_TOKEN_REGEX_FRAGMENT,
   validateModeCoverage,
-} from './modes';
+} from './modes.js';
 
 // Key-signature helpers/options
 export {
@@ -96,6 +96,6 @@ export {
   getKeySignatureMap,
   parseKeyHeaderAccidentalModifier,
   serializeKeySignatureModifiers,
-} from './keySignature';
+} from './keySignature.js';
 
-export { buildPairSummary, buildAvailablePairSummaries } from './pairSummary';
+export { buildPairSummary, buildAvailablePairSummaries, extractParallelPerfectIssues } from './pairSummary.js';

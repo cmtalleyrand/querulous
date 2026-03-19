@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   STRETTO_TRANSPOSITION_OPTIONS,
   COUNTERPOINT_VIZ_TRANSPOSITION_OPTIONS,
-} from './constants/transpositionOptions';
+} from './constants/transpositionOptions.js';
 
 describe('transposition option profiles', () => {
   it('keeps stretto profile conservative and interval-class annotated', () => {

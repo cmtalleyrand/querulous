@@ -1,5 +1,5 @@
-import { NOTE_TO_MIDI, KEY_SIGNATURES } from './constants/musicTheory';
-import { parseABC, generateAnswerABC } from './abcParser';
+import { NOTE_TO_MIDI, KEY_SIGNATURES } from './constants/musicTheory.js';
+import { parseABC, generateAnswerABC } from './abcParser.js';
 import {
   findSimultaneities,
   testMelodicContour,
@@ -12,10 +12,10 @@ import {
   testContourIndependence,
   testModulatoryRobustness,
   testSequentialPotential,
-} from './analysis';
-import { calculateOverallScore } from './scoring';
-import { BeatFormatter } from './formatter';
-import { setMeter, setP4Treatment } from './dissonanceScoring';
+} from './analysis.js';
+import { calculateOverallScore } from './scoring.js';
+import { BeatFormatter } from './formatter.js';
+import { setMeter, setP4Treatment } from './dissonanceScoring.js';
 
 export const DEFAULT_ANALYSIS_INPUT = {
   subject: 'C8 | ^B,4 E4 | D8 |',

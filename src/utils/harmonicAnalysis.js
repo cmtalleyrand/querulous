@@ -3,8 +3,8 @@
  * Uses DP optimization to find optimal chord sequence with cross-beat arpeggiation support
  */
 
-import { metricWeight } from './formatter';
-import { ANALYSIS_THRESHOLDS } from './constants/analysisThresholds';
+import { metricWeight } from './formatter.js';
+import { ANALYSIS_THRESHOLDS } from './constants/analysisThresholds.js';
 
 // Complete chord vocabulary with semitone intervals
 // Note: sus2/sus4 removed - suspensions are non-chord tones handled separately

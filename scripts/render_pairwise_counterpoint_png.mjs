@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import zlib from 'node:zlib';
 import { BeatFormatter } from '../src/utils/formatter.js';
 import { parseABC } from '../src/utils/abcParser.js';
@@ -17,7 +18,7 @@ import {
 } from '../src/utils/analysis.js';
 import { calculateOverallScore } from '../src/utils/scoring.js';
 import { setMeter, setP4Treatment } from '../src/utils/dissonanceScoring.js';
-import { buildAvailablePairSummaries } from '../src/utils/pairSummary.js';
+import { buildAvailablePairSummaries, extractParallelPerfectIssues } from '../src/utils/pairSummary.js';
 
 const FONT = {
   ' ': ['00000','00000','00000','00000','00000','00000','00000'],
@@ -260,7 +261,7 @@ function computePairSummaries() {
 
   const pairAccessors = {
     summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
-    violationAccessor: (pairResult) => (pairResult.original?.issues || []).filter((issue) => issue.type === 'parallel'),
+    violationAccessor: (pairResult) => extractParallelPerfectIssues(pairResult.original?.issues),
     allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
   };
 
@@ -281,6 +282,7 @@ function computePairSummaries() {
 
 function renderScreenshot(outputPath) {
   const { pairSummaries, scoreResult } = computePairSummaries();
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const width = 1500;
   const cardHeight = 180;
   const height = 300 + pairSummaries.length * (cardHeight + 22);

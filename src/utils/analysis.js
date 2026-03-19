@@ -1,10 +1,10 @@
-import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types';
-import { metricWeight, pitchName } from './formatter';
-import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring';
-import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis';
-import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants/analysisThresholds';
-import { METRIC_STRENGTH_CUTOFFS } from './constants/thresholds';
-import { mergeChainAnalysisIntoIntervalPoints } from './chainMerge';
+import { NoteEvent, Simultaneity, MelodicMotion, ScaleDegree } from '../types/index.js';
+import { metricWeight, pitchName } from './formatter.js';
+import { scoreDissonance, analyzeAllDissonances } from './dissonanceScoring.js';
+import { analyzeHarmonicImplication as analyzeChords } from './harmonicAnalysis.js';
+import { ANALYSIS_THRESHOLDS, getAdjustedThresholds } from './constants/analysisThresholds.js';
+import { METRIC_STRENGTH_CUTOFFS } from './constants/thresholds.js';
+import { mergeChainAnalysisIntoIntervalPoints } from './chainMerge.js';
 
 /**
  * Classify a dissonance according to species counterpoint practice
