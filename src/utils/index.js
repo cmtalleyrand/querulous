@@ -97,3 +97,5 @@ export {
   parseKeyHeaderAccidentalModifier,
   serializeKeySignatureModifiers,
 } from './keySignature';
+
+export { buildPairSummary, buildAvailablePairSummaries } from './pairSummary';

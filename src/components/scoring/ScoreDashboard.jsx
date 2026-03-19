@@ -10,6 +10,7 @@ import { getScoreSummary } from '../../utils/scoring';
 export function ScoreDashboard({
   scoreResult,
   hasCountersubject,
+  pairSummaries = [],
   scoreProfiles = [],
   selectedScoreProfile,
   onSelectScoreProfile,
@@ -36,7 +37,7 @@ export function ScoreDashboard({
     },
     pairQuality: {
       title: 'Counterpoint Quality',
-      subtitle: 'Direct pair quality: answer vs countersubject, then subject vs countersubject',
+      subtitle: 'Aggregate invertibility and answer-compatibility categories remain available below the explicit per-pair table.',
       color: '#81c784',
       categories: hasCountersubject
         ? ['transpositionStability', 'invertibility']
@@ -247,6 +248,62 @@ export function ScoreDashboard({
             )}
           </div>
         </div>
+
+        {pairSummaries.length > 0 && (
+          <div style={{ marginBottom: '20px' }}>
+            <h3
+              style={{
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#37474f',
+                marginBottom: '4px',
+                paddingBottom: '6px',
+                borderBottom: '2px solid #81c784',
+              }}
+            >
+              Pairwise Counterpoint
+            </h3>
+            <p style={{ fontSize: '11px', color: '#78909c', margin: '0 0 10px 0' }}>
+              Each available pair is scored directly with the shared formula 0.4×A + 0.3×S + 0.3×D − parallel penalty, where A is the duration-weighted all-interval mean, S is the salience-weighted dissonance handling mean, and D is the unweighted dissonance-handling mean.
+            </p>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {pairSummaries.map((pairSummary) => (
+                <div
+                  key={pairSummary.label}
+                  style={{
+                    border: '1px solid #dce775',
+                    borderRadius: '6px',
+                    backgroundColor: '#f9fbe7',
+                    padding: '12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#37474f' }}>{pairSummary.label}</div>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '11px', color: '#546e7a' }}>Pair quality: <strong>{pairSummary.pairQuality.toFixed(1)}</strong></span>
+                      <span style={{ fontSize: '12px', color: '#1b5e20', fontWeight: 600 }}>Final pair score: {pairSummary.finalPairScore.toFixed(1)}</span>
+                    </div>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <tbody>
+                      {[
+                        ['All-interval duration-weighted mean', pairSummary.components.allIntervalDurationWeightedMean],
+                        ['Salience-weighted dissonance handling', pairSummary.components.salienceWeightedDissonanceHandling],
+                        ['Average dissonance handling', pairSummary.components.averageDissonanceHandling],
+                        ['Parallel-perfect penalty', -pairSummary.parallelPerfectPenalty],
+                      ].map(([rowLabel, rowValue]) => (
+                        <tr key={rowLabel}>
+                          <td style={{ padding: '6px 0', color: '#455a64', borderTop: '1px solid #e6ee9c' }}>{rowLabel}</td>
+                          <td style={{ padding: '6px 0', textAlign: 'right', color: '#263238', borderTop: '1px solid #e6ee9c', fontVariantNumeric: 'tabular-nums' }}>{Number(rowValue).toFixed(1)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {Object.entries(categoryGroups).map(([groupKey, group]) => {
           if (group.categories.length === 0) return null;

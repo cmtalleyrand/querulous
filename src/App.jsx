@@ -33,19 +33,19 @@ import {
   testModulatoryRobustness,
   testSequentialPotential,
   calculateOverallScore,
+  buildAvailablePairSummaries,
   setP4Treatment,
   setMeter,
   setSequenceRanges,
   setSequenceBeatRanges,
 } from './utils';
 import { MODE_DEFINITIONS, MODE_HEADER_SUFFIX } from './utils/modes';
-import { NOTE_TO_MIDI, KEY_SIGNATURES } from './utils/constants/musicTheory';
+import { NOTE_TO_MIDI } from './utils/constants/musicTheory';
 import {
   AVAILABLE_KEYS,
   AVAILABLE_MODES,
   NOTE_LENGTH_OPTIONS,
   STRETTO_STEP_OPTIONS,
-  STRETTO_TRANSPOSITION_OPTIONS,
   CS_POSITION_OPTIONS,
 } from './utils/constants/uiOptions';
 import { TIME_SIGNATURE_OPTIONS } from './utils/constants/timeSignatures';
@@ -431,6 +431,7 @@ export default function App() {
         res.modulatoryRobustness = testModulatoryRobustness(subject, shiftedCs, formatter);
         res.subjectCsSims = findSimultaneities(subject, shiftedCs, meter);
         res.answerCsSims = findSimultaneities(answerNotes, shiftedCs, meter);
+        res.answerCs1DoubleCounterpoint = testDoubleCounterpoint(answerNotes, shiftedCs, formatter);
       }
 
       // Run CS2 analyses if provided
@@ -440,7 +441,8 @@ export default function App() {
         res.cs2RhythmicComplementarity = testRhythmicComplementarity(subject, shiftedCs2, meter);
         res.cs2ContourIndependence = testContourIndependence(subject, shiftedCs2, formatter);
         res.answerCs2Sims = findSimultaneities(answerNotes, shiftedCs2, meter);
-        res.cs2AnswerDoubleCounterpoint = testDoubleCounterpoint(answerNotes, shiftedCs2, formatter);
+        res.answerCs2DoubleCounterpoint = testDoubleCounterpoint(answerNotes, shiftedCs2, formatter);
+        res.cs2AnswerDoubleCounterpoint = res.answerCs2DoubleCounterpoint;
 
         // CS2 vs CS1 interaction
         if (shiftedCs?.length) {
@@ -455,6 +457,52 @@ export default function App() {
       res.defaultNL = effNL;
       res.meter = meter;
       res.formatter = formatter;
+
+      const pairSummaryDefinitions = [
+        {
+          label: 'Subject 1 vs CS1',
+          analysisResult: res.doubleCounterpoint,
+          summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
+          violationAccessor: (pairResult) => (pairResult.original?.issues || []).filter((issue) => issue.type === 'parallel'),
+          allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
+        },
+        {
+          label: 'Answer vs CS1',
+          analysisResult: res.answerCs1DoubleCounterpoint,
+          summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
+          violationAccessor: (pairResult) => (pairResult.original?.issues || []).filter((issue) => issue.type === 'parallel'),
+          allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
+        },
+        {
+          label: 'Subject 1 vs CS2',
+          analysisResult: res.cs2DoubleCounterpoint,
+          summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
+          violationAccessor: (pairResult) => (pairResult.original?.issues || []).filter((issue) => issue.type === 'parallel'),
+          allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
+        },
+        {
+          label: 'Answer vs CS2',
+          analysisResult: res.answerCs2DoubleCounterpoint,
+          summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
+          violationAccessor: (pairResult) => (pairResult.original?.issues || []).filter((issue) => issue.type === 'parallel'),
+          allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
+        },
+        {
+          label: 'Subject 2 vs CS1',
+          analysisResult: res.subject2Cs1DoubleCounterpoint,
+          summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
+          violationAccessor: (pairResult) => (pairResult.original?.issues || []).filter((issue) => issue.type === 'parallel'),
+          allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
+        },
+        {
+          label: 'Subject 2 vs CS2',
+          analysisResult: res.subject2Cs2DoubleCounterpoint,
+          summaryAccessor: (pairResult) => pairResult.original?.detailedScoring?.summary,
+          violationAccessor: (pairResult) => (pairResult.original?.issues || []).filter((issue) => issue.type === 'parallel'),
+          allAccessor: (pairResult) => pairResult.original?.detailedScoring?.all,
+        },
+      ];
+      res.pairSummaries = buildAvailablePairSummaries(pairSummaryDefinitions, meter);
 
       // Calculate scores
       const scores = calculateOverallScore(res, !!cs?.length);
@@ -471,11 +519,16 @@ export default function App() {
           subject: subjectNotes,
         };
 
+        const profileScore = calculateOverallScore(profileResults, hasCountersubject);
+
         return {
           key,
           label,
           hasCountersubject,
-          score: calculateOverallScore(profileResults, hasCountersubject),
+          score: {
+            ...profileScore,
+            pairSummaries: res.pairSummaries,
+          },
         };
       };
 
@@ -545,7 +598,10 @@ export default function App() {
           key: 'subject_only',
           label: 'Subject 1 (no countersubject)',
           hasCountersubject: false,
-          score: scores,
+          score: {
+            ...scores,
+            pairSummaries: res.pairSummaries,
+          },
         });
       }
 
@@ -1102,6 +1158,7 @@ export default function App() {
             <ScoreDashboard
               scoreResult={scoreResult}
               hasCountersubject={!!results.countersubject}
+              pairSummaries={results.pairSummaries || scoreResult?.pairSummaries || []}
               scoreProfiles={scoreProfiles}
               selectedScoreProfile={selectedScoreProfile}
               onSelectScoreProfile={(profileKey) => {
