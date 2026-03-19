@@ -415,7 +415,7 @@ export function TwoVoiceViz({
     setSelectedInterval(pt);
     setHighlightedOnset(getOnsetKey(pt.onset));
     setHighlightedChain(pt.chainStartOnset !== undefined ? pt.chainStartOnset : null);
-  }, []);
+  }, [getOnsetKey]);
 
   const handleNoteClick = useCallback((n, event) => {
     if (event) event.preventDefault();
@@ -429,7 +429,7 @@ export function TwoVoiceViz({
       setHighlightedOnset(getOnsetKey(overlapping.onset));
       setHighlightedChain(overlapping.chainStartOnset !== undefined ? overlapping.chainStartOnset : null);
     }
-  }, [analysis]);
+  }, [analysis, getOnsetKey]);
 
   const handleIssueClick = useCallback((issue, event) => {
     if (event) event.preventDefault();

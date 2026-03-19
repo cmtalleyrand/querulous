@@ -18,6 +18,7 @@
  */
 
 import { pitchName, metricWeight } from './formatter';
+import { computeNoteSalience } from './harmonicAnalysis';
 import { METRIC_STRENGTH_CUTOFFS, PENALTY_MULTIPLIERS, SCORE_BAND_BOUNDARIES } from './constants/thresholds';
 
 // ===========================================================================
@@ -1566,6 +1567,65 @@ export function scoreDissonance(currSim, allSims, index = -1, intervalHistory = 
  * - Each dissonance that resolves to another dissonance receives a -0.75 penalty (in scoreExit)
  * - Consecutive dissonances compound: tracked in the summary as consecutiveDissonanceGroups
  */
+
+function getConsonanceQualityScore(intervalClass) {
+  return [3, 6].includes(intervalClass) ? 0.5
+    : intervalClass === 5 ? 0.3
+    : intervalClass === 4 ? 0.25
+    : 0.2;
+}
+
+function computePairQualitySummary(results, sims, ctx) {
+  let allIntervalWeightedScore = 0;
+  let allIntervalWeight = 0;
+  let dissonanceScoreTotal = 0;
+  let dissonanceCount = 0;
+  let salienceWeightedDissonanceScore = 0;
+  let salienceWeightTotal = 0;
+
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    const sim = sims[i];
+    const prevSim = i > 0 ? sims[i - 1] : null;
+    const v1Salience = computeNoteSalience(sim.voice1Note, prevSim?.voice1Note ?? null, ctx.meter);
+    const v2Salience = computeNoteSalience(sim.voice2Note, prevSim?.voice2Note ?? null, ctx.meter);
+    const simultaneitySalience = Math.max(v1Salience, v2Salience);
+    const durationWeight = Math.max(0.25, result.duration || 0.25);
+    const intervalScore = result.isConsonant
+      ? getConsonanceQualityScore(result.intervalClass)
+      : (result.score || 0);
+
+    allIntervalWeightedScore += intervalScore * durationWeight;
+    allIntervalWeight += durationWeight;
+
+    if (!result.isConsonant) {
+      dissonanceScoreTotal += result.score || 0;
+      dissonanceCount += 1;
+      salienceWeightedDissonanceScore += (result.score || 0) * simultaneitySalience;
+      salienceWeightTotal += simultaneitySalience;
+    }
+  }
+
+  const allIntervalDurationWeightedMean = allIntervalWeight > 0 ? allIntervalWeightedScore / allIntervalWeight : 0;
+  const averageDissonanceHandling = dissonanceCount > 0 ? dissonanceScoreTotal / dissonanceCount : 0;
+  const salienceWeightedDissonanceHandling = salienceWeightTotal > 0
+    ? salienceWeightedDissonanceScore / salienceWeightTotal
+    : 0;
+
+  return {
+    pairQualityComponents: {
+      allIntervalDurationWeightedMean,
+      salienceWeightedDissonanceHandling,
+      averageDissonanceHandling,
+    },
+    pairQualityBeforeParallels: (
+      0.4 * allIntervalDurationWeightedMean +
+      0.3 * salienceWeightedDissonanceHandling +
+      0.3 * averageDissonanceHandling
+    ),
+  };
+}
+
 export function analyzeAllDissonances(sims, options = {}) {
   const ctx = createAnalysisContext(options);
   const results = [];
@@ -1863,23 +1923,8 @@ export function analyzeAllDissonances(sims, options = {}) {
     }
   }
 
-  // Duration-weighted average across ALL intervals (same formula as TwoVoiceViz badge).
-  // Consonances are scored 0.2–0.5 by type; dissonances use their actual score.
-  let _totalW = 0, _totalD = 0;
-  for (const r of results) {
-    const dur = Math.max(0.25, r.duration || 0.25);
-    _totalD += dur;
-    if (r.isConsonant) {
-      const base = [3, 6].includes(r.intervalClass) ? 0.5
-        : r.intervalClass === 5 ? 0.3
-        : r.intervalClass === 4 ? 0.25
-        : 0.2;
-      _totalW += base * dur;
-    } else {
-      _totalW += (r.score || 0) * dur;
-    }
-  }
-  const overallAvgScore = _totalD > 0 ? _totalW / _totalD : 0;
+  const pairQualitySummary = computePairQualitySummary(results, sims, ctx);
+  const overallAvgScore = pairQualitySummary.pairQualityBeforeParallels;
 
   return {
     all: results,
@@ -1898,6 +1943,7 @@ export function analyzeAllDissonances(sims, options = {}) {
         : 0,
       // Duration-weighted average across all intervals — matches the TwoVoiceViz badge score
       overallAvgScore,
+      ...pairQualitySummary,
       typeCounts,
       allPatterns, // All recognized ornamental patterns
       consecutiveDissonanceGroups: consecutiveGroups, // Groups of 2+ adjacent dissonances
