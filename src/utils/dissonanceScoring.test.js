@@ -269,7 +269,8 @@ describe('pair-quality summary statistics', () => {
       0.3 * averageDissonanceHandling
     );
 
-    expect(allIntervalDurationWeightedMean).toBeCloseTo(analysis.summary.overallAvgScore, 10);
+    expect(analysis.summary.overallAvgScore).toBeCloseTo(manualPairQuality, 10);
     expect(analysis.summary.pairQualityBeforeParallels).toBeCloseTo(manualPairQuality, 10);
+    expect(analysis.summary.overallAvgScore).not.toBeCloseTo(allIntervalDurationWeightedMean, 10);
   });
 });

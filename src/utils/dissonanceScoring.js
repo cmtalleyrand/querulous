@@ -1924,7 +1924,7 @@ export function analyzeAllDissonances(sims, options = {}) {
   }
 
   const pairQualitySummary = computePairQualitySummary(results, sims, ctx);
-  const overallAvgScore = pairQualitySummary.pairQualityComponents.allIntervalDurationWeightedMean;
+  const overallAvgScore = pairQualitySummary.pairQualityBeforeParallels;
 
   return {
     all: results,
