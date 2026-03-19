@@ -36,7 +36,7 @@ const BASS_SEVENTH_PENALTY = 0.8; // Penalty when lowest note is seventh
 /**
  * Get the metric multiplier for salience calculation
  */
-function getMetricMultiplier(onset, meter) {
+export function getMetricMultiplier(onset, meter) {
   const weight = metricWeight(onset, meter);
   const {
     SALIENCE_DOWNBEAT_MULT,
@@ -54,7 +54,7 @@ function getMetricMultiplier(onset, meter) {
 /**
  * Calculate approach multiplier based on melodic interval from previous note
  */
-function getApproachMultiplier(note, prevNote) {
+export function getApproachMultiplier(note, prevNote) {
   if (!prevNote) return 1.0;
 
   const interval = Math.abs(note.pitch - prevNote.pitch);
@@ -76,7 +76,7 @@ function getApproachMultiplier(note, prevNote) {
  * Calculate salience for a note contributing to a specific beat
  * Salience = max[(duration - PASSING_NOTE_THRESHOLD) * metric_mult * approach, MIN_SALIENCE] * decay
  */
-function calculateSalience(note, beatTime, meter, prevNote, decay = 1.0) {
+export function calculateSalience(note, beatTime, meter, prevNote, decay = 1.0) {
   const {
     PASSING_NOTE_THRESHOLD,
     MIN_SALIENCE,
@@ -90,6 +90,14 @@ function calculateSalience(note, beatTime, meter, prevNote, decay = 1.0) {
   const baseSalience = Math.max(rawSalience, MIN_SALIENCE);
 
   return baseSalience * decay;
+}
+
+
+/**
+ * Public helper for note-level salience reuse outside harmonic beat collection.
+ */
+export function computeNoteSalience(note, prevNote, meter, decay = 1.0) {
+  return calculateSalience(note, note?.onset ?? 0, meter, prevNote, decay);
 }
 
 /**

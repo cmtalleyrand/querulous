@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeAllDissonances, createAnalysisContext, setP4Treatment } from './dissonanceScoring';
+import { computeNoteSalience } from './harmonicAnalysis';
 import { NoteEvent, ScaleDegree, Simultaneity } from '../types/music';
 import { scoreDissonance } from './dissonanceScoring';
 
@@ -187,5 +188,88 @@ describe('passingness assignment and D→D base penalty policy', () => {
     expect(Math.abs(partial.passingCharacterAdj || 0)).toBeGreaterThan(0);
     expect((partial.entryMitigationDetails || []).length + (partial.exitMitigationDetails || []).length).toBeGreaterThan(0);
     expect(partial.score).not.toBeCloseTo(base.score, 5);
+  });
+});
+
+
+describe('pair-quality summary statistics', () => {
+  function makeSimultaneity(onset, v1Pitch, v1Duration, v2Pitch = 60, v2Duration = v1Duration) {
+    return new Simultaneity(
+      onset,
+      makeNote(v1Pitch, onset, v1Duration),
+      makeNote(v2Pitch, onset, v2Duration),
+      1
+    );
+  }
+
+  it('weights an equally bad downbeat dissonance more heavily than an equally bad weak-beat dissonance', () => {
+    const sims = [
+      makeSimultaneity(0, 61, 1),
+      makeSimultaneity(1, 67, 1),
+      makeSimultaneity(2, 63, 1),
+      makeSimultaneity(2.5, 71, 0.5),
+      makeSimultaneity(3, 63, 1),
+      makeSimultaneity(4, 64, 1),
+      makeSimultaneity(5, 65, 1),
+      makeSimultaneity(6, 64, 1),
+    ];
+
+    const analysis = analyzeAllDissonances(sims, { treatP4AsDissonant: true, meter: [4, 4] });
+    const dissonances = analysis.all.filter((result) => !result.isConsonant);
+    const [downbeatBad, weakBad, goodDissonance] = dissonances;
+
+    expect(downbeatBad.score).toBeCloseTo(-1, 5);
+    expect(weakBad.score).toBeCloseTo(-1, 5);
+    expect(goodDissonance.score).toBeGreaterThan(0);
+
+    const downbeatSalience = Math.max(
+      computeNoteSalience(sims[0].voice1Note, null, [4, 4]),
+      computeNoteSalience(sims[0].voice2Note, null, [4, 4])
+    );
+    const weakSalience = Math.max(
+      computeNoteSalience(sims[3].voice1Note, sims[2].voice1Note, [4, 4]),
+      computeNoteSalience(sims[3].voice2Note, sims[2].voice2Note, [4, 4])
+    );
+    const goodSalience = Math.max(
+      computeNoteSalience(sims[6].voice1Note, sims[5].voice1Note, [4, 4]),
+      computeNoteSalience(sims[6].voice2Note, sims[5].voice2Note, [4, 4])
+    );
+
+    expect(downbeatSalience).toBeGreaterThan(weakSalience);
+
+    const manualWeightedMean = (
+      downbeatBad.score * downbeatSalience +
+      weakBad.score * weakSalience +
+      goodDissonance.score * goodSalience
+    ) / (downbeatSalience + weakSalience + goodSalience);
+
+    expect(analysis.summary.pairQualityComponents.salienceWeightedDissonanceHandling).toBeCloseTo(manualWeightedMean, 10);
+    expect(analysis.summary.pairQualityComponents.salienceWeightedDissonanceHandling).toBeLessThan(analysis.summary.pairQualityComponents.averageDissonanceHandling);
+  });
+
+  it('computes pairQualityBeforeParallels exactly from the 40/30/30 component formula', () => {
+    const sims = [
+      makeSimultaneity(0, 64, 1),
+      makeSimultaneity(0.5, 65, 0.5),
+      makeSimultaneity(1, 64, 1),
+    ];
+
+    const analysis = analyzeAllDissonances(sims, { treatP4AsDissonant: true, meter: [4, 4] });
+    const {
+      allIntervalDurationWeightedMean,
+      salienceWeightedDissonanceHandling,
+      averageDissonanceHandling,
+    } = analysis.summary.pairQualityComponents;
+
+    expect(allIntervalDurationWeightedMean).not.toBeCloseTo(averageDissonanceHandling, 10);
+
+    const manualPairQuality = (
+      0.4 * allIntervalDurationWeightedMean +
+      0.3 * salienceWeightedDissonanceHandling +
+      0.3 * averageDissonanceHandling
+    );
+
+    expect(allIntervalDurationWeightedMean).toBeCloseTo(analysis.summary.overallAvgScore, 10);
+    expect(analysis.summary.pairQualityBeforeParallels).toBeCloseTo(manualPairQuality, 10);
   });
 });
