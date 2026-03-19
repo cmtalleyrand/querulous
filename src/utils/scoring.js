@@ -422,14 +422,27 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
   // Count good distances for context
   const goodDistances = distanceScores.filter(d => d.avgScore >= 0).length;
 
-  // Bonus for close stretto possibility (high overlap with good counterpoint)
-  const closeGood = distanceScores.filter(d => {
-    const r = allResults.find(ar => ar.distance === d.distance);
-    return r && r.overlapPercent >= 60 && d.avgScore >= 0;
-  });
-  if (closeGood.length > 0) {
-    internal += 5;
-    details.push({ factor: `Close stretto possible with good counterpoint`, impact: +5 });
+  const shortDistanceCutoff = subjectLength == null ? null : Math.ceil(subjectLength / 3);
+  const shortDistanceCandidates = shortDistanceCutoff == null
+    ? []
+    : distanceScores.filter(({ distance }) => distance <= shortDistanceCutoff);
+  const shortDistanceTopScores = [...shortDistanceCandidates]
+    .sort((a, b) => b.avgScore - a.avgScore)
+    .slice(0, 3);
+  const shortDistanceWeights = [2, 1, 0.5];
+  const shortDistanceWeightTotal = shortDistanceTopScores
+    .reduce((sum, _, index) => sum + shortDistanceWeights[index], 0);
+  const shortDistanceWeightedAverage = shortDistanceWeightTotal > 0
+    ? shortDistanceTopScores.reduce((sum, entry, index) => sum + entry.avgScore * shortDistanceWeights[index], 0) / shortDistanceWeightTotal
+    : 0;
+  const shortDistanceBonus = shortDistanceWeightedAverage * 5;
+
+  if (shortDistanceTopScores.length > 0) {
+    internal += shortDistanceBonus;
+    details.push({
+      factor: `Short-distance stretto quality avg: ${shortDistanceWeightedAverage.toFixed(2)}`,
+      impact: Math.round(shortDistanceBonus),
+    });
   }
 
   // Context
@@ -439,6 +452,10 @@ export function calculateStrettoPotentialScore(result, subjectLength = null) {
     goodDistances,
     avgCounterpointScore: weightedAvg,
     distanceScores,
+    shortDistanceCutoff,
+    shortDistanceCandidates,
+    shortDistanceTopScores,
+    shortDistanceWeightedAverage,
   };
 
   if (subjectLength && goodDistances > 0) {
