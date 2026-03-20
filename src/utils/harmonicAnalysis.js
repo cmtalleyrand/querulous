@@ -93,6 +93,15 @@ function calculateSalience(note, beatTime, meter, prevNote, decay = 1.0) {
 }
 
 /**
+ * Public wrapper for the note-salience primitive used by harmonic implication scoring.
+ * This operation is O(1): it performs a fixed number of arithmetic operations and
+ * conditional branches without iterating over any collection.
+ */
+export function computeNoteSalience(note, beatTime, meter, prevNote = null, decay = 1.0) {
+  return calculateSalience(note, beatTime, meter, prevNote, decay);
+}
+
+/**
  * Preprocess notes: split long notes at beat boundaries, merge repeated pitches
  *
  * Important: We do NOT merge segments from sustained notes (isSegment=true).

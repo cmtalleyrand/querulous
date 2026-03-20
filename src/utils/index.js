@@ -71,7 +71,7 @@ export {
 } from './dissonanceScoring.js';
 
 // Harmonic analysis
-export { analyzeHarmonicImplication } from './harmonicAnalysis.js';
+export { analyzeHarmonicImplication, computeNoteSalience } from './harmonicAnalysis.js';
 
 // Mode definitions/options
 export {
